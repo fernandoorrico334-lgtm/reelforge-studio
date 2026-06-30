@@ -1,0 +1,67 @@
+import { loadEnv } from "./config/env.js";
+import { createApp } from "./http/app.js";
+import { resolveAssetRepository } from "./modules/assets/infrastructure/asset-repository-factory.js";
+import { createLocalAssetStorage } from "./modules/assets/infrastructure/local-asset-storage.js";
+import { resolveCharacterRepository } from "./modules/characters/infrastructure/character-repository-factory.js";
+import { resolveChannelRepository } from "./modules/channels/infrastructure/channel-repository-factory.js";
+import { resolveVisualGenerationJobRepository } from "./modules/hybrid-visual/infrastructure/visual-generation-job-repository-factory.js";
+import { resolveIntakeRepository } from "./modules/intake/infrastructure/intake-repository-factory.js";
+import { resolveProjectRepository } from "./modules/projects/infrastructure/project-repository-factory.js";
+import { resolveResearchRepository } from "./modules/research/infrastructure/research-repository-factory.js";
+import { resolveRenderJobRepository } from "./modules/render-jobs/infrastructure/render-job-repository-factory.js";
+import { createLocalRenderStorage } from "./modules/render-jobs/infrastructure/local-render-storage.js";
+
+const appEnv = loadEnv();
+const { dataBackend, port } = appEnv;
+const [
+  projectBinding,
+  channelBinding,
+  assetBinding,
+  characterBinding,
+  intakeBinding,
+  researchBinding,
+  renderJobBinding,
+  visualGenerationJobBinding
+] = await Promise.all([
+  resolveProjectRepository(dataBackend),
+  resolveChannelRepository(dataBackend),
+  resolveAssetRepository(dataBackend),
+  resolveCharacterRepository(dataBackend),
+  resolveIntakeRepository(dataBackend),
+  resolveResearchRepository(dataBackend),
+  resolveRenderJobRepository(dataBackend),
+  resolveVisualGenerationJobRepository(dataBackend)
+]);
+
+const repositoryMode =
+  projectBinding.backend === channelBinding.backend &&
+  channelBinding.backend === assetBinding.backend &&
+  assetBinding.backend === characterBinding.backend &&
+  characterBinding.backend === intakeBinding.backend &&
+  intakeBinding.backend === researchBinding.backend &&
+  researchBinding.backend === renderJobBinding.backend &&
+  renderJobBinding.backend === visualGenerationJobBinding.backend
+    ? projectBinding.backend
+    : "mixed";
+
+const app = createApp({
+  appEnv,
+  assetStorage: createLocalAssetStorage(),
+  repositoryMode,
+  projectRepository: projectBinding.repository,
+  researchRepository: researchBinding.repository,
+  channelRepository: channelBinding.repository,
+  assetRepository: assetBinding.repository,
+  characterRepository: characterBinding.repository,
+  intakeRepository: intakeBinding.repository,
+  renderJobRepository: renderJobBinding.repository,
+  renderStorage: createLocalRenderStorage(),
+  visualGenerationJobRepository: visualGenerationJobBinding.repository
+});
+
+app.listen(port, () => {
+  console.log(
+    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
+  );
+});
+

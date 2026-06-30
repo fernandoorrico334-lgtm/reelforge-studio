@@ -1,0 +1,735 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  MUSIC
+  SFX
+  OVERLAY
+  DOCUMENT
+  FONT
+}
+
+enum AssetCategory {
+  CHARACTER
+  BACKGROUND
+  PANEL
+  SCREENSHOT
+  COVER
+  BROLL
+  REFERENCE
+  TRACK
+  EFFECT
+  OVERLAY
+  TYPOGRAPHY
+  OTHER
+}
+
+enum CopyrightRisk {
+  LOW
+  MEDIUM
+  HIGH
+  UNKNOWN
+}
+
+enum ProjectStatus {
+  DRAFT
+  SCRIPTING
+  SCENE_PLANNING
+  READY_FOR_EDIT
+}
+
+enum EmotionTag {
+  NEUTRAL
+  CURIOUS
+  EPIC
+  MYSTERIOUS
+  DARK
+  TENSE
+  JOYFUL
+  SAD
+}
+
+enum RenderJobStatus {
+  queued
+  processing
+  completed
+  failed
+  cancelled
+}
+
+enum RenderJobStep {
+  reading_blueprint
+  generating_subtitles
+  rendering_scene
+  concatenating_segments
+  burning_subtitles
+  generating_thumbnail
+  probing_output
+  completed
+}
+
+enum RenderMode {
+  v1
+  cinematic_v2
+}
+
+enum RenderQuality {
+  draft
+  standard
+  high
+}
+
+enum MediaCollectionStatus {
+  draft
+  scanning
+  ready_for_review
+  importing
+  completed
+  failed
+}
+
+enum MediaCandidateStatus {
+  pending
+  approved
+  rejected
+  imported
+  failed
+}
+
+enum IntakeMediaType {
+  image
+  video
+  audio
+  music
+  sfx
+  overlay
+  document
+  reference
+}
+
+enum ResearchDossierStatus {
+  draft
+  researching
+  ready_for_review
+  completed
+  failed
+}
+
+enum ResearchSourceType {
+  web_page
+  wikipedia
+  wikidata
+  archive
+  document
+  manual_note
+  book
+  article
+  official_record
+  other
+}
+
+enum ResearchSourceStatus {
+  candidate
+  approved
+  rejected
+  imported
+  failed
+}
+
+enum ResearchFactType {
+  date
+  person
+  place
+  event
+  quote
+  context
+  statistic
+  allegation
+  uncertainty
+  other
+}
+
+enum ResearchConfidence {
+  confirmed
+  likely
+  disputed
+  uncertain
+}
+
+enum ResearchHookType {
+  mystery
+  shock
+  question
+  contrast
+  timeline
+  character
+  revelation
+  warning
+  other
+}
+
+enum ResearchAssetMediaType {
+  image
+  video
+  audio
+  music
+  sfx
+  overlay
+  document
+  map
+  text_card
+}
+
+enum ResearchOutlineRole {
+  hook
+  context
+  tension
+  climax
+  resolution
+  cta
+}
+
+enum VisualSourceMode {
+  asset_only
+  generated_only
+  hybrid_overlay
+  fallback_generated
+  mixed_sequence
+}
+
+enum VisualGenerationStatus {
+  draft
+  queued
+  generating
+  completed
+  failed
+  cancelled
+}
+
+enum CharacterReferenceType {
+  face
+  full_body
+  pose
+  outfit
+  style
+  expression
+  other
+}
+
+model Channel {
+  id                       String            @id @default(cuid())
+  name                     String            @unique
+  niche                    String
+  language                 String
+  visualStyle              String?
+  narrativeTone            String?
+  defaultTemplate          String?
+  defaultRenderMode        RenderMode        @default(cinematic_v2)
+  defaultRenderQuality     RenderQuality     @default(standard)
+  defaultAudioMood         String?
+  defaultCaptionStyle      String?
+  defaultVisualPreset      String?
+  defaultMusicAssetId      String?
+  defaultVoiceoverAssetId  String?
+  defaultDurationTarget    Int?
+  defaultSceneDuration     Float             @default(4)
+  preferredAssetCategories String            @default("[]")
+  preferredAssetTags       String            @default("[]")
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  mediaCollections         MediaCollection[]
+  researchDossiers         ResearchDossier[]
+  videoProjects            VideoProject[]
+}
+
+model Asset {
+  id                            String                       @id @default(cuid())
+  filename                      String
+  originalName                  String
+  path                          String                       @unique
+  type                          AssetType
+  category                      AssetCategory                @default(REFERENCE)
+  franchise                     String?
+  character                     String?
+  emotion                       EmotionTag?
+  tags                          String                       @default("[]")
+  licenseType                   String                       @default("UNSPECIFIED")
+  copyrightRisk                 CopyrightRisk                @default(UNKNOWN)
+  recommendedUse                String?
+  duration                      Float?
+  width                         Int?
+  height                        Int?
+  mimeType                      String?
+  extension                     String?
+  fileSize                      Int?
+  sourceProvider                String?
+  sourceUrl                     String?
+  sourceAuthor                  String?
+  sourceLicense                 String?
+  sourceLicenseUrl              String?
+  downloadedAt                  DateTime?
+  collectionId                  String?
+  usageNotes                    String?
+  createdAt                     DateTime                     @default(now())
+  updatedAt                     DateTime                     @updatedAt
+  collection                     MediaCollection?            @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  importedCandidates            MediaCandidate[]
+  scenes                        Scene[]                      @relation("ScenePrimaryAsset")
+  generatedScenes               Scene[]                      @relation("SceneGeneratedAsset")
+  sfxScenes                     Scene[]                      @relation("SceneSfxAsset")
+  characterReferences           CharacterReference[]         @relation("CharacterReferenceAsset")
+  fulfilledResearchRequirements ResearchAssetRequirement[]   @relation("ResearchRequirementFulfilledAsset")
+  generatedResearchRequirements ResearchAssetRequirement[]   @relation("ResearchRequirementGeneratedAsset")
+  visualGenerationJobs          VisualGenerationJob[]        @relation("VisualJobGeneratedAsset")
+
+  @@index([type, category])
+  @@index([franchise, character])
+  @@index([collectionId, createdAt])
+  @@index([sourceProvider])
+}
+
+model MediaCollection {
+  id                 String                 @id @default(cuid())
+  name               String
+  channelId          String?
+  projectId          String?
+  dossierId          String?
+  assetRequirementId String?
+  provider           String
+  query              String?
+  sourcePath         String?
+  mediaType          IntakeMediaType?
+  status             MediaCollectionStatus  @default(draft)
+  targetCount        Int?
+  importedCount      Int                    @default(0)
+  rejectedCount      Int                    @default(0)
+  notes              String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  channel            Channel?               @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  project            VideoProject?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  dossier            ResearchDossier?       @relation(fields: [dossierId], references: [id], onDelete: SetNull)
+  assetRequirement   ResearchAssetRequirement? @relation(fields: [assetRequirementId], references: [id], onDelete: SetNull)
+  assets             Asset[]
+  candidates         MediaCandidate[]
+
+  @@index([provider, status])
+  @@index([projectId, status])
+  @@index([channelId, status])
+  @@index([dossierId, status])
+  @@index([assetRequirementId, status])
+}
+
+model MediaCandidate {
+  id                 String               @id @default(cuid())
+  collectionId       String
+  provider           String
+  originalPath       String?
+  title              String
+  previewUrl         String?
+  downloadUrl        String?
+  sourceUrl          String?
+  sourceAuthor       String?
+  sourceLicense      String?
+  sourceLicenseUrl   String?
+  mediaType          IntakeMediaType
+  detectedType       String?
+  suggestedCategory  AssetCategory?
+  suggestedTags      String               @default("[]")
+  suggestedCharacter String?
+  suggestedProject   String?
+  width              Int?
+  height             Int?
+  duration           Float?
+  fileSize           Int?
+  extension          String?
+  mimeType           String?
+  category           AssetCategory?
+  franchise          String?
+  character          String?
+  emotion            EmotionTag?
+  tags               String               @default("[]")
+  copyrightRisk      CopyrightRisk?
+  recommendedUse     String?
+  usageNotes         String?
+  status             MediaCandidateStatus @default(pending)
+  assetId            String?
+  errorMessage       String?
+  contentHash        String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  asset              Asset?               @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  collection         MediaCollection      @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@index([collectionId, status])
+  @@index([provider, mediaType, status])
+  @@index([provider, originalPath])
+  @@index([suggestedProject, suggestedCharacter])
+  @@index([fileSize, title])
+  @@index([contentHash])
+}
+
+model ResearchDossier {
+  id                String                 @id @default(cuid())
+  channelId         String?
+  title             String
+  topic             String
+  niche             String?
+  tone              String?
+  targetDuration    Int?
+  status            ResearchDossierStatus  @default(draft)
+  summary           String?
+  narrativeAngle    String?
+  editorialNotes    String?
+  safetyNotes       String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  channel           Channel?               @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  mediaCollections  MediaCollection[]
+  assetRequirements ResearchAssetRequirement[]
+  facts             ResearchFact[]
+  hooks             ResearchHook[]
+  outlineScenes     ResearchOutlineScene[]
+  sources           ResearchSource[]
+  timelineEvents    ResearchTimelineEvent[]
+
+  @@index([channelId, status])
+  @@index([topic, status])
+}
+
+model ResearchSource {
+  id               String               @id @default(cuid())
+  dossierId        String
+  title            String
+  url              String?
+  provider         String
+  sourceType       ResearchSourceType
+  author           String?
+  publishedAt      String?
+  accessedAt       String?
+  reliabilityScore Int?
+  citationText     String?
+  rawTextPath      String?
+  excerpt          String?
+  notes            String?
+  status           ResearchSourceStatus @default(candidate)
+  errorMessage     String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  dossier          ResearchDossier      @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  facts            ResearchFact[]
+  timelineEvents   ResearchTimelineEvent[]
+
+  @@index([dossierId, status])
+  @@index([provider, sourceType, status])
+}
+
+model ResearchFact {
+  id         String             @id @default(cuid())
+  dossierId  String
+  sourceId   String?
+  claim      String
+  factType   ResearchFactType
+  confidence ResearchConfidence
+  dateValue  String?
+  people     String?
+  places     String?
+  tags       String?
+  notes      String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  dossier    ResearchDossier    @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  source     ResearchSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([dossierId, factType, confidence])
+  @@index([sourceId])
+}
+
+model ResearchTimelineEvent {
+  id          String             @id @default(cuid())
+  dossierId   String
+  sourceId    String?
+  title       String
+  description String
+  dateValue   String?
+  order       Int?
+  location    String?
+  people      String?
+  confidence  ResearchConfidence
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  dossier     ResearchDossier    @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  source      ResearchSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([dossierId, order])
+  @@index([sourceId])
+}
+
+model ResearchHook {
+  id            String             @id @default(cuid())
+  dossierId     String
+  text          String
+  hookType      ResearchHookType
+  strengthScore Int?
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  dossier       ResearchDossier    @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@index([dossierId, hookType])
+}
+
+model ResearchAssetRequirement {
+  id                    String                    @id @default(cuid())
+  dossierId             String
+  sceneRole             ResearchOutlineRole?
+  description           String
+  mediaType             ResearchAssetMediaType
+  suggestedTags         String?
+  emotion               EmotionTag?
+  priority              Int?
+  fulfilledAssetId      String?
+  visualSourceMode      VisualSourceMode?
+  characterProfileId    String?
+  generatedAssetId      String?
+  visualPrompt          String?
+  generationStatus      VisualGenerationStatus?
+  generationProvider    String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  dossier               ResearchDossier           @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  fulfilledAsset        Asset?                    @relation("ResearchRequirementFulfilledAsset", fields: [fulfilledAssetId], references: [id], onDelete: SetNull)
+  characterProfile      CharacterProfile?         @relation(fields: [characterProfileId], references: [id], onDelete: SetNull)
+  generatedAsset        Asset?                    @relation("ResearchRequirementGeneratedAsset", fields: [generatedAssetId], references: [id], onDelete: SetNull)
+  mediaCollections      MediaCollection[]
+  outlineScenes         ResearchOutlineScene[]
+  visualGenerationJobs  VisualGenerationJob[]     @relation("RequirementVisualJobs")
+
+  @@index([dossierId, sceneRole])
+  @@index([fulfilledAssetId])
+  @@index([characterProfileId])
+  @@index([generatedAssetId])
+}
+
+model ResearchOutlineScene {
+  id                 String                    @id @default(cuid())
+  dossierId          String
+  order              Int
+  role               ResearchOutlineRole
+  title              String
+  narrationDraft     String
+  captionDraft       String?
+  emotion            EmotionTag?
+  visualPreset       String?
+  assetRequirementId String?
+  estimatedDuration  Float?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  dossier            ResearchDossier           @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  assetRequirement   ResearchAssetRequirement? @relation(fields: [assetRequirementId], references: [id], onDelete: SetNull)
+
+  @@unique([dossierId, order])
+  @@index([assetRequirementId])
+}
+
+model VideoProject {
+  id                    String            @id @default(cuid())
+  title                 String
+  status                ProjectStatus     @default(DRAFT)
+  channelId             String
+  script                String?
+  durationTarget        Int?
+  format                String            @default("9:16")
+  templateId            String?
+  defaultCaptionStyle   String?
+  backgroundMusicAssetId String?
+  voiceoverAssetId      String?
+  audioMood             String?
+  musicVolume           Float             @default(0.18)
+  voiceVolume           Float             @default(1.0)
+  sfxVolume             Float             @default(0.7)
+  enableAudioDucking    Boolean           @default(false)
+  duckingLevel          Float             @default(0.35)
+  defaultRenderMode     RenderMode        @default(v1)
+  defaultRenderQuality  RenderQuality     @default(standard)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  channel               Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  mediaCollections      MediaCollection[]
+  scenes                Scene[]
+  renderJobs            RenderJob[]
+  visualGenerationJobs  VisualGenerationJob[]
+
+  @@index([channelId, status])
+}
+
+model Scene {
+  id                   String                  @id @default(cuid())
+  videoProjectId       String
+  order                Int
+  title                String
+  narrationText        String?
+  captionText          String?
+  duration             Float?
+  emotion              EmotionTag?
+  assetId              String?
+  generatedAssetId     String?
+  characterProfileId   String?
+  sfxAssetId           String?
+  sfxStartTime         Float                   @default(0)
+  sfxVolume            Float                   @default(0.7)
+  visualPreset         String?
+  visualSourceMode     VisualSourceMode?
+  visualPrompt         String?
+  negativePrompt       String?
+  visualRecipe         String?
+  generationStatus     VisualGenerationStatus?
+  generationProvider   String?
+  generationSeed       Int?
+  transition           String?
+  captionStyle         String?
+  captionPosition      String?
+  captionEmphasisWords String?
+  energyLevel          Int?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  videoProject         VideoProject            @relation(fields: [videoProjectId], references: [id], onDelete: Cascade)
+  asset                Asset?                  @relation("ScenePrimaryAsset", fields: [assetId], references: [id], onDelete: SetNull)
+  generatedAsset       Asset?                  @relation("SceneGeneratedAsset", fields: [generatedAssetId], references: [id], onDelete: SetNull)
+  characterProfile     CharacterProfile?       @relation(fields: [characterProfileId], references: [id], onDelete: SetNull)
+  sfxAsset             Asset?                  @relation("SceneSfxAsset", fields: [sfxAssetId], references: [id], onDelete: SetNull)
+  visualGenerationJobs VisualGenerationJob[]   @relation("SceneVisualJobs")
+
+  @@unique([videoProjectId, order])
+  @@index([assetId])
+  @@index([generatedAssetId])
+  @@index([characterProfileId])
+  @@index([sfxAssetId])
+}
+
+model RenderJob {
+  id                String           @id @default(cuid())
+  videoProjectId    String
+  status            RenderJobStatus  @default(queued)
+  renderMode        RenderMode       @default(v1)
+  renderQuality     RenderQuality    @default(standard)
+  outputPath        String?
+  blueprintPath     String?
+  srtPath           String?
+  assPath           String?
+  logPath           String?
+  errorMessage      String?
+  progress          Int?
+  currentStep       RenderJobStep?
+  currentSceneIndex Int?
+  totalScenes       Int?
+  outputWidth       Int?
+  outputHeight      Int?
+  outputDuration    Float?
+  outputCodec       String?
+  hasAudio          Boolean?
+  audioCodec        String?
+  audioChannels     Int?
+  audioSampleRate   Int?
+  outputFileSize    Int?
+  thumbnailPath     String?
+  cancelledAt       DateTime?
+  retriedFromJobId  String?
+  attempt           Int              @default(1)
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  videoProject      VideoProject     @relation(fields: [videoProjectId], references: [id], onDelete: Cascade)
+
+  @@index([videoProjectId, status])
+  @@index([status, createdAt])
+  @@index([retriedFromJobId])
+}
+
+model CharacterProfile {
+  id                     String                  @id @default(cuid())
+  name                   String
+  slug                   String                  @unique
+  franchise              String?
+  category               String?
+  description            String?
+  basePrompt             String?
+  negativePrompt         String?
+  styleNotes             String?
+  defaultVisualStyle     String?
+  referenceStrength      Float                   @default(0.75)
+  preferredProvider      String                  @default("mock-svg")
+  tags                   String                  @default("[]")
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  references             CharacterReference[]
+  scenes                 Scene[]
+  researchRequirements   ResearchAssetRequirement[]
+  visualGenerationJobs   VisualGenerationJob[]
+
+  @@index([name, franchise])
+}
+
+model CharacterReference {
+  id                 String                 @id @default(cuid())
+  characterProfileId String
+  assetId            String?
+  sourcePath         String?
+  title              String?
+  notes              String?
+  referenceType      CharacterReferenceType @default(other)
+  strength           Float                  @default(0.75)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  characterProfile   CharacterProfile       @relation(fields: [characterProfileId], references: [id], onDelete: Cascade)
+  asset              Asset?                 @relation("CharacterReferenceAsset", fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([characterProfileId, referenceType])
+  @@index([assetId])
+}
+
+model VisualGenerationJob {
+  id                         String                 @id @default(cuid())
+  videoProjectId             String?
+  sceneId                    String?
+  characterProfileId         String?
+  researchAssetRequirementId String?
+  status                     VisualGenerationStatus @default(draft)
+  provider                   String
+  visualSourceMode           VisualSourceMode?
+  prompt                     String
+  negativePrompt             String?
+  stylePreset                String?
+  seed                       Int?
+  width                      Int
+  height                     Int
+  outputPath                 String?
+  generatedAssetId           String?
+  errorMessage               String?
+  metadata                   String?
+  startedAt                  DateTime?
+  completedAt                DateTime?
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+  videoProject               VideoProject?          @relation(fields: [videoProjectId], references: [id], onDelete: SetNull)
+  scene                      Scene?                 @relation("SceneVisualJobs", fields: [sceneId], references: [id], onDelete: SetNull)
+  characterProfile           CharacterProfile?      @relation(fields: [characterProfileId], references: [id], onDelete: SetNull)
+  researchAssetRequirement   ResearchAssetRequirement? @relation("RequirementVisualJobs", fields: [researchAssetRequirementId], references: [id], onDelete: SetNull)
+  generatedAsset             Asset?                 @relation("VisualJobGeneratedAsset", fields: [generatedAssetId], references: [id], onDelete: SetNull)
+
+  @@index([videoProjectId, status])
+  @@index([sceneId, status])
+  @@index([characterProfileId, status])
+  @@index([researchAssetRequirementId, status])
+  @@index([generatedAssetId])
+}

@@ -1,0 +1,745 @@
+import {
+  analyzeCaptionQuality,
+  generateAssSubtitle,
+  generateSrt,
+  getCaptionStyleById,
+  splitCaptionIntoLines,
+  suggestCaptionStyleByEmotion,
+  suggestCaptionStyleByTemplate,
+  type CaptionEmotionTag,
+  type CaptionPosition,
+  type CaptionQualityAnalysis,
+  type CaptionStyle,
+  type CaptionStyleId
+} from "@reelforge/caption-engine";
+import {
+  buildAudioMixPlan,
+  type AudioMixPlan
+} from "@reelforge/audio-engine";
+import {
+  getCinematicPresetById,
+  suggestPresetForEmotion,
+  type CinematicPreset,
+  type CinematicPresetId,
+  type PresetEmotionTag
+} from "@reelforge/cinematic-engine";
+import {
+  analyzeStoryProject,
+  type SuggestedSceneRole,
+  type NarrativeSceneRole,
+  type StoryAnalysis
+} from "@reelforge/story-engine";
+import {
+  getTemplateById,
+  suggestTemplateByProject,
+  type ReelTemplate
+} from "@reelforge/templates";
+
+export interface BlueprintChannelInput {
+  id: string;
+  name: string;
+  niche: string;
+  language: string;
+  visualStyle: string | null;
+  narrativeTone: string | null;
+  defaultTemplate: string | null;
+  defaultRenderMode: "v1" | "cinematic_v2";
+  defaultRenderQuality: "draft" | "standard" | "high";
+  defaultAudioMood: string | null;
+  defaultCaptionStyle: string | null;
+  defaultVisualPreset: string | null;
+  defaultMusicAssetId: string | null;
+  defaultVoiceoverAssetId: string | null;
+  defaultDurationTarget: number | null;
+  defaultSceneDuration: number;
+  preferredAssetCategories: string[];
+  preferredAssetTags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BlueprintAssetInput {
+  id: string;
+  filename: string;
+  originalName: string;
+  path: string;
+  type: string;
+  category: string;
+  franchise: string | null;
+  character: string | null;
+  emotion: string | null;
+  duration: number | null;
+  width: number | null;
+  height: number | null;
+  mimeType: string | null;
+  extension: string | null;
+}
+
+export interface BlueprintSceneInput {
+  id: string;
+  order: number;
+  title: string;
+  narrationText: string | null;
+  captionText: string | null;
+  duration: number | null;
+  emotion: CaptionEmotionTag | null;
+  assetId: string | null;
+  asset: BlueprintAssetInput | null;
+  generatedAssetId?: string | null;
+  generatedAsset?: BlueprintAssetInput | null;
+  sfxAssetId: string | null;
+  sfxAsset: BlueprintAssetInput | null;
+  sfxStartTime: number;
+  sfxVolume: number;
+  visualPreset: string | null;
+  transition: string | null;
+  captionStyle: string | null;
+  captionPosition: string | null;
+  captionEmphasisWords: string[];
+  energyLevel: number | null;
+}
+
+export interface BlueprintProjectInput {
+  id: string;
+  title: string;
+  status: string;
+  channelId: string;
+  channel: BlueprintChannelInput;
+  script: string | null;
+  durationTarget: number | null;
+  format: string;
+  templateId: string | null;
+  defaultCaptionStyle: string | null;
+  backgroundMusicAssetId: string | null;
+  backgroundMusicAsset: BlueprintAssetInput | null;
+  voiceoverAssetId: string | null;
+  voiceoverAsset: BlueprintAssetInput | null;
+  audioMood: string | null;
+  musicVolume: number;
+  voiceVolume: number;
+  sfxVolume: number;
+  enableAudioDucking: boolean;
+  duckingLevel: number;
+  scenes: BlueprintSceneInput[];
+}
+
+export interface ResolvedProjectTemplate {
+  configuredTemplateId: string | null;
+  template: ReelTemplate;
+  source: "project" | "channel" | "suggested";
+}
+
+export interface ResolvedCaptionStyle {
+  configuredStyleId: string | null;
+  projectDefaultStyleId: string | null;
+  templateSuggestedStyleId: CaptionStyleId;
+  emotionSuggestedStyleId: CaptionStyleId;
+  style: CaptionStyle;
+  source: "scene" | "project" | "template" | "emotion";
+}
+
+export interface ResolvedScenePreset {
+  configuredPresetId: string | null;
+  templateSuggestedPresetId: CinematicPresetId;
+  emotionSuggestedPresetId: CinematicPresetId;
+  preset: CinematicPreset;
+  source: "scene" | "template" | "emotion";
+}
+
+export interface ProjectCaptionAnalysisScene {
+  sceneId: string;
+  order: number;
+  title: string;
+  captionText: string | null;
+  duration: number | null;
+  splitLines: string[];
+  quality: CaptionQualityAnalysis;
+  suggestedByTemplate: CaptionStyle;
+  suggestedByEmotion: CaptionStyle;
+  resolvedStyle: ResolvedCaptionStyle;
+}
+
+export interface ProjectCaptionAnalysisSummary {
+  sceneCount: number;
+  scenesWithCaptions: number;
+  scenesWithoutCaptions: number;
+  tooFastScenes: number;
+  scenesWithWarnings: number;
+  averageImpactScore: number;
+  alerts: string[];
+}
+
+export interface ProjectCaptionAnalysis {
+  projectId: string;
+  template: ResolvedProjectTemplate;
+  defaultCaptionStyle: CaptionStyle;
+  summary: ProjectCaptionAnalysisSummary;
+  scenes: ProjectCaptionAnalysisScene[];
+}
+
+export interface RenderBlueprintScene {
+  sceneId: string;
+  order: number;
+  title: string;
+  narrationText: string | null;
+  captionText: string | null;
+  captionPreviewLines: string[];
+  duration: number | null;
+  emotion: CaptionEmotionTag | null;
+  energyLevel: number;
+  asset: BlueprintAssetInput | null;
+  effectiveAsset: BlueprintAssetInput | null;
+  effectiveAssetId: string | null;
+  effectiveAssetPath: string | null;
+  effectiveAssetSource: "project_asset" | "generated_asset" | "missing";
+  transition: string;
+  visualPreset: ResolvedScenePreset;
+  captionStyle: ResolvedCaptionStyle & {
+    effectivePosition: CaptionPosition;
+    emphasisWords: string[];
+  };
+  storyRole: NarrativeSceneRole;
+  storyReason: string;
+  readingSpeedStatus: CaptionQualityAnalysis["readingSpeedStatus"];
+  warnings: string[];
+  ready: boolean;
+}
+
+export interface RenderBlueprintSummary {
+  durationTotal: number;
+  sceneCount: number;
+  readyScenes: number;
+  scenesWithProblems: number;
+  templateId: string;
+  defaultCaptionStyleId: CaptionStyleId;
+}
+
+export interface RenderBlueprint {
+  projectId: string;
+  title: string;
+  status: string;
+  format: "vertical_9_16";
+  sourceFormat: string;
+  channel: BlueprintChannelInput;
+  template: ResolvedProjectTemplate;
+  defaultCaptionStyle: CaptionStyle;
+  storyAnalysis: StoryAnalysis;
+  captionAnalysis: ProjectCaptionAnalysisSummary;
+  resolution: {
+    width: 1080;
+    height: 1920;
+  };
+  fps: 30;
+  durationTotal: number;
+  sceneCount: number;
+  audio: AudioMixPlan;
+  summary: RenderBlueprintSummary;
+  subtitleExports: {
+    srt: string;
+    ass: string;
+  };
+  scenes: RenderBlueprintScene[];
+}
+
+function roundToSingleDecimal(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
+function normalizeSceneOrder(left: BlueprintSceneInput, right: BlueprintSceneInput) {
+  return left.order - right.order;
+}
+
+function resolveEffectiveAsset(
+  scene: BlueprintSceneInput
+): Pick<
+  RenderBlueprintScene,
+  "effectiveAsset" | "effectiveAssetId" | "effectiveAssetPath" | "effectiveAssetSource"
+> {
+  const generatedAsset =
+    "generatedAsset" in scene
+      ? ((scene as BlueprintSceneInput & { generatedAsset?: BlueprintAssetInput | null })
+          .generatedAsset ?? null)
+      : null;
+  const generatedAssetId =
+    "generatedAssetId" in scene
+      ? ((scene as BlueprintSceneInput & { generatedAssetId?: string | null })
+          .generatedAssetId ?? null)
+      : null;
+  const effectiveAsset = generatedAsset ?? scene.asset;
+
+  return {
+    effectiveAsset,
+    effectiveAssetId: generatedAssetId ?? scene.assetId,
+    effectiveAssetPath: effectiveAsset?.path ?? null,
+    effectiveAssetSource: generatedAsset
+      ? "generated_asset"
+      : scene.asset
+        ? "project_asset"
+        : "missing"
+  };
+}
+
+function normalizePosition(position: string | null | undefined): CaptionPosition | null {
+  if (typeof position !== "string" || position.trim().length === 0) {
+    return null;
+  }
+
+  const normalized = position.trim().toLowerCase();
+
+  if (
+    normalized === "top" ||
+    normalized === "center" ||
+    normalized === "lower-third" ||
+    normalized === "bottom" ||
+    normalized === "split"
+  ) {
+    return normalized;
+  }
+
+  return null;
+}
+
+function normalizeEmotionTag(
+  emotion: string | null | undefined
+): CaptionEmotionTag | null {
+  switch (emotion) {
+    case "NEUTRAL":
+    case "CURIOUS":
+    case "EPIC":
+    case "MYSTERIOUS":
+    case "DARK":
+    case "TENSE":
+    case "JOYFUL":
+    case "SAD":
+      return emotion;
+    default:
+      return null;
+  }
+}
+
+function toStoryProjectInput(project: BlueprintProjectInput) {
+  return {
+    id: project.id,
+    title: project.title,
+    script: project.script,
+    scenes: [...project.scenes].sort(normalizeSceneOrder).map((scene) => ({
+      id: scene.id,
+      order: scene.order,
+      title: scene.title,
+      narrationText: scene.narrationText,
+      captionText: scene.captionText,
+      duration: scene.duration,
+      emotion: scene.emotion,
+      hasAsset: Boolean(scene.assetId),
+      visualPreset: scene.visualPreset,
+      energyLevel: scene.energyLevel
+    }))
+  };
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return roundToSingleDecimal(
+    values.reduce((total, value) => total + value, 0) / values.length
+  );
+}
+
+function buildBlueprintAudioPlan(
+  project: BlueprintProjectInput
+) {
+  const audioAssets = [
+    project.backgroundMusicAsset,
+    project.voiceoverAsset,
+    ...project.scenes.map((scene) => scene.sfxAsset)
+  ]
+    .filter((asset): asset is BlueprintAssetInput => asset !== null)
+    .map((asset) => ({
+      id: asset.id,
+      filename: asset.filename,
+      path: asset.path,
+      type: asset.type,
+      duration: asset.duration,
+      mimeType: asset.mimeType,
+      extension: asset.extension
+    }));
+
+  return buildAudioMixPlan(
+    {
+      id: project.id,
+      title: project.title,
+      durationTarget: project.durationTarget,
+      backgroundMusicAssetId: project.backgroundMusicAssetId,
+      voiceoverAssetId: project.voiceoverAssetId,
+      audioMood: project.audioMood,
+      musicVolume: project.musicVolume,
+      voiceVolume: project.voiceVolume,
+      sfxVolume: project.sfxVolume,
+      enableAudioDucking: project.enableAudioDucking,
+      duckingLevel: project.duckingLevel
+    },
+    project.scenes.map((scene) => ({
+      id: scene.id,
+      order: scene.order,
+      title: scene.title,
+      duration: scene.duration,
+      sfxAssetId: scene.sfxAssetId,
+      sfxStartTime: scene.sfxStartTime,
+      sfxVolume: scene.sfxVolume
+    })),
+    [...new Map(audioAssets.map((asset) => [asset.id, asset] as const)).values()]
+  );
+}
+
+export function resolveProjectTemplate(
+  project: BlueprintProjectInput
+): ResolvedProjectTemplate {
+  const configuredProjectTemplate = getTemplateById(project.templateId);
+
+  if (configuredProjectTemplate) {
+    return {
+      configuredTemplateId: project.templateId,
+      template: configuredProjectTemplate,
+      source: "project"
+    };
+  }
+
+  const configuredChannelTemplate = getTemplateById(project.channel.defaultTemplate);
+
+  if (configuredChannelTemplate) {
+    return {
+      configuredTemplateId: project.channel.defaultTemplate,
+      template: configuredChannelTemplate,
+      source: "channel"
+    };
+  }
+
+  return {
+    configuredTemplateId: null,
+    template: suggestTemplateByProject({
+      title: project.title,
+      script: project.script,
+      templateId: project.templateId,
+      channel: project.channel
+    }),
+    source: "suggested"
+  };
+}
+
+export function resolveSceneCaptionStyle(
+  scene: BlueprintSceneInput,
+  project: BlueprintProjectInput,
+  template: ReelTemplate
+): ResolvedCaptionStyle {
+  const configuredSceneStyle = getCaptionStyleById(scene.captionStyle);
+  const configuredProjectDefault = getCaptionStyleById(project.defaultCaptionStyle);
+  const templateSuggested = suggestCaptionStyleByTemplate(template.id);
+  const emotionSuggested = suggestCaptionStyleByEmotion(scene.emotion);
+
+  if (configuredSceneStyle) {
+    return {
+      configuredStyleId: scene.captionStyle,
+      projectDefaultStyleId: project.defaultCaptionStyle,
+      templateSuggestedStyleId: templateSuggested.id,
+      emotionSuggestedStyleId: emotionSuggested.id,
+      style: configuredSceneStyle,
+      source: "scene"
+    };
+  }
+
+  if (configuredProjectDefault) {
+    return {
+      configuredStyleId: null,
+      projectDefaultStyleId: configuredProjectDefault.id,
+      templateSuggestedStyleId: templateSuggested.id,
+      emotionSuggestedStyleId: emotionSuggested.id,
+      style: configuredProjectDefault,
+      source: "project"
+    };
+  }
+
+  if (templateSuggested) {
+    return {
+      configuredStyleId: null,
+      projectDefaultStyleId: null,
+      templateSuggestedStyleId: templateSuggested.id,
+      emotionSuggestedStyleId: emotionSuggested.id,
+      style: templateSuggested,
+      source: "template"
+    };
+  }
+
+  return {
+    configuredStyleId: null,
+    projectDefaultStyleId: null,
+    templateSuggestedStyleId: emotionSuggested.id,
+    emotionSuggestedStyleId: emotionSuggested.id,
+    style: emotionSuggested,
+    source: "emotion"
+  };
+}
+
+export function resolveScenePreset(
+  scene: BlueprintSceneInput,
+  template: ReelTemplate
+): ResolvedScenePreset {
+  const configuredPreset = getCinematicPresetById(scene.visualPreset);
+  const templatePreset =
+    getCinematicPresetById(template.defaultVisualPreset) ??
+    suggestPresetForEmotion(scene.emotion as PresetEmotionTag | null);
+  const emotionPreset = suggestPresetForEmotion(scene.emotion as PresetEmotionTag | null);
+
+  if (configuredPreset) {
+    return {
+      configuredPresetId: scene.visualPreset,
+      templateSuggestedPresetId: templatePreset.id,
+      emotionSuggestedPresetId: emotionPreset.id,
+      preset: configuredPreset,
+      source: "scene"
+    };
+  }
+
+  if (templatePreset) {
+    return {
+      configuredPresetId: null,
+      templateSuggestedPresetId: templatePreset.id,
+      emotionSuggestedPresetId: emotionPreset.id,
+      preset: templatePreset,
+      source: "template"
+    };
+  }
+
+  return {
+    configuredPresetId: null,
+    templateSuggestedPresetId: emotionPreset.id,
+    emotionSuggestedPresetId: emotionPreset.id,
+    preset: emotionPreset,
+    source: "emotion"
+  };
+}
+
+export function buildProjectCaptionAnalysis(
+  project: BlueprintProjectInput
+): ProjectCaptionAnalysis {
+  const orderedScenes = [...project.scenes].sort(normalizeSceneOrder);
+  const resolvedTemplate = resolveProjectTemplate(project);
+  const defaultCaptionStyle =
+    getCaptionStyleById(project.defaultCaptionStyle) ??
+    getCaptionStyleById(resolvedTemplate.template.defaultCaptionStyle) ??
+    suggestCaptionStyleByTemplate(resolvedTemplate.template.id);
+
+  const scenes = orderedScenes.map((scene) => {
+    const suggestedByTemplate = suggestCaptionStyleByTemplate(resolvedTemplate.template.id);
+    const suggestedByEmotion = suggestCaptionStyleByEmotion(scene.emotion);
+    const resolvedStyle = resolveSceneCaptionStyle(
+      scene,
+      project,
+      resolvedTemplate.template
+    );
+    const quality = analyzeCaptionQuality(
+      scene.captionText ?? "",
+      scene.duration,
+      resolvedStyle.style
+    );
+
+    return {
+      sceneId: scene.id,
+      order: scene.order,
+      title: scene.title,
+      captionText: scene.captionText,
+      duration: scene.duration,
+      splitLines: splitCaptionIntoLines(scene.captionText ?? "", resolvedStyle.style),
+      quality,
+      suggestedByTemplate,
+      suggestedByEmotion,
+      resolvedStyle
+    };
+  });
+
+  const tooFastScenes = scenes.filter(
+    (scene) => scene.quality.readingSpeedStatus === "too_fast"
+  ).length;
+  const scenesWithoutCaptions = scenes.filter(
+    (scene) => !scene.captionText?.trim()
+  ).length;
+  const scenesWithWarnings = scenes.filter(
+    (scene) =>
+      scene.quality.lineWarnings.length > 0 ||
+      scene.quality.durationWarnings.length > 0
+  ).length;
+  const alerts: string[] = [];
+
+  if (scenesWithoutCaptions > 0) {
+    alerts.push(
+      `${scenesWithoutCaptions} cena(s) ainda nao possuem legenda definida.`
+    );
+  }
+
+  if (tooFastScenes > 0) {
+    alerts.push(
+      `${tooFastScenes} cena(s) estao com leitura rapida demais para um acabamento premium.`
+    );
+  }
+
+  if (scenesWithWarnings > 0) {
+    alerts.push(
+      `${scenesWithWarnings} cena(s) pedem ajuste de quebra de linha ou duracao.`
+    );
+  }
+
+  return {
+    projectId: project.id,
+    template: resolvedTemplate,
+    defaultCaptionStyle,
+    summary: {
+      sceneCount: orderedScenes.length,
+      scenesWithCaptions: orderedScenes.length - scenesWithoutCaptions,
+      scenesWithoutCaptions,
+      tooFastScenes,
+      scenesWithWarnings,
+      averageImpactScore: average(scenes.map((scene) => scene.quality.impactScore)),
+      alerts
+    },
+    scenes
+  };
+}
+
+export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlueprint {
+  const orderedScenes = [...project.scenes].sort(normalizeSceneOrder);
+  const resolvedTemplate = resolveProjectTemplate(project);
+  const captionAnalysis = buildProjectCaptionAnalysis(project);
+  const storyAnalysis = analyzeStoryProject(toStoryProjectInput(project));
+  const audio = buildBlueprintAudioPlan(project);
+  const roleMap = new Map<string, SuggestedSceneRole>(
+    storyAnalysis.suggestedSceneRoles.map(
+      (role: SuggestedSceneRole) => [role.sceneId, role] as const
+    )
+  );
+
+  const scenes: RenderBlueprintScene[] = orderedScenes.map((scene) => {
+    const captionScene =
+      captionAnalysis.scenes.find((entry) => entry.sceneId === scene.id) ?? null;
+    const resolvedCaptionStyle =
+      captionScene?.resolvedStyle ??
+      resolveSceneCaptionStyle(scene, project, resolvedTemplate.template);
+    const resolvedPreset = resolveScenePreset(scene, resolvedTemplate.template);
+    const role = roleMap.get(scene.id);
+    const effectivePosition =
+      normalizePosition(scene.captionPosition) ?? resolvedCaptionStyle.style.position;
+    const transition =
+      scene.transition ??
+      resolvedPreset.preset.suggestedTransition ??
+      resolvedTemplate.template.defaultTransition;
+    const warnings: string[] = [];
+
+    if (!scene.asset) {
+      warnings.push("Cena sem asset associado.");
+    }
+
+    if (!scene.captionText?.trim()) {
+      warnings.push("Cena sem legenda definida.");
+    }
+
+    if (captionScene) {
+      warnings.push(...captionScene.quality.lineWarnings);
+      warnings.push(...captionScene.quality.durationWarnings);
+    }
+
+    return {
+      sceneId: scene.id,
+      order: scene.order,
+      title: scene.title,
+      narrationText: scene.narrationText,
+      captionText: scene.captionText,
+      captionPreviewLines:
+        captionScene?.splitLines ?? splitCaptionIntoLines(scene.captionText ?? "", resolvedCaptionStyle.style),
+      duration: scene.duration,
+      emotion: normalizeEmotionTag(scene.emotion),
+      energyLevel: scene.energyLevel ?? role?.energyScore ?? 40,
+      asset: scene.asset,
+      ...resolveEffectiveAsset(scene),
+      transition,
+      visualPreset: resolvedPreset,
+      captionStyle: {
+        ...resolvedCaptionStyle,
+        effectivePosition,
+        emphasisWords: [...scene.captionEmphasisWords]
+      },
+      storyRole: role?.role ?? "context",
+      storyReason:
+        role?.reason ?? "Fallback local aplicado por ausencia de papel narrativo.",
+      readingSpeedStatus: captionScene?.quality.readingSpeedStatus ?? "slow",
+      warnings: [...new Set(warnings)],
+      ready: warnings.length === 0
+    };
+  });
+
+  const readyScenes = scenes.filter((scene) => scene.ready).length;
+  const scenesWithProblems = scenes.length - readyScenes;
+  const durationTotal = roundToSingleDecimal(
+    orderedScenes.reduce((total, scene) => total + (scene.duration ?? 0), 0)
+  );
+  const defaultCaptionStyle =
+    captionAnalysis.defaultCaptionStyle ??
+    suggestCaptionStyleByTemplate(resolvedTemplate.template.id);
+
+  return {
+    projectId: project.id,
+    title: project.title,
+    status: project.status,
+    format: "vertical_9_16",
+    sourceFormat: project.format,
+    channel: project.channel,
+    template: resolvedTemplate,
+    defaultCaptionStyle,
+    storyAnalysis,
+    captionAnalysis: captionAnalysis.summary,
+    resolution: {
+      width: 1080,
+      height: 1920
+    },
+    fps: 30,
+    durationTotal,
+    sceneCount: scenes.length,
+    audio,
+    summary: {
+      durationTotal,
+      sceneCount: scenes.length,
+      readyScenes,
+      scenesWithProblems,
+      templateId: resolvedTemplate.template.id,
+      defaultCaptionStyleId: defaultCaptionStyle.id
+    },
+    subtitleExports: {
+      srt: generateSrt({
+        title: project.title,
+        scenes: orderedScenes.map((scene) => ({
+          order: scene.order,
+          captionText: scene.captionText,
+          duration: scene.duration,
+          captionStyle:
+            captionAnalysis.scenes.find((entry) => entry.sceneId === scene.id)?.resolvedStyle.style.id ??
+            project.defaultCaptionStyle
+        }))
+      }),
+      ass: generateAssSubtitle(
+        {
+          title: project.title,
+          scenes: orderedScenes.map((scene) => ({
+            order: scene.order,
+            captionText: scene.captionText,
+            duration: scene.duration,
+            captionStyle:
+              captionAnalysis.scenes.find((entry) => entry.sceneId === scene.id)?.resolvedStyle.style.id ??
+              project.defaultCaptionStyle
+          }))
+        },
+        defaultCaptionStyle
+      )
+    },
+    scenes
+  };
+}
+

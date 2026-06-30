@@ -1,0 +1,832 @@
+"use client";
+
+import {
+  buildVisualPrompt,
+  type NegativePromptPackId,
+  type VisualPromptPackId
+} from "@reelforge/prompt-engine";
+import { getTemplates } from "@reelforge/templates";
+import { useEffect, useState } from "react";
+import {
+  buildResearchRequirementVisualPromptRequest,
+  buildSceneVisualPromptRequest,
+  generateRequirementVisualRequest,
+  generateSceneVisualRequest
+} from "../lib/studio-api";
+import type {
+  CharacterProfile,
+  DataSource,
+  NegativePromptPack,
+  ProjectScene,
+  PromptVariantType,
+  ResearchAssetRequirement,
+  StudioChannel,
+  StudioProject,
+  VisualGenerationProvider,
+  VisualGenerationProviderDescriptor,
+  VisualPromptPack
+} from "../lib/studio-types";
+import { promptVariantTypes, templateIds } from "../lib/studio-types";
+
+interface PromptLabRequirementOption {
+  dossierId: string;
+  dossierTitle: string;
+  requirement: ResearchAssetRequirement;
+  channelId: string | null;
+  channel: StudioChannel | null;
+}
+
+interface PromptLabStudioProps {
+  projects: StudioProject[];
+  projectsSource: DataSource;
+  channels: StudioChannel[];
+  channelsSource: DataSource;
+  characters: CharacterProfile[];
+  charactersSource: DataSource;
+  promptPacks: VisualPromptPack[];
+  promptPacksSource: DataSource;
+  negativePromptPacks: NegativePromptPack[];
+  negativePromptPacksSource: DataSource;
+  researchRequirements: PromptLabRequirementOption[];
+  researchRequirementsSource: DataSource;
+  visualGenerationProviders: VisualGenerationProviderDescriptor[];
+  visualGenerationProvidersSource: DataSource;
+}
+
+function formatSourceLabel(value: DataSource) {
+  return value === "api" ? "API local ativa" : "Mock local";
+}
+
+function formatTagLabel(value: string) {
+  return value.replaceAll("_", " ").replaceAll("-", " ");
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return [...new Set(values.map((value) => value?.trim()).filter(Boolean))] as string[];
+}
+
+function resolveSceneEffectiveAsset(scene: ProjectScene) {
+  return scene.generatedAsset ?? scene.asset ?? null;
+}
+
+export function PromptLabStudio({
+  projects,
+  projectsSource,
+  channels,
+  channelsSource,
+  characters,
+  charactersSource,
+  promptPacks,
+  promptPacksSource,
+  negativePromptPacks,
+  negativePromptPacksSource,
+  researchRequirements,
+  researchRequirementsSource,
+  visualGenerationProviders,
+  visualGenerationProvidersSource
+}: PromptLabStudioProps) {
+  const templates = getTemplates();
+  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "");
+  const [selectedSceneId, setSelectedSceneId] = useState(
+    projects[0]?.scenes[0]?.id ?? ""
+  );
+  const [selectedRequirementId, setSelectedRequirementId] = useState(
+    researchRequirements[0]?.requirement.id ?? ""
+  );
+  const [selectedCharacterId, setSelectedCharacterId] = useState("");
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [selectedPromptPackId, setSelectedPromptPackId] = useState<
+    VisualPromptPackId | ""
+  >("");
+  const [selectedNegativePromptPackId, setSelectedNegativePromptPackId] =
+    useState<NegativePromptPackId | "">("");
+  const [selectedVariantType, setSelectedVariantType] =
+    useState<PromptVariantType | "">("");
+  const [statusMessage, setStatusMessage] = useState(
+    "Monte um contexto e gere um prompt premium reutilizavel."
+  );
+
+  const comfyProvider =
+    visualGenerationProviders.find((provider) => provider.id === "comfyui-local") ??
+    null;
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ?? null;
+  const selectedScene =
+    selectedProject?.scenes.find((scene) => scene.id === selectedSceneId) ?? null;
+  const selectedRequirementOption =
+    researchRequirements.find(
+      (entry) => entry.requirement.id === selectedRequirementId
+    ) ?? null;
+  const selectedRequirement = selectedRequirementOption?.requirement ?? null;
+  const effectiveChannel =
+    channels.find((channel) => channel.id === selectedChannelId) ??
+    selectedProject?.channel ??
+    selectedRequirementOption?.channel ??
+    null;
+  const effectiveCharacter =
+    characters.find((character) => character.id === selectedCharacterId) ??
+    characters.find(
+      (character) =>
+        character.id ===
+        (selectedScene?.characterProfileId ??
+          selectedRequirement?.characterProfileId ??
+          "")
+    ) ??
+    null;
+  const effectiveTemplateId =
+    selectedTemplateId ||
+    selectedProject?.templateId ||
+    effectiveChannel?.defaultTemplate ||
+    "";
+  const effectiveSceneAsset = selectedScene
+    ? resolveSceneEffectiveAsset(selectedScene)
+    : null;
+  const preview = buildVisualPrompt({
+    scene: selectedScene
+      ? {
+          id: selectedScene.id,
+          title: selectedScene.title,
+          narrationText: selectedScene.narrationText,
+          captionText: selectedScene.captionText,
+          emotion: selectedScene.emotion,
+          visualPreset: selectedScene.visualPreset,
+          energyLevel: selectedScene.energyLevel,
+          visualPrompt: selectedScene.visualPrompt ?? null,
+          negativePrompt: selectedScene.negativePrompt ?? null
+        }
+      : {
+          id: "prompt-lab-draft",
+          title: selectedRequirement?.description ?? "prompt lab concept frame",
+          narrationText: selectedRequirement?.description ?? null,
+          captionText: null,
+          emotion: selectedRequirement?.emotion ?? null,
+          visualPreset: effectiveChannel?.defaultVisualPreset ?? null,
+          energyLevel: selectedRequirement?.priority ?? 72,
+          visualPrompt: null,
+          negativePrompt: null
+        },
+    project: selectedProject
+      ? {
+          id: selectedProject.id,
+          title: selectedProject.title,
+          script: selectedProject.script,
+          format: selectedProject.format,
+          templateId: selectedProject.templateId ?? null
+        }
+      : null,
+    channel: effectiveChannel
+      ? {
+          id: effectiveChannel.id,
+          name: effectiveChannel.name,
+          niche: effectiveChannel.niche,
+          visualStyle: effectiveChannel.visualStyle,
+          narrativeTone: effectiveChannel.narrativeTone,
+          defaultTemplate: effectiveChannel.defaultTemplate
+        }
+      : null,
+    characterProfile: effectiveCharacter
+      ? {
+          id: effectiveCharacter.id,
+          name: effectiveCharacter.name,
+          franchise: effectiveCharacter.franchise,
+          description: effectiveCharacter.description,
+          basePrompt: effectiveCharacter.basePrompt,
+          negativePrompt: effectiveCharacter.negativePrompt,
+          styleNotes: effectiveCharacter.styleNotes,
+          defaultVisualStyle: effectiveCharacter.defaultVisualStyle,
+          tags: [...effectiveCharacter.tags],
+          references: effectiveCharacter.references.map((reference) => ({
+            title: reference.title,
+            notes: reference.notes,
+            referenceType: reference.referenceType,
+            tags: reference.asset?.tags ? [...reference.asset.tags] : []
+          }))
+        }
+      : null,
+    researchAssetRequirement: selectedRequirement
+      ? {
+          id: selectedRequirement.id,
+          description: selectedRequirement.description,
+          suggestedTags: [...selectedRequirement.suggestedTags],
+          emotion: selectedRequirement.emotion,
+          mediaType: selectedRequirement.mediaType,
+          sceneRole: selectedRequirement.sceneRole
+        }
+      : null,
+    templateId: effectiveTemplateId || null,
+    promptPackId: selectedPromptPackId ? selectedPromptPackId : null,
+    negativePackId: selectedNegativePromptPackId
+      ? selectedNegativePromptPackId
+      : null,
+    variantType: selectedVariantType || null,
+    supportTags: uniqueStrings([
+      ...(effectiveSceneAsset?.tags ?? []),
+      ...(selectedRequirement?.suggestedTags ?? []),
+      ...(effectiveCharacter?.tags ?? [])
+    ])
+  });
+
+  useEffect(() => {
+    if (selectedProject && selectedSceneId) {
+      const stillExists = selectedProject.scenes.some(
+        (scene) => scene.id === selectedSceneId
+      );
+
+      if (!stillExists) {
+        setSelectedSceneId(selectedProject.scenes[0]?.id ?? "");
+      }
+    }
+  }, [selectedProject, selectedSceneId]);
+
+  async function handleCopyPrompt() {
+    try {
+      await navigator.clipboard.writeText(preview.prompt);
+      setStatusMessage("Prompt premium copiado para a area de transferencia.");
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : "Nao foi possivel copiar o prompt nesta sessao."
+      );
+    }
+  }
+
+  async function handleApplyScenePrompt() {
+    if (!selectedScene) {
+      setStatusMessage("Selecione uma cena para aplicar o prompt premium.");
+      return;
+    }
+
+    try {
+      const result = await buildSceneVisualPromptRequest(selectedScene.id, {
+        characterProfileId: effectiveCharacter?.id ?? null,
+        promptPackId: preview.promptPack.id,
+        negativePackId: preview.negativePromptPack.id,
+        variantType: selectedVariantType || null
+      });
+      setStatusMessage(
+        `Prompt premium aplicado na cena ${result.scene.order}. ${result.scene.title}.`
+      );
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : "Falha ao aplicar o prompt premium na cena."
+      );
+    }
+  }
+
+  async function handleApplyRequirementPrompt() {
+    if (!selectedRequirement) {
+      setStatusMessage(
+        "Selecione um requirement de research para aplicar o prompt premium."
+      );
+      return;
+    }
+
+    try {
+      const result = await buildResearchRequirementVisualPromptRequest(
+        selectedRequirement.id,
+        {
+          characterProfileId: effectiveCharacter?.id ?? null,
+          promptPackId: preview.promptPack.id,
+          negativePackId: preview.negativePromptPack.id,
+          variantType: selectedVariantType || null
+        }
+      );
+      setStatusMessage(
+        `Prompt premium aplicado no requirement ${result.requirement.description}.`
+      );
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : "Falha ao aplicar o prompt premium no requirement."
+      );
+    }
+  }
+
+  async function handleGenerateSceneVisual(provider: VisualGenerationProvider) {
+    if (!selectedScene) {
+      setStatusMessage("Selecione uma cena antes de gerar um visual.");
+      return;
+    }
+
+    try {
+      const result = await generateSceneVisualRequest(selectedScene.id, {
+        provider,
+        visualSourceMode:
+          selectedScene.visualSourceMode ?? "generated_only",
+        characterProfileId: effectiveCharacter?.id ?? null,
+        width: 1080,
+        height: 1920,
+        seed: null,
+        autoAttach: true
+      });
+      setStatusMessage(
+        `Cena recebeu visual via ${provider}. Asset ${result.asset?.filename ?? "sem arquivo"} pronto.`
+      );
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : `Falha ao gerar visual da cena com ${provider}.`
+      );
+    }
+  }
+
+  async function handleGenerateRequirementVisual(
+    provider: VisualGenerationProvider
+  ) {
+    if (!selectedRequirement) {
+      setStatusMessage("Selecione um requirement antes de gerar um visual.");
+      return;
+    }
+
+    try {
+      const result = await generateRequirementVisualRequest(selectedRequirement.id, {
+        provider,
+        visualSourceMode:
+          selectedRequirement.visualSourceMode ?? "generated_only",
+        characterProfileId: effectiveCharacter?.id ?? null,
+        width: 1080,
+        height: 1920,
+        seed: null,
+        autoAttach: true
+      });
+      setStatusMessage(
+        `Requirement recebeu visual via ${provider}. Asset ${result.asset?.filename ?? "sem arquivo"} pronto.`
+      );
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : `Falha ao gerar visual do requirement com ${provider}.`
+      );
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-[1.9rem] border border-white/10 bg-white/[0.04] p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+              Prompt Lab
+            </p>
+            <h2 className="mt-3 text-3xl font-semibold text-white">
+              Prompt packs, variantes e contexto narrativo
+            </h2>
+            <p className="mt-4 max-w-4xl text-sm leading-7 text-mist/70">
+              Misture cena, canal, personagem, template e requirements de research
+              para construir prompts premium antes de disparar mock visuals ou
+              encaminhar o fluxo para o ComfyUI local.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/20 px-4 py-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">
+                Projetos
+              </p>
+              <p className="mt-3 text-sm font-medium text-white">
+                {formatSourceLabel(projectsSource)}
+              </p>
+            </div>
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/20 px-4 py-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">
+                Research
+              </p>
+              <p className="mt-3 text-sm font-medium text-white">
+                {formatSourceLabel(researchRequirementsSource)}
+              </p>
+            </div>
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/20 px-4 py-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">
+                Providers
+              </p>
+              <p className="mt-3 text-sm font-medium text-white">
+                {formatSourceLabel(visualGenerationProvidersSource)}
+              </p>
+            </div>
+          </div>
+        </div>
+        <p className="mt-5 rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+          {statusMessage}
+        </p>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <article className="space-y-6 rounded-[1.9rem] border border-white/10 bg-white/[0.04] p-6">
+          <div>
+            <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+              Contexto
+            </p>
+            <h3 className="mt-2 text-2xl font-semibold text-white">
+              Escolha a origem criativa
+            </h3>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Projeto</span>
+              <select
+                value={selectedProjectId}
+                onChange={(event) => setSelectedProjectId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Sem projeto</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Cena</span>
+              <select
+                value={selectedSceneId}
+                onChange={(event) => setSelectedSceneId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Sem cena</option>
+                {(selectedProject?.scenes ?? []).map((scene) => (
+                  <option key={scene.id} value={scene.id}>
+                    {scene.order}. {scene.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">
+                Requirement de research
+              </span>
+              <select
+                value={selectedRequirementId}
+                onChange={(event) => setSelectedRequirementId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Sem requirement</option>
+                {researchRequirements.map((entry) => (
+                  <option key={entry.requirement.id} value={entry.requirement.id}>
+                    {entry.dossierTitle} - {entry.requirement.description}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Personagem</span>
+              <select
+                value={selectedCharacterId}
+                onChange={(event) => setSelectedCharacterId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Auto / sem personagem</option>
+                {characters.map((character) => (
+                  <option key={character.id} value={character.id}>
+                    {character.name} - {character.slug}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Canal</span>
+              <select
+                value={selectedChannelId}
+                onChange={(event) => setSelectedChannelId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Auto / sem override</option>
+                {channels.map((channel) => (
+                  <option key={channel.id} value={channel.id}>
+                    {channel.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Template</span>
+              <select
+                value={selectedTemplateId}
+                onChange={(event) => setSelectedTemplateId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Auto / sem override</option>
+                {templates
+                  .filter((template) =>
+                    templateIds.includes(template.id)
+                  )
+                  .map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Prompt pack</span>
+              <select
+                value={selectedPromptPackId}
+                onChange={(event) =>
+                  setSelectedPromptPackId(
+                    event.target.value as VisualPromptPackId | ""
+                  )
+                }
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Auto ({preview.promptPack.name})</option>
+                {promptPacks.map((pack) => (
+                  <option key={pack.id} value={pack.id}>
+                    {pack.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">
+                Negative pack
+              </span>
+              <select
+                value={selectedNegativePromptPackId}
+                onChange={(event) =>
+                  setSelectedNegativePromptPackId(
+                    event.target.value as NegativePromptPackId | ""
+                  )
+                }
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">
+                  Auto ({preview.negativePromptPack.name})
+                </option>
+                {negativePromptPacks.map((pack) => (
+                  <option key={pack.id} value={pack.id}>
+                    {pack.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Variante</span>
+              <select
+                value={selectedVariantType}
+                onChange={(event) =>
+                  setSelectedVariantType(event.target.value as PromptVariantType | "")
+                }
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Default</option>
+                {promptVariantTypes.map((variant) => (
+                  <option key={variant} value={variant}>
+                    {formatTagLabel(variant)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Channel / template
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {effectiveChannel?.name ?? "sem canal"}
+              </p>
+              <p className="mt-2 text-xs text-mist/60">
+                template {effectiveTemplateId || "auto"} | canais{" "}
+                {formatSourceLabel(channelsSource)} | characters{" "}
+                {formatSourceLabel(charactersSource)}
+              </p>
+            </div>
+            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Pack escolhido
+              </p>
+              <p className="mt-2 text-sm text-white">{preview.promptPack.name}</p>
+              <p className="mt-2 text-xs text-mist/60">
+                workflow {preview.promptPack.recommendedWorkflow} | provider{" "}
+                {preview.promptPack.recommendedProvider}
+              </p>
+            </div>
+            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Requirement extra
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {selectedRequirement?.description ?? "sem requirement"}
+              </p>
+              <p className="mt-2 text-xs text-mist/60">
+                prompt packs {formatSourceLabel(promptPacksSource)} | negative packs{" "}
+                {formatSourceLabel(negativePromptPacksSource)}
+              </p>
+            </div>
+          </div>
+        </article>
+
+        <article className="space-y-6 rounded-[1.9rem] border border-white/10 bg-white/[0.04] p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                Preview premium
+              </p>
+              <h3 className="mt-2 text-2xl font-semibold text-white">
+                Prompt final, variantes e score
+              </h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/72">
+                pack {preview.promptPack.id}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/72">
+                negative {preview.negativePromptPack.id}
+              </span>
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
+                score {preview.qualityAnalysis.overallScore}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="rounded-[1.1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Prompt final
+              </p>
+              <p className="mt-3 text-sm leading-7 text-mist/68">{preview.prompt}</p>
+            </div>
+            <div className="rounded-[1.1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Negative prompt
+              </p>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                {preview.negativePrompt}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Prompt plan
+              </p>
+              <p className="mt-2 text-sm text-white">{preview.promptPlanSummary}</p>
+            </div>
+            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Faltas detectadas
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {preview.qualityAnalysis.missingElements.length > 0
+                  ? preview.qualityAnalysis.missingElements.join(", ")
+                  : "Nenhuma falta critica"}
+              </p>
+            </div>
+            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Sugestao principal
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {preview.qualityAnalysis.suggestions[0] ??
+                  "Prompt equilibrado para gerar visual premium."}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-[1.35rem] border border-[#7be0ff]/20 bg-[#7be0ff]/8 p-4">
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleCopyPrompt();
+                }}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-mist/80"
+              >
+                Copiar prompt
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleApplyScenePrompt();
+                }}
+                disabled={!selectedScene}
+                className="rounded-full border border-signal/25 bg-signal/10 px-4 py-2 text-xs text-signal disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Aplicar a cena
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleApplyRequirementPrompt();
+                }}
+                disabled={!selectedRequirement}
+                className="rounded-full border border-[#63ffe1]/25 bg-[#63ffe1]/10 px-4 py-2 text-xs text-[#c8fff3] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Aplicar ao requirement
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleGenerateSceneVisual("mock-svg");
+                }}
+                disabled={!selectedScene}
+                className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-4 py-2 text-xs text-[#d8f8ff] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Gerar visual mock na cena
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleGenerateRequirementVisual("mock-svg");
+                }}
+                disabled={!selectedRequirement}
+                className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-4 py-2 text-xs text-[#d8f8ff] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Gerar visual mock no requirement
+              </button>
+              {comfyProvider ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleGenerateSceneVisual("comfyui-local");
+                    }}
+                    disabled={!selectedScene || !comfyProvider.available}
+                    className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-4 py-2 text-xs text-[#e2e8ff] disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Gerar com ComfyUI na cena
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleGenerateRequirementVisual("comfyui-local");
+                    }}
+                    disabled={!selectedRequirement || !comfyProvider.available}
+                    className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-4 py-2 text-xs text-[#e2e8ff] disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Gerar com ComfyUI no requirement
+                  </button>
+                </>
+              ) : null}
+            </div>
+
+            <p className="mt-4 text-xs leading-6 text-mist/60">
+              ComfyUI {comfyProvider?.available ? "disponivel" : "opcional/offline"}.
+              O mock provider continua sendo o baseline deterministico para preview
+              e smoke 100% local.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                Variantes
+              </p>
+              <p className="text-xs text-mist/60">
+                {preview.variants.length} variacoes deterministicas
+              </p>
+            </div>
+            {preview.variants.map((variant) => (
+              <button
+                key={variant.id}
+                type="button"
+                onClick={() => setSelectedVariantType(variant.type)}
+                className={`w-full rounded-[1.2rem] border p-4 text-left transition ${
+                  selectedVariantType === variant.type
+                    ? "border-signal/35 bg-signal/8"
+                    : "border-white/10 bg-black/20 hover:border-white/20"
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">{variant.title}</p>
+                    <p className="mt-2 text-xs text-mist/55">{variant.type}</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-mist/65">
+                    score {variant.score}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-7 text-mist/68">
+                  {variant.recommendedUse}
+                </p>
+              </button>
+            ))}
+          </div>
+        </article>
+      </section>
+    </div>
+  );
+}
+

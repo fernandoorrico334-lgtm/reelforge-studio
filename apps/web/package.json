@@ -1,0 +1,36 @@
+{
+  "name": "@reelforge/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@reelforge/audio-engine": "file:../../packages/audio-engine",
+    "@reelforge/caption-engine": "file:../../packages/caption-engine",
+    "@reelforge/cinematic-engine": "file:../../packages/cinematic-engine",
+    "@reelforge/prompt-engine": "file:../../packages/prompt-engine",
+    "@reelforge/hybrid-visual-engine": "file:../../packages/hybrid-visual-engine",
+    "@reelforge/media-collector": "file:../../packages/media-collector",
+    "@reelforge/research-collector": "file:../../packages/research-collector",
+    "@reelforge/story-engine": "file:../../packages/story-engine",
+    "@reelforge/templates": "file:../../packages/templates",
+    "@reelforge/video-engine": "file:../../packages/video-engine",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.0"
+  }
+}
+

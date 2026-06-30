@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "workflows": [
+    {
+      "id": "txt2img-basic",
+      "name": "Text to Image Basic",
+      "description": "Workflow base para gerar PNG vertical a partir de prompt premium e negative prompt local.",
+      "type": "txt2img",
+      "supportsReferences": false,
+      "supportsSeed": true,
+      "supportsResolution": true,
+      "recommendedPromptPacks": [
+        "cinematic_story",
+        "documentary_clean",
+        "mystery_doc",
+        "true_crime_doc",
+        "sports_hype"
+      ],
+      "notes": [
+        "Usa placeholders padrao do ReelForge para prompt, negative prompt, seed e resolucao.",
+        "Mantem compatibilidade com smoke offline e fallback mock provider."
+      ]
+    },
+    {
+      "id": "img2img-reference-basic",
+      "name": "Image to Image Reference Basic",
+      "description": "Workflow base para reaproveitar uma referencia local do usuario e enriquecer a geracao com prompt premium.",
+      "type": "img2img",
+      "supportsReferences": true,
+      "supportsSeed": true,
+      "supportsResolution": true,
+      "recommendedPromptPacks": [
+        "anime_dark",
+        "comic_drama",
+        "game_epic",
+        "horror_tension",
+        "history_dark"
+      ],
+      "notes": [
+        "Exige REFERENCE_IMAGE no workflow para subir a referencia local com seguranca.",
+        "Serve como baseline para Character Reference System e Generated Visuals render-ready."
+      ]
+    }
+  ]
+}

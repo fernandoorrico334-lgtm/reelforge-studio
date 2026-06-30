@@ -1,0 +1,52 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "@reelforge/video-engine": [
+        "packages/video-engine/src/index.ts"
+      ],
+      "@reelforge/video-engine/render-server": [
+        "packages/video-engine/src/render-server.ts"
+      ],
+      "@reelforge/audio-engine": [
+        "packages/audio-engine/src/index.ts"
+      ],
+      "@reelforge/story-engine": [
+        "packages/story-engine/src/index.ts"
+      ],
+      "@reelforge/research-collector": [
+        "packages/research-collector/src/index.ts"
+      ],
+      "@reelforge/media-collector": [
+        "packages/media-collector/src/index.ts"
+      ],
+      "@reelforge/cinematic-engine": [
+        "packages/cinematic-engine/src/index.ts"
+      ],
+      "@reelforge/prompt-engine": [
+        "packages/prompt-engine/src/index.ts"
+      ],
+      "@reelforge/hybrid-visual-engine": [
+        "packages/hybrid-visual-engine/src/index.ts"
+      ],
+      "@reelforge/caption-engine": [
+        "packages/caption-engine/src/index.ts"
+      ],
+      "@reelforge/templates": [
+        "packages/templates/src/index.ts"
+      ]
+    }
+  }
+}
+

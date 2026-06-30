@@ -1,0 +1,2662 @@
+[
+  {
+    "relativePath": ".gitignore",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/.gitignore.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/dist/modules/assets/infrastructure/prisma-asset-repository.js",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/dist/modules/assets/infrastructure/prisma-asset-repository.js.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/cli/intake-import-approved.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/cli/intake-import-approved.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/cli/intake-scan.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/cli/intake-scan.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/config/env.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/config/env.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/config/paths.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/config/paths.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/app.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/app.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/asset-media-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/asset-media-routes.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/assets-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/assets-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/audio-mood-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/audio-mood-routes.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/candidate-media-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/candidate-media-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/caption-style-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/caption-style-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/channels-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/channels-routes.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/characters-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/characters-routes.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/hybrid-visual-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/hybrid-visual-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/intake-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/intake-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/media-collector-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/media-collector-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/production-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/production-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/prompt-engine-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/prompt-engine-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/render-job-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/render-job-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/render-media-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/render-media-routes.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/research-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/research-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/template-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/template-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/routes/video-project-routes.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/routes/video-project-routes.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/http/utils/http-utils.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/http/utils/http-utils.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/infrastructure/database/prisma-client.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/infrastructure/database/prisma-client.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/infrastructure/memory/studio-memory-store.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/infrastructure/memory/studio-memory-store.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/application/asset-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/application/asset-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/application/asset-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/application/asset-service.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/application/asset-storage.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/application/asset-storage.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/application/asset-upload-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/application/asset-upload-service.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/domain/asset.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/domain/asset.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/infrastructure/asset-file-utils.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/infrastructure/asset-file-utils.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/infrastructure/asset-repository-factory.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/infrastructure/asset-repository-factory.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/infrastructure/in-memory-asset-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/infrastructure/in-memory-asset-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/infrastructure/local-asset-storage.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/infrastructure/local-asset-storage.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/assets/infrastructure/prisma-asset-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/assets/infrastructure/prisma-asset-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/channels/application/channel-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/channels/application/channel-repository.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/channels/application/channel-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/channels/application/channel-service.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/channels/domain/channel.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/channels/domain/channel.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/channels/infrastructure/channel-repository-factory.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/channels/infrastructure/channel-repository-factory.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/channels/infrastructure/in-memory-channel-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/channels/infrastructure/in-memory-channel-repository.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/channels/infrastructure/prisma-channel-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/channels/infrastructure/prisma-channel-repository.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/characters/application/character-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/characters/application/character-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/characters/application/character-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/characters/application/character-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/characters/domain/character.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/characters/domain/character.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/characters/infrastructure/character-repository-factory.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/characters/infrastructure/character-repository-factory.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/characters/infrastructure/in-memory-character-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/characters/infrastructure/in-memory-character-repository.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/characters/infrastructure/prisma-character-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/characters/infrastructure/prisma-character-repository.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/application/hybrid-visual-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/application/hybrid-visual-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/application/visual-generation-job-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/application/visual-generation-job-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/domain/visual-generation.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/domain/visual-generation.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/infrastructure/comfyui-client.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/infrastructure/comfyui-client.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/infrastructure/in-memory-visual-generation-job-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/infrastructure/in-memory-visual-generation-job-repository.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/infrastructure/mock-visual-rasterizer.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/infrastructure/mock-visual-rasterizer.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/infrastructure/prisma-visual-generation-job-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/infrastructure/prisma-visual-generation-job-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/infrastructure/visual-generation-job-repository-factory.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/infrastructure/visual-generation-job-repository-factory.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/hybrid-visual/infrastructure/visual-generation-provider-registry.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/hybrid-visual/infrastructure/visual-generation-provider-registry.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/intake/application/intake-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/intake/application/intake-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/intake/application/intake-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/intake/application/intake-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/intake/domain/intake.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/intake/domain/intake.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/intake/infrastructure/in-memory-intake-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/intake/infrastructure/in-memory-intake-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/intake/infrastructure/intake-filesystem.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/intake/infrastructure/intake-filesystem.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/intake/infrastructure/intake-repository-factory.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/intake/infrastructure/intake-repository-factory.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/intake/infrastructure/prisma-intake-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/intake/infrastructure/prisma-intake-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/media-collector/application/media-collector-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/media-collector/application/media-collector-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/media-collector/domain/media-collector.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/media-collector/domain/media-collector.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/media-collector/infrastructure/media-provider-registry.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/media-collector/infrastructure/media-provider-registry.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/production/application/production-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/production/application/production-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/production/domain/production.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/production/domain/production.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/application/create-studio-manifest.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/application/create-studio-manifest.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/application/project-audio-plan-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/application/project-audio-plan-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/application/project-caption-analysis-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/application/project-caption-analysis-service.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/application/project-render-blueprint-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/application/project-render-blueprint-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/application/project-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/application/project-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/application/project-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/application/project-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/application/project-story-analysis-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/application/project-story-analysis-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/application/project-video-engine-mapper.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/application/project-video-engine-mapper.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/domain/project.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/domain/project.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/infrastructure/in-memory-project-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/infrastructure/in-memory-project-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/infrastructure/prisma-project-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/infrastructure/prisma-project-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/projects/infrastructure/project-repository-factory.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/projects/infrastructure/project-repository-factory.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/render-jobs/application/render-job-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/render-jobs/application/render-job-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/render-jobs/application/render-job-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/render-jobs/application/render-job-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/render-jobs/application/render-storage.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/render-jobs/application/render-storage.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/render-jobs/domain/render-job.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/render-jobs/domain/render-job.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/render-jobs/infrastructure/in-memory-render-job-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/render-jobs/infrastructure/in-memory-render-job-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/render-jobs/infrastructure/local-render-storage.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/render-jobs/infrastructure/local-render-storage.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/render-jobs/infrastructure/prisma-render-job-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/render-jobs/infrastructure/prisma-render-job-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/render-jobs/infrastructure/render-job-repository-factory.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/render-jobs/infrastructure/render-job-repository-factory.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/research/application/research-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/research/application/research-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/research/application/research-service.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/research/application/research-service.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/research/domain/research.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/research/domain/research.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/research/infrastructure/in-memory-research-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/research/infrastructure/in-memory-research-repository.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/research/infrastructure/prisma-research-repository.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/research/infrastructure/prisma-research-repository.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/research/infrastructure/public-research-connectors.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/research/infrastructure/public-research-connectors.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/research/infrastructure/research-repository-factory.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/research/infrastructure/research-repository-factory.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/modules/research/infrastructure/research-source-storage.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/modules/research/infrastructure/research-source-storage.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/src/shared/errors.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/src/shared/errors.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/tsconfig.dev.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/tsconfig.dev.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/api/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/api/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/next-env.d.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/next-env.d.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/next.config.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/next.config.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/postcss.config.js",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/postcss.config.js.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/assets/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/assets/page.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/channels/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/channels/page.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/characters/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/characters/page.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/globals.css",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/globals.css.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/intake/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/intake/page.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/layout.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/layout.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/media-collector/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/media-collector/page.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/page.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/produce/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/produce/page.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/projects/[id]/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/projects/_id_/page.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/projects/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/projects/page.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/prompt-lab/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/prompt-lab/page.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/renders/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/renders/page.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/research/[id]/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/research/_id_/page.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/app/research/page.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/app/research/page.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/asset-media-preview.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/asset-media-preview.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/assets-manager.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/assets-manager.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/caption-engine-panel.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/caption-engine-panel.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/caption-frame-preview.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/caption-frame-preview.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/channels-manager.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/channels-manager.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/characters-manager.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/characters-manager.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/cinematic-preset-card.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/cinematic-preset-card.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/dashboard-card.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/dashboard-card.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/intake-candidate-preview.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/intake-candidate-preview.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/intake-manager.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/intake-manager.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/media-collector-studio.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/media-collector-studio.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/production-flow-studio.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/production-flow-studio.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/project-studio.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/project-studio.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/projects-manager.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/projects-manager.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/prompt-lab-studio.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/prompt-lab-studio.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/render-blueprint-panel.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/render-blueprint-panel.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/render-job-card.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/render-job-card.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/render-jobs-panel.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/render-jobs-panel.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/renders-manager.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/renders-manager.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/research-dossier-studio.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/research-dossier-studio.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/research-dossiers-manager.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/research-dossiers-manager.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/story-engine-panel.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/story-engine-panel.tsx.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/components/studio-chrome.tsx",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/components/studio-chrome.tsx.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/lib/mock-studio-data.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/lib/mock-studio-data.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/lib/production-flow.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/lib/production-flow.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/lib/project-story-analysis.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/lib/project-story-analysis.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/lib/project-video-blueprint.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/lib/project-video-blueprint.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/lib/research-local.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/lib/research-local.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/lib/studio-api.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/lib/studio-api.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/src/lib/studio-types.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/src/lib/studio-types.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/tailwind.config.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/tailwind.config.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/web/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/web/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/src/config/paths.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/src/config/paths.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/src/infrastructure/prisma-client.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/src/infrastructure/prisma-client.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/src/jobs/render-video.job.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/src/jobs/render-video.job.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/src/pipelines/render-pipeline.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/src/pipelines/render-pipeline.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/src/services/job-registry.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/src/services/job-registry.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/src/services/render-worker.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/src/services/render-worker.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/tsconfig.dev.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/tsconfig.dev.json.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "apps/worker/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/apps/worker/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "docs/ARCHITECTURE.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/docs/ARCHITECTURE.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "docs/CODEX_GUIDE.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/docs/CODEX_GUIDE.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "docs/MODULES.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/docs/MODULES.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "docs/PRODUCT_SPEC.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/docs/PRODUCT_SPEC.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "docs/ROADMAP.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/docs/ROADMAP.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "docs/VISION.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/docs/VISION.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "package-lock.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "medium",
+    "completeness": "partial",
+    "savedPath": "recovery/extracted-logs/files/package-lock.json.from-get-content.txt",
+    "notes": "The captured command output appears truncated in the session log.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/audio-engine/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/audio-engine/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/audio-engine/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/audio-engine/src/index.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/audio-engine/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/audio-engine/tsconfig.json.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/caption-engine/dist/index.js",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/caption-engine/dist/index.js.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/caption-engine/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/caption-engine/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/caption-engine/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/caption-engine/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/caption-engine/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/caption-engine/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/cinematic-engine/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/cinematic-engine/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/cinematic-engine/src/index.js",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/cinematic-engine/src/index.js.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/cinematic-engine/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/cinematic-engine/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/cinematic-engine/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/cinematic-engine/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/hybrid-visual-engine/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/hybrid-visual-engine/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/hybrid-visual-engine/src/comfy-workflows.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/hybrid-visual-engine/src/comfy-workflows.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/hybrid-visual-engine/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/hybrid-visual-engine/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/hybrid-visual-engine/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/hybrid-visual-engine/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/hybrid-visual-engine/workflows/comfyui/img2img-reference-basic.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/hybrid-visual-engine/workflows/comfyui/img2img-reference-basic.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/hybrid-visual-engine/workflows/comfyui/txt2img-basic.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/hybrid-visual-engine/workflows/comfyui/txt2img-basic.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/hybrid-visual-engine/workflows/comfyui/workflow-manifest.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/hybrid-visual-engine/workflows/comfyui/workflow-manifest.json.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/media-collector/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/media-collector/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/media-collector/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/media-collector/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/media-collector/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/media-collector/tsconfig.json.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/prompt-engine/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/prompt-engine/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/prompt-engine/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/prompt-engine/src/index.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/prompt-engine/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/prompt-engine/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/research-collector/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/research-collector/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/research-collector/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/research-collector/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/research-collector/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/research-collector/tsconfig.json.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/story-engine/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/story-engine/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/story-engine/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/story-engine/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/story-engine/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/story-engine/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/templates/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/templates/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/templates/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/templates/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/templates/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/templates/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/package.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/package.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/src/audio-mix.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/src/audio-mix.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/src/cinematic-filter-plans.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/src/cinematic-filter-plans.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/src/ffmpeg-filter-utils.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/src/ffmpeg-filter-utils.ts.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/src/index.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/src/index.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/src/render-cinematic-v2.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/src/render-cinematic-v2.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/src/render-paths.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/src/render-paths.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/src/render-server.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/src/render-server.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/src/render-v1.ts",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/src/render-v1.ts.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "packages/video-engine/tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/packages/video-engine/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/migrations/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/migrations/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/migrations/20260627190500_render_cinematic_v2_mode/migration.sql",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/migrations/20260627190500_render_cinematic_v2_mode/migration.sql.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/migrations/20260627221000_audio_engine_v1/migration.sql",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/migrations/20260627221000_audio_engine_v1/migration.sql.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/migrations/20260627221005_manual_intake_system/migration.sql",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/migrations/20260627221005_manual_intake_system/migration.sql.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/migrations/20260627233000_production_flow_channel_defaults/migration.sql",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/migrations/20260627233000_production_flow_channel_defaults/migration.sql.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/migrations/20260628121500_media_collector_v1/migration.sql",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/migrations/20260628121500_media_collector_v1/migration.sql.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/README.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/README.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/schema.prisma",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/schema.prisma.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "prisma/seed.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/prisma/seed.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "README.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/README.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/lib/smoke-utils.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/lib/smoke-utils.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/prisma-cli.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/prisma-cli.mjs.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-comfy-provider-contract.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-comfy-provider-contract.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-comfy-provider-local.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-comfy-provider-local.mjs.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-comfy-provider-mock-status.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-comfy-provider-mock-status.mjs.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-hybrid-visual-render-ready.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-hybrid-visual-render-ready.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-hybrid-visual-render.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-hybrid-visual-render.mjs.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-hybrid-visual.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-hybrid-visual.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-intake.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-intake.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-media-collector.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-media-collector.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-production-flow.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-production-flow.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-prompt-engine.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-prompt-engine.mjs.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-render-audio.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-render-audio.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-render-v1.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-render-v1.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "scripts/smoke-research.mjs",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/scripts/smoke-research.mjs.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/assets/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/assets/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/comfyui/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/comfyui/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/comfyui/workflows/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/comfyui/workflows/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/characters/_example-character/notes/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/characters/_example-character/notes/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/characters/_example-character/references/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/characters/_example-character/references/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/audio/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/audio/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/documents/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/documents/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/images/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/images/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/music/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/music/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/overlays/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/overlays/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/references/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/references/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/sfx/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/sfx/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/drop/videos/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/drop/videos/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/projects/_example-project/raw/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/projects/_example-project/raw/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/projects/_example-project/references/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/projects/_example-project/references/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/projects/_example-project/selected/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/projects/_example-project/selected/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/rejected/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/rejected/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/inbox/reviewed/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/inbox/reviewed/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/README.md",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/README.md.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/renders/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/renders/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/research/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/research/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "storage/research/raw/.gitkeep",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "apply_patch:add",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/storage/research/raw/.gitkeep.reconstructed.txt",
+    "notes": "Full file recovered from Add File patch.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "tsconfig.base.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/tsconfig.base.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  },
+  {
+    "relativePath": "tsconfig.json",
+    "sourceLog": "rollout-2026-06-26T15-18-24-019f0527-80c0-7990-ac53-9fdfb26c413d.jsonl",
+    "extractionType": "get-content",
+    "confidence": "high",
+    "completeness": "complete",
+    "savedPath": "recovery/extracted-logs/files/tsconfig.json.from-get-content.txt",
+    "notes": "Full file body recovered from Get-Content -Raw output.",
+    "status": "updated from logs"
+  }
+]

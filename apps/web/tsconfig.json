@@ -1,0 +1,35 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "baseUrl": ".",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "preserve",
+    "allowJs": false,
+    "incremental": true,
+    "noEmit": true,
+    "paths": {
+      "@reelforge/audio-engine": ["../../packages/audio-engine/src/index.ts"],
+      "@reelforge/video-engine": ["../../packages/video-engine/src/index.ts"],
+      "@reelforge/story-engine": ["../../packages/story-engine/src/index.ts"],
+      "@reelforge/media-collector": ["../../packages/media-collector/src/index.ts"],
+      "@reelforge/research-collector": ["../../packages/research-collector/src/index.ts"],
+      "@reelforge/cinematic-engine": ["../../packages/cinematic-engine/src/index.ts"],
+      "@reelforge/prompt-engine": ["../../packages/prompt-engine/src/index.ts"],
+      "@reelforge/hybrid-visual-engine": ["../../packages/hybrid-visual-engine/src/index.ts"],
+      "@reelforge/caption-engine": ["../../packages/caption-engine/src/index.ts"],
+      "@reelforge/templates": ["../../packages/templates/src/index.ts"]
+    },
+    "plugins": [{ "name": "next" }]
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "../../packages/*/src/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}
+

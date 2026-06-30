@@ -1,0 +1,17 @@
+ALTER TABLE "VideoProject" ADD COLUMN "backgroundMusicAssetId" TEXT;
+ALTER TABLE "VideoProject" ADD COLUMN "voiceoverAssetId" TEXT;
+ALTER TABLE "VideoProject" ADD COLUMN "audioMood" TEXT;
+ALTER TABLE "VideoProject" ADD COLUMN "musicVolume" REAL NOT NULL DEFAULT 0.18;
+ALTER TABLE "VideoProject" ADD COLUMN "voiceVolume" REAL NOT NULL DEFAULT 1.0;
+ALTER TABLE "VideoProject" ADD COLUMN "sfxVolume" REAL NOT NULL DEFAULT 0.7;
+ALTER TABLE "VideoProject" ADD COLUMN "enableAudioDucking" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "VideoProject" ADD COLUMN "duckingLevel" REAL NOT NULL DEFAULT 0.35;
+
+ALTER TABLE "Scene" ADD COLUMN "sfxAssetId" TEXT;
+ALTER TABLE "Scene" ADD COLUMN "sfxStartTime" REAL NOT NULL DEFAULT 0;
+ALTER TABLE "Scene" ADD COLUMN "sfxVolume" REAL NOT NULL DEFAULT 0.7;
+
+ALTER TABLE "RenderJob" ADD COLUMN "hasAudio" BOOLEAN;
+ALTER TABLE "RenderJob" ADD COLUMN "audioCodec" TEXT;
+ALTER TABLE "RenderJob" ADD COLUMN "audioChannels" INTEGER;
+ALTER TABLE "RenderJob" ADD COLUMN "audioSampleRate" INTEGER;

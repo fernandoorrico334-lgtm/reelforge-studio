@@ -1,0 +1,44 @@
+{
+  "name": "reelforge-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo foundation for a local cinematic short-form video studio.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present --parallel",
+    "dev:web": "npm run dev --workspace @reelforge/web",
+    "dev:api": "npm run dev --workspace @reelforge/api",
+    "dev:worker": "npm run dev --workspace @reelforge/worker",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate:dev": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:seed": "prisma db seed --schema prisma/schema.prisma",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "smoke:research": "node scripts/smoke-research.mjs",
+    "smoke:intake": "node scripts/smoke-intake.mjs",
+    "smoke:production:logic": "node scripts/smoke-production-flow.mjs",
+    "smoke:media-collector": "node scripts/smoke-media-collector.mjs",
+    "smoke:hybrid-visual": "node scripts/smoke-hybrid-visual.mjs",
+    "smoke:hybrid-visual:render-ready": "node scripts/smoke-hybrid-visual-render-ready.mjs",
+    "smoke:comfy-provider:contract": "node scripts/smoke-comfy-provider-contract.mjs",
+    "smoke:comfy-provider:mock-status": "node scripts/smoke-comfy-provider-mock-status.mjs",
+    "smoke:comfy-provider:local": "node scripts/smoke-comfy-provider-local.mjs",
+    "smoke:prompt-engine": "node scripts/smoke-prompt-engine.mjs"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "6.16.0"
+  },
+  "devDependencies": {
+    "prisma": "6.16.0"
+  }
+}

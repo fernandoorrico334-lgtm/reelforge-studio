@@ -1,0 +1,11 @@
+ALTER TABLE "Channel" ADD COLUMN "defaultRenderMode" TEXT NOT NULL DEFAULT 'v1';
+ALTER TABLE "Channel" ADD COLUMN "defaultRenderQuality" TEXT NOT NULL DEFAULT 'standard';
+ALTER TABLE "Channel" ADD COLUMN "defaultAudioMood" TEXT;
+ALTER TABLE "Channel" ADD COLUMN "defaultCaptionStyle" TEXT;
+ALTER TABLE "Channel" ADD COLUMN "defaultVisualPreset" TEXT;
+ALTER TABLE "Channel" ADD COLUMN "defaultMusicAssetId" TEXT;
+ALTER TABLE "Channel" ADD COLUMN "defaultVoiceoverAssetId" TEXT;
+ALTER TABLE "Channel" ADD COLUMN "defaultDurationTarget" INTEGER;
+ALTER TABLE "Channel" ADD COLUMN "defaultSceneDuration" REAL NOT NULL DEFAULT 4;
+ALTER TABLE "Channel" ADD COLUMN "preferredAssetCategories" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "Channel" ADD COLUMN "preferredAssetTags" TEXT NOT NULL DEFAULT '[]';

@@ -1,0 +1,28 @@
+{
+  "name": "@reelforge/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "once": "node dist/index.js --once",
+    "build": "tsc -b tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -b tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "@prisma/client": "6.16.0",
+    "@reelforge/audio-engine": "file:../../packages/audio-engine",
+    "@reelforge/caption-engine": "file:../../packages/caption-engine",
+    "@reelforge/cinematic-engine": "file:../../packages/cinematic-engine",
+    "@reelforge/story-engine": "file:../../packages/story-engine",
+    "@reelforge/templates": "file:../../packages/templates",
+    "@reelforge/video-engine": "file:../../packages/video-engine"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
+}
+

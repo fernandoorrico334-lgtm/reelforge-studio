@@ -1,0 +1,403 @@
+{
+  "files": [
+    {
+      "path": ".codex-run/api-dev.log",
+      "size": 29485
+    },
+    {
+      "path": ".gitignore",
+      "size": 187
+    },
+    {
+      "path": "apps/api/package.json",
+      "size": 521
+    },
+    {
+      "path": "apps/api/src/config/env.ts",
+      "size": 695
+    },
+    {
+      "path": "apps/api/src/http/app.ts",
+      "size": 2542
+    },
+    {
+      "path": "apps/api/src/http/routes/assets-routes.ts",
+      "size": 2626
+    },
+    {
+      "path": "apps/api/src/http/routes/channels-routes.ts",
+      "size": 2251
+    },
+    {
+      "path": "apps/api/src/http/utils/http-utils.ts",
+      "size": 2319
+    },
+    {
+      "path": "apps/api/src/index.ts",
+      "size": 1213
+    },
+    {
+      "path": "apps/api/src/infrastructure/database/prisma-client.ts",
+      "size": 303
+    },
+    {
+      "path": "apps/api/src/infrastructure/memory/studio-memory-store.ts",
+      "size": 7372
+    },
+    {
+      "path": "apps/api/src/modules/assets/application/asset-repository.ts",
+      "size": 439
+    },
+    {
+      "path": "apps/api/src/modules/assets/application/asset-service.ts",
+      "size": 1204
+    },
+    {
+      "path": "apps/api/src/modules/assets/domain/asset.ts",
+      "size": 10060
+    },
+    {
+      "path": "apps/api/src/modules/assets/infrastructure/asset-repository-factory.ts",
+      "size": 1084
+    },
+    {
+      "path": "apps/api/src/modules/assets/infrastructure/in-memory-asset-repository.ts",
+      "size": 2081
+    },
+    {
+      "path": "apps/api/src/modules/assets/infrastructure/prisma-asset-repository.ts",
+      "size": 3928
+    },
+    {
+      "path": "apps/api/src/modules/channels/application/channel-repository.ts",
+      "size": 427
+    },
+    {
+      "path": "apps/api/src/modules/channels/application/channel-service.ts",
+      "size": 1196
+    },
+    {
+      "path": "apps/api/src/modules/channels/domain/channel.ts",
+      "size": 3055
+    },
+    {
+      "path": "apps/api/src/modules/channels/infrastructure/channel-repository-factory.ts",
+      "size": 1112
+    },
+    {
+      "path": "apps/api/src/modules/channels/infrastructure/in-memory-channel-repository.ts",
+      "size": 2142
+    },
+    {
+      "path": "apps/api/src/modules/channels/infrastructure/prisma-channel-repository.ts",
+      "size": 2302
+    },
+    {
+      "path": "apps/api/src/modules/projects/application/create-studio-manifest.ts",
+      "size": 1102
+    },
+    {
+      "path": "apps/api/src/modules/projects/application/project-repository.ts",
+      "size": 162
+    },
+    {
+      "path": "apps/api/src/modules/projects/domain/project.ts",
+      "size": 963
+    },
+    {
+      "path": "apps/api/src/modules/projects/infrastructure/in-memory-project-repository.ts",
+      "size": 1404
+    },
+    {
+      "path": "apps/api/src/modules/projects/infrastructure/prisma-project-repository.ts",
+      "size": 4520
+    },
+    {
+      "path": "apps/api/src/modules/projects/infrastructure/project-repository-factory.ts",
+      "size": 1139
+    },
+    {
+      "path": "apps/api/src/shared/errors.ts",
+      "size": 274
+    },
+    {
+      "path": "apps/api/tsconfig.json",
+      "size": 275
+    },
+    {
+      "path": "apps/web/next-env.d.ts",
+      "size": 151
+    },
+    {
+      "path": "apps/web/next.config.ts",
+      "size": 128
+    },
+    {
+      "path": "apps/web/package.json",
+      "size": 788
+    },
+    {
+      "path": "apps/web/postcss.config.js",
+      "size": 80
+    },
+    {
+      "path": "apps/web/src/app/globals.css",
+      "size": 550
+    },
+    {
+      "path": "apps/web/src/app/layout.tsx",
+      "size": 429
+    },
+    {
+      "path": "apps/web/src/app/page.tsx",
+      "size": 3546
+    },
+    {
+      "path": "apps/web/tailwind.config.ts",
+      "size": 594
+    },
+    {
+      "path": "apps/web/tsconfig.json",
+      "size": 408
+    },
+    {
+      "path": "apps/worker/package.json",
+      "size": 636
+    },
+    {
+      "path": "apps/worker/src/index.ts",
+      "size": 343
+    },
+    {
+      "path": "apps/worker/src/jobs/render-video.job.ts",
+      "size": 144
+    },
+    {
+      "path": "apps/worker/src/pipelines/render-pipeline.ts",
+      "size": 788
+    },
+    {
+      "path": "apps/worker/src/services/job-registry.ts",
+      "size": 851
+    },
+    {
+      "path": "apps/worker/tsconfig.json",
+      "size": 275
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "size": 4183
+    },
+    {
+      "path": "docs/CODEX_GUIDE.md",
+      "size": 1779
+    },
+    {
+      "path": "docs/MODULES.md",
+      "size": 1927
+    },
+    {
+      "path": "docs/PRODUCT_SPEC.md",
+      "size": 2265
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "size": 1824
+    },
+    {
+      "path": "docs/VISION.md",
+      "size": 1782
+    },
+    {
+      "path": "package.json",
+      "size": 1082
+    },
+    {
+      "path": "packages/caption-engine/package.json",
+      "size": 428
+    },
+    {
+      "path": "packages/caption-engine/src/index.ts",
+      "size": 743
+    },
+    {
+      "path": "packages/caption-engine/tsconfig.json",
+      "size": 277
+    },
+    {
+      "path": "packages/cinematic-engine/package.json",
+      "size": 430
+    },
+    {
+      "path": "packages/cinematic-engine/src/index.ts",
+      "size": 856
+    },
+    {
+      "path": "packages/cinematic-engine/tsconfig.json",
+      "size": 277
+    },
+    {
+      "path": "packages/story-engine/package.json",
+      "size": 426
+    },
+    {
+      "path": "packages/story-engine/src/index.ts",
+      "size": 1014
+    },
+    {
+      "path": "packages/story-engine/tsconfig.json",
+      "size": 277
+    },
+    {
+      "path": "packages/templates/package.json",
+      "size": 545
+    },
+    {
+      "path": "packages/templates/src/index.ts",
+      "size": 1232
+    },
+    {
+      "path": "packages/templates/tsconfig.json",
+      "size": 277
+    },
+    {
+      "path": "packages/video-engine/package.json",
+      "size": 637
+    },
+    {
+      "path": "packages/video-engine/src/index.ts",
+      "size": 1129
+    },
+    {
+      "path": "packages/video-engine/tsconfig.json",
+      "size": 277
+    },
+    {
+      "path": "prisma/migrations/.gitkeep",
+      "size": 0
+    },
+    {
+      "path": "prisma/README.md",
+      "size": 419
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "size": 2953
+    },
+    {
+      "path": "prisma/seed.mjs",
+      "size": 5495
+    },
+    {
+      "path": "README.md",
+      "size": 3043
+    },
+    {
+      "path": "storage/assets/.gitkeep",
+      "size": 0
+    },
+    {
+      "path": "storage/README.md",
+      "size": 280
+    },
+    {
+      "path": "storage/renders/.gitkeep",
+      "size": 0
+    },
+    {
+      "path": "tsconfig.base.json",
+      "size": 759
+    },
+    {
+      "path": "tsconfig.json",
+      "size": 350
+    }
+  ],
+  "emptyDirectories": [
+    ".codex-temp",
+    "apps/api/src/cli",
+    "apps/api/src/modules/characters/application",
+    "apps/api/src/modules/characters/domain",
+    "apps/api/src/modules/characters/infrastructure",
+    "apps/api/src/modules/hybrid-visual/application",
+    "apps/api/src/modules/hybrid-visual/domain",
+    "apps/api/src/modules/hybrid-visual/infrastructure",
+    "apps/api/src/modules/intake/application",
+    "apps/api/src/modules/intake/domain",
+    "apps/api/src/modules/intake/infrastructure",
+    "apps/api/src/modules/media-collector/application",
+    "apps/api/src/modules/media-collector/domain",
+    "apps/api/src/modules/media-collector/infrastructure",
+    "apps/api/src/modules/production/application",
+    "apps/api/src/modules/production/domain",
+    "apps/api/src/modules/render-jobs/application",
+    "apps/api/src/modules/render-jobs/domain",
+    "apps/api/src/modules/render-jobs/infrastructure",
+    "apps/api/src/modules/research/application",
+    "apps/api/src/modules/research/domain",
+    "apps/api/src/modules/research/infrastructure",
+    "apps/web/src/app/assets",
+    "apps/web/src/app/channels",
+    "apps/web/src/app/characters",
+    "apps/web/src/app/intake",
+    "apps/web/src/app/media-collector",
+    "apps/web/src/app/produce",
+    "apps/web/src/app/projects/[id]",
+    "apps/web/src/app/prompt-lab",
+    "apps/web/src/app/renders",
+    "apps/web/src/app/research/[id]",
+    "apps/web/src/components",
+    "apps/web/src/lib",
+    "apps/worker/src/config",
+    "apps/worker/src/infrastructure",
+    "CodexTemp",
+    "logs",
+    "packages/audio-engine/src",
+    "packages/hybrid-visual-engine/src",
+    "packages/hybrid-visual-engine/workflows/comfyui",
+    "packages/media-collector/src",
+    "packages/prompt-engine/src",
+    "packages/research-collector/src",
+    "prisma/migrations/20260626233957_init",
+    "prisma/migrations/20260627024507_caption_templates_blueprint",
+    "prisma/migrations/20260627032810_render_jobs_v1",
+    "prisma/migrations/20260627141116_render_ops_v1",
+    "prisma/migrations/20260627190500_render_cinematic_v2_mode",
+    "prisma/migrations/20260627221000_audio_engine_v1",
+    "prisma/migrations/20260627221005_manual_intake_system",
+    "prisma/migrations/20260627233000_production_flow_channel_defaults",
+    "prisma/migrations/20260628033958_research_collector_v1",
+    "prisma/migrations/20260628121500_media_collector_v1",
+    "prisma/migrations/20260628161148_hybrid_visual_engine_v1",
+    "scripts/lib",
+    "storage/comfyui/workflows",
+    "storage/inbox",
+    "storage/research/raw"
+  ],
+  "gitSummary": {
+    "exists": true
+  },
+  "missingCriticalPaths": [
+    "packages/audio-engine/package.json",
+    "packages/audio-engine/src/index.ts",
+    "packages/hybrid-visual-engine/package.json",
+    "packages/hybrid-visual-engine/src/index.ts",
+    "packages/media-collector/package.json",
+    "packages/media-collector/src/index.ts",
+    "packages/prompt-engine/package.json",
+    "packages/prompt-engine/src/index.ts",
+    "packages/research-collector/package.json",
+    "packages/research-collector/src/index.ts",
+    "scripts/lib/smoke-utils.mjs",
+    "scripts/smoke-comfy-provider-contract.mjs",
+    "scripts/smoke-comfy-provider-local.mjs",
+    "scripts/smoke-comfy-provider-mock-status.mjs",
+    "scripts/smoke-hybrid-visual-render-ready.mjs",
+    "scripts/smoke-hybrid-visual.mjs",
+    "scripts/smoke-intake.mjs",
+    "scripts/smoke-media-collector.mjs",
+    "scripts/smoke-production-flow.mjs",
+    "scripts/smoke-prompt-engine.mjs",
+    "scripts/smoke-research.mjs"
+  ]
+}

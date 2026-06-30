@@ -1,0 +1,181 @@
+# Original Inventory
+
+- Generated from: `C:\Users\Pichau\Documents\New project\reelforge-studio`
+- Generated at: `2026-06-29T11:57:21.652Z`
+- Files outside node_modules: `78`
+- Empty directories outside node_modules/.git: `59`
+- Critical missing paths: `21`
+- .git shell present: `yes`
+
+## Notes
+
+- This inventory treats the original ReelForge folder as evidence and does not mutate it.
+- `node_modules` is excluded from the file listing.
+- Deep `.git` internals are not enumerated here because the old repository is frozen and already known to be unusable.
+
+## Existing Files
+
+- `.codex-run/api-dev.log` (29485 bytes)
+- `.gitignore` (187 bytes)
+- `apps/api/package.json` (521 bytes)
+- `apps/api/src/config/env.ts` (695 bytes)
+- `apps/api/src/http/app.ts` (2542 bytes)
+- `apps/api/src/http/routes/assets-routes.ts` (2626 bytes)
+- `apps/api/src/http/routes/channels-routes.ts` (2251 bytes)
+- `apps/api/src/http/utils/http-utils.ts` (2319 bytes)
+- `apps/api/src/index.ts` (1213 bytes)
+- `apps/api/src/infrastructure/database/prisma-client.ts` (303 bytes)
+- `apps/api/src/infrastructure/memory/studio-memory-store.ts` (7372 bytes)
+- `apps/api/src/modules/assets/application/asset-repository.ts` (439 bytes)
+- `apps/api/src/modules/assets/application/asset-service.ts` (1204 bytes)
+- `apps/api/src/modules/assets/domain/asset.ts` (10060 bytes)
+- `apps/api/src/modules/assets/infrastructure/asset-repository-factory.ts` (1084 bytes)
+- `apps/api/src/modules/assets/infrastructure/in-memory-asset-repository.ts` (2081 bytes)
+- `apps/api/src/modules/assets/infrastructure/prisma-asset-repository.ts` (3928 bytes)
+- `apps/api/src/modules/channels/application/channel-repository.ts` (427 bytes)
+- `apps/api/src/modules/channels/application/channel-service.ts` (1196 bytes)
+- `apps/api/src/modules/channels/domain/channel.ts` (3055 bytes)
+- `apps/api/src/modules/channels/infrastructure/channel-repository-factory.ts` (1112 bytes)
+- `apps/api/src/modules/channels/infrastructure/in-memory-channel-repository.ts` (2142 bytes)
+- `apps/api/src/modules/channels/infrastructure/prisma-channel-repository.ts` (2302 bytes)
+- `apps/api/src/modules/projects/application/create-studio-manifest.ts` (1102 bytes)
+- `apps/api/src/modules/projects/application/project-repository.ts` (162 bytes)
+- `apps/api/src/modules/projects/domain/project.ts` (963 bytes)
+- `apps/api/src/modules/projects/infrastructure/in-memory-project-repository.ts` (1404 bytes)
+- `apps/api/src/modules/projects/infrastructure/prisma-project-repository.ts` (4520 bytes)
+- `apps/api/src/modules/projects/infrastructure/project-repository-factory.ts` (1139 bytes)
+- `apps/api/src/shared/errors.ts` (274 bytes)
+- `apps/api/tsconfig.json` (275 bytes)
+- `apps/web/next-env.d.ts` (151 bytes)
+- `apps/web/next.config.ts` (128 bytes)
+- `apps/web/package.json` (788 bytes)
+- `apps/web/postcss.config.js` (80 bytes)
+- `apps/web/src/app/globals.css` (550 bytes)
+- `apps/web/src/app/layout.tsx` (429 bytes)
+- `apps/web/src/app/page.tsx` (3546 bytes)
+- `apps/web/tailwind.config.ts` (594 bytes)
+- `apps/web/tsconfig.json` (408 bytes)
+- `apps/worker/package.json` (636 bytes)
+- `apps/worker/src/index.ts` (343 bytes)
+- `apps/worker/src/jobs/render-video.job.ts` (144 bytes)
+- `apps/worker/src/pipelines/render-pipeline.ts` (788 bytes)
+- `apps/worker/src/services/job-registry.ts` (851 bytes)
+- `apps/worker/tsconfig.json` (275 bytes)
+- `docs/ARCHITECTURE.md` (4183 bytes)
+- `docs/CODEX_GUIDE.md` (1779 bytes)
+- `docs/MODULES.md` (1927 bytes)
+- `docs/PRODUCT_SPEC.md` (2265 bytes)
+- `docs/ROADMAP.md` (1824 bytes)
+- `docs/VISION.md` (1782 bytes)
+- `package.json` (1082 bytes)
+- `packages/caption-engine/package.json` (428 bytes)
+- `packages/caption-engine/src/index.ts` (743 bytes)
+- `packages/caption-engine/tsconfig.json` (277 bytes)
+- `packages/cinematic-engine/package.json` (430 bytes)
+- `packages/cinematic-engine/src/index.ts` (856 bytes)
+- `packages/cinematic-engine/tsconfig.json` (277 bytes)
+- `packages/story-engine/package.json` (426 bytes)
+- `packages/story-engine/src/index.ts` (1014 bytes)
+- `packages/story-engine/tsconfig.json` (277 bytes)
+- `packages/templates/package.json` (545 bytes)
+- `packages/templates/src/index.ts` (1232 bytes)
+- `packages/templates/tsconfig.json` (277 bytes)
+- `packages/video-engine/package.json` (637 bytes)
+- `packages/video-engine/src/index.ts` (1129 bytes)
+- `packages/video-engine/tsconfig.json` (277 bytes)
+- `prisma/migrations/.gitkeep` (0 bytes)
+- `prisma/README.md` (419 bytes)
+- `prisma/schema.prisma` (2953 bytes)
+- `prisma/seed.mjs` (5495 bytes)
+- `README.md` (3043 bytes)
+- `storage/assets/.gitkeep` (0 bytes)
+- `storage/README.md` (280 bytes)
+- `storage/renders/.gitkeep` (0 bytes)
+- `tsconfig.base.json` (759 bytes)
+- `tsconfig.json` (350 bytes)
+
+## Empty Directories
+
+- `.codex-temp`
+- `apps/api/src/cli`
+- `apps/api/src/modules/characters/application`
+- `apps/api/src/modules/characters/domain`
+- `apps/api/src/modules/characters/infrastructure`
+- `apps/api/src/modules/hybrid-visual/application`
+- `apps/api/src/modules/hybrid-visual/domain`
+- `apps/api/src/modules/hybrid-visual/infrastructure`
+- `apps/api/src/modules/intake/application`
+- `apps/api/src/modules/intake/domain`
+- `apps/api/src/modules/intake/infrastructure`
+- `apps/api/src/modules/media-collector/application`
+- `apps/api/src/modules/media-collector/domain`
+- `apps/api/src/modules/media-collector/infrastructure`
+- `apps/api/src/modules/production/application`
+- `apps/api/src/modules/production/domain`
+- `apps/api/src/modules/render-jobs/application`
+- `apps/api/src/modules/render-jobs/domain`
+- `apps/api/src/modules/render-jobs/infrastructure`
+- `apps/api/src/modules/research/application`
+- `apps/api/src/modules/research/domain`
+- `apps/api/src/modules/research/infrastructure`
+- `apps/web/src/app/assets`
+- `apps/web/src/app/channels`
+- `apps/web/src/app/characters`
+- `apps/web/src/app/intake`
+- `apps/web/src/app/media-collector`
+- `apps/web/src/app/produce`
+- `apps/web/src/app/projects/[id]`
+- `apps/web/src/app/prompt-lab`
+- `apps/web/src/app/renders`
+- `apps/web/src/app/research/[id]`
+- `apps/web/src/components`
+- `apps/web/src/lib`
+- `apps/worker/src/config`
+- `apps/worker/src/infrastructure`
+- `CodexTemp`
+- `logs`
+- `packages/audio-engine/src`
+- `packages/hybrid-visual-engine/src`
+- `packages/hybrid-visual-engine/workflows/comfyui`
+- `packages/media-collector/src`
+- `packages/prompt-engine/src`
+- `packages/research-collector/src`
+- `prisma/migrations/20260626233957_init`
+- `prisma/migrations/20260627024507_caption_templates_blueprint`
+- `prisma/migrations/20260627032810_render_jobs_v1`
+- `prisma/migrations/20260627141116_render_ops_v1`
+- `prisma/migrations/20260627190500_render_cinematic_v2_mode`
+- `prisma/migrations/20260627221000_audio_engine_v1`
+- `prisma/migrations/20260627221005_manual_intake_system`
+- `prisma/migrations/20260627233000_production_flow_channel_defaults`
+- `prisma/migrations/20260628033958_research_collector_v1`
+- `prisma/migrations/20260628121500_media_collector_v1`
+- `prisma/migrations/20260628161148_hybrid_visual_engine_v1`
+- `scripts/lib`
+- `storage/comfyui/workflows`
+- `storage/inbox`
+- `storage/research/raw`
+
+## Critical Missing Paths
+
+- `packages/audio-engine/package.json`
+- `packages/audio-engine/src/index.ts`
+- `packages/hybrid-visual-engine/package.json`
+- `packages/hybrid-visual-engine/src/index.ts`
+- `packages/media-collector/package.json`
+- `packages/media-collector/src/index.ts`
+- `packages/prompt-engine/package.json`
+- `packages/prompt-engine/src/index.ts`
+- `packages/research-collector/package.json`
+- `packages/research-collector/src/index.ts`
+- `scripts/lib/smoke-utils.mjs`
+- `scripts/smoke-comfy-provider-contract.mjs`
+- `scripts/smoke-comfy-provider-local.mjs`
+- `scripts/smoke-comfy-provider-mock-status.mjs`
+- `scripts/smoke-hybrid-visual-render-ready.mjs`
+- `scripts/smoke-hybrid-visual.mjs`
+- `scripts/smoke-intake.mjs`
+- `scripts/smoke-media-collector.mjs`
+- `scripts/smoke-production-flow.mjs`
+- `scripts/smoke-prompt-engine.mjs`
+- `scripts/smoke-research.mjs`

@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../audio-engine" },
+    { "path": "../caption-engine" },
+    { "path": "../cinematic-engine" },
+    { "path": "../story-engine" },
+    { "path": "../templates" }
+  ]
+}
+

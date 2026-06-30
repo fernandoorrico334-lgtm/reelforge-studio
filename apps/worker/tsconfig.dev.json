@@ -1,0 +1,36 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@reelforge/audio-engine": [
+        "../../packages/audio-engine/src/index.ts",
+        "../../packages/audio-engine/dist/index.d.ts"
+      ],
+      "@reelforge/video-engine": [
+        "../../packages/video-engine/src/index.ts",
+        "../../packages/video-engine/dist/index.d.ts"
+      ],
+      "@reelforge/video-engine/render-server": [
+        "../../packages/video-engine/src/render-server.ts",
+        "../../packages/video-engine/dist/render-server.d.ts"
+      ],
+      "@reelforge/story-engine": [
+        "../../packages/story-engine/src/index.ts",
+        "../../packages/story-engine/dist/index.d.ts"
+      ],
+      "@reelforge/cinematic-engine": [
+        "../../packages/cinematic-engine/src/index.ts",
+        "../../packages/cinematic-engine/dist/index.d.ts"
+      ],
+      "@reelforge/caption-engine": [
+        "../../packages/caption-engine/src/index.ts",
+        "../../packages/caption-engine/dist/index.d.ts"
+      ],
+      "@reelforge/templates": [
+        "../../packages/templates/src/index.ts",
+        "../../packages/templates/dist/index.d.ts"
+      ]
+    }
+  }
+}

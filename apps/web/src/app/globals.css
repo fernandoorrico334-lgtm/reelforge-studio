@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: #f8fafc;
+  background-image:
+    radial-gradient(circle at top, rgba(249, 115, 22, 0.15), transparent 32%),
+    linear-gradient(135deg, #fff7ed 0%, #f8fafc 52%, #ecfeff 100%);
+  color: #0f172a;
+  font-family: "Segoe UI Variable", "Trebuchet MS", "Helvetica Neue", sans-serif;
+}
+
+* {
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+::selection {
+  background: rgba(249, 115, 22, 0.25);
+}

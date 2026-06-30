@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/web" },
+    { "path": "./apps/api" },
+    { "path": "./apps/worker" },
+    { "path": "./packages/video-engine" },
+    { "path": "./packages/story-engine" },
+    { "path": "./packages/cinematic-engine" },
+    { "path": "./packages/caption-engine" },
+    { "path": "./packages/templates" }
+  ]
+}
+
