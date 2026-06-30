@@ -117,11 +117,14 @@ reelforge-studio/
 cd reelforge-studio
 ```
 
-2. Instale as dependencias:
+2. Em clone limpo, prefira instalar com lockfile fechado:
 
 ```bash
-npm install
+npm ci
 ```
+
+Se voce estiver atualizando dependencias ou reconstruindo o lockfile
+intencionalmente, use `npm install`.
 
 3. Confirme que o FFmpeg esta disponivel:
 
@@ -184,6 +187,13 @@ worker consome `RenderJob` pelo SQLite local. O mesmo vale para
 
 Se a porta `3000` estiver ocupada, o Next.js sobe automaticamente na proxima
 porta livre, como `3001`.
+
+Para validar a API pelo bundle compilado sem `tsx watch`, rode:
+
+```bash
+npm run build --workspace @reelforge/api
+npm run start --workspace @reelforge/api
+```
 
 ## Manual Intake
 

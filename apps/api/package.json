@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch --tsconfig tsconfig.dev.json src/index.ts",
     "build": "tsc -b tsconfig.json",
-    "start": "node dist/index.js",
+    "start": "node dist/apps/api/src/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "intake:scan": "tsx --tsconfig tsconfig.dev.json src/cli/intake-scan.ts",
     "intake:import-approved": "tsx --tsconfig tsconfig.dev.json src/cli/intake-import-approved.ts"
