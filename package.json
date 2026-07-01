@@ -32,6 +32,7 @@
     "smoke:comfy-provider:mock-status": "node scripts/smoke-comfy-provider-mock-status.mjs",
     "smoke:comfy-provider:local": "node scripts/smoke-comfy-provider-local.mjs",
     "smoke:comfy-workflow-pack:local": "node scripts/smoke-comfy-workflow-pack-local.mjs",
+    "smoke:workflow-pack-quality": "node scripts/smoke-workflow-pack-quality.mjs",
     "smoke:prompt-engine": "node scripts/smoke-prompt-engine.mjs"
   },
   "prisma": {
