@@ -29,6 +29,9 @@ export function createProjectRepository(): ProjectRepository {
         : null,
       generatedAsset: scene.generatedAssetId
         ? state.assets.find((asset) => asset.id === scene.generatedAssetId) ?? null
+        : null,
+      generatedNarrationAsset: scene.generatedNarrationAssetId
+        ? state.assets.find((asset) => asset.id === scene.generatedNarrationAssetId) ?? null
         : null
     };
   }
@@ -179,6 +182,7 @@ export function createProjectRepository(): ProjectRepository {
         updatedAt: timestamp,
         ...input,
         generatedAssetId: input.generatedAssetId ?? null,
+        generatedNarrationAssetId: input.generatedNarrationAssetId ?? null,
         characterProfileId: input.characterProfileId ?? null,
         sfxStartTime: input.sfxStartTime ?? 0,
         sfxVolume: input.sfxVolume ?? 0.7,
@@ -188,7 +192,10 @@ export function createProjectRepository(): ProjectRepository {
         visualRecipe: input.visualRecipe ?? null,
         generationStatus: input.generationStatus ?? null,
         generationProvider: input.generationProvider ?? null,
-        generationSeed: input.generationSeed ?? null
+        generationSeed: input.generationSeed ?? null,
+        narrationStatus: input.narrationStatus ?? null,
+        narrationProvider: input.narrationProvider ?? null,
+        narrationVoicePackId: input.narrationVoicePackId ?? null
       };
 
       state.scenes.push(scene);
@@ -216,6 +223,10 @@ export function createProjectRepository(): ProjectRepository {
         ...input,
         generatedAssetId:
           "generatedAssetId" in input ? input.generatedAssetId ?? null : existingScene.generatedAssetId,
+        generatedNarrationAssetId:
+          "generatedNarrationAssetId" in input
+            ? input.generatedNarrationAssetId ?? null
+            : existingScene.generatedNarrationAssetId,
         characterProfileId:
           "characterProfileId" in input
             ? input.characterProfileId ?? null
@@ -246,6 +257,18 @@ export function createProjectRepository(): ProjectRepository {
           "generationSeed" in input
             ? input.generationSeed ?? null
             : existingScene.generationSeed,
+        narrationStatus:
+          "narrationStatus" in input
+            ? input.narrationStatus ?? null
+            : existingScene.narrationStatus,
+        narrationProvider:
+          "narrationProvider" in input
+            ? input.narrationProvider ?? null
+            : existingScene.narrationProvider,
+        narrationVoicePackId:
+          "narrationVoicePackId" in input
+            ? input.narrationVoicePackId ?? null
+            : existingScene.narrationVoicePackId,
         updatedAt: createTimestamp()
       };
 

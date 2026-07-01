@@ -14,6 +14,7 @@ interface ResolvedProjectAudioAssets {
   backgroundMusicAsset: StudioAsset | null;
   voiceoverAsset: StudioAsset | null;
   sceneSfxAssets: Record<string, StudioAsset | null>;
+  sceneNarrationAssets: Record<string, StudioAsset | null>;
 }
 
 function toAudioAssetInput(asset: StudioAsset | null): AudioAssetInput | null {
@@ -38,7 +39,8 @@ function buildAudioAssetCatalog(
   const assets = [
     resolvedAssets.backgroundMusicAsset,
     resolvedAssets.voiceoverAsset,
-    ...Object.values(resolvedAssets.sceneSfxAssets)
+    ...Object.values(resolvedAssets.sceneSfxAssets),
+    ...Object.values(resolvedAssets.sceneNarrationAssets)
   ]
     .map(toAudioAssetInput)
     .filter((asset): asset is AudioAssetInput => asset !== null);
@@ -71,10 +73,20 @@ export async function resolveProjectAudioAssets(
   assetRepository: AssetRepository,
   project: StudioProject
 ): Promise<ResolvedProjectAudioAssets> {
-  const [backgroundMusicAsset, voiceoverAsset, ...sceneSfxResults] = await Promise.all([
+  const [
+    backgroundMusicAsset,
+    voiceoverAsset,
+    ...sceneAssetResults
+  ] = await Promise.all([
     resolveAssetById(assetRepository, project.backgroundMusicAssetId),
     resolveAssetById(assetRepository, project.voiceoverAssetId),
-    ...project.scenes.map((scene) => resolveAssetById(assetRepository, scene.sfxAssetId))
+    ...project.scenes.flatMap((scene) => [
+      resolveAssetById(assetRepository, scene.sfxAssetId),
+      resolveAssetById(
+        assetRepository,
+        scene.generatedNarrationAssetId ?? null
+      )
+    ])
   ]);
 
   return {
@@ -83,7 +95,13 @@ export async function resolveProjectAudioAssets(
     sceneSfxAssets: Object.fromEntries(
       project.scenes.map((scene, index) => [
         scene.id,
-        sceneSfxResults[index] ?? null
+        sceneAssetResults[index * 2] ?? null
+      ])
+    ),
+    sceneNarrationAssets: Object.fromEntries(
+      project.scenes.map((scene, index) => [
+        scene.id,
+        sceneAssetResults[index * 2 + 1] ?? null
       ])
     )
   };

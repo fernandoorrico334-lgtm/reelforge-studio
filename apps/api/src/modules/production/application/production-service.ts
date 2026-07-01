@@ -475,6 +475,7 @@ export async function createProductionFromScript(
         emotion: sceneDraft.emotion,
         assetId: chosenAssetId,
         generatedAssetId: null,
+        generatedNarrationAssetId: null,
         characterProfileId: null,
         sfxAssetId: null,
         sfxStartTime: 0,
@@ -491,7 +492,10 @@ export async function createProductionFromScript(
         captionStyle: sceneDraft.captionStyle,
         captionPosition: null,
         captionEmphasisWords: [],
-        energyLevel: sceneDraft.energyLevel
+        energyLevel: sceneDraft.energyLevel,
+        narrationStatus: null,
+        narrationProvider: null,
+        narrationVoicePackId: null
       }
     );
 

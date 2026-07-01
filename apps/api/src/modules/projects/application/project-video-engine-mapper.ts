@@ -10,6 +10,7 @@ interface ProjectAudioAssetMap {
   backgroundMusicAsset: StudioAsset | null;
   voiceoverAsset: StudioAsset | null;
   sceneSfxAssets: Record<string, StudioAsset | null>;
+  sceneNarrationAssets: Record<string, StudioAsset | null>;
 }
 
 function mapAsset(asset: StudioAsset | null): BlueprintAssetInput | null {
@@ -48,6 +49,11 @@ function mapScene(scene: ProjectScene): BlueprintSceneInput {
     asset: mapAsset(scene.asset),
     generatedAssetId: scene.generatedAssetId,
     generatedAsset: mapAsset(scene.generatedAsset),
+    generatedNarrationAssetId: scene.generatedNarrationAssetId,
+    generatedNarrationAsset: mapAsset(scene.generatedNarrationAsset),
+    narrationStatus: scene.narrationStatus,
+    narrationProvider: scene.narrationProvider,
+    narrationVoicePackId: scene.narrationVoicePackId,
     visualSourceMode: scene.visualSourceMode,
     sfxAssetId: scene.sfxAssetId,
     sfxAsset: null,
@@ -111,8 +117,11 @@ export function mapProjectToBlueprintInput(
     scenes: [...project.scenes]
       .sort((left, right) => left.order - right.order)
       .map((scene) => ({
-        ...mapScene(scene),
-        sfxAsset: mapAsset(audioAssets?.sceneSfxAssets[scene.id] ?? null)
+      ...mapScene(scene),
+        sfxAsset: mapAsset(audioAssets?.sceneSfxAssets[scene.id] ?? null),
+        generatedNarrationAsset: mapAsset(
+          audioAssets?.sceneNarrationAssets[scene.id] ?? null
+        )
       }))
   };
 }

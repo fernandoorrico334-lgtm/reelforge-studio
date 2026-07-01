@@ -21,6 +21,11 @@ packages/cinematic-engine/src/index.d.ts
 
 storage/assets/*
 !storage/assets/.gitkeep
+!storage/assets/generated/
+storage/assets/generated/*
+!storage/assets/generated/narrations/
+storage/assets/generated/narrations/*
+!storage/assets/generated/narrations/.gitkeep
 
 storage/renders/*
 !storage/renders/.gitkeep

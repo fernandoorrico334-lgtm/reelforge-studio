@@ -46,8 +46,12 @@ import type {
   DataSource,
   GenerateMissingVisualsPayload,
   GenerateMissingVisualsResponse,
+  GeneratedAudioGalleryItem,
   GeneratedImageGalleryFilters,
   GeneratedImageGalleryItem,
+  GeneratedNarrationGalleryFilters,
+  GenerateNarrationPayload,
+  GenerateNarrationResponse,
   GenerateSceneVisualResponse,
   GenerateVisualPayload,
   ImageQualityPreset,
@@ -74,6 +78,9 @@ import type {
   PromptBuildResponse,
   ManualResearchSourcePayload,
   NegativePromptPack,
+  NarrationJob,
+  NarrationProviderDescriptor,
+  NarrationVoicePack,
   ResearchAnalyzeResponse,
   ResearchConnectorSearchPayload,
   ResearchCreateProductionPayload,
@@ -103,6 +110,7 @@ import type {
   StudioProject,
   StudioRenderJob,
   UseGeneratedImageForSceneResponse,
+  UseNarrationForSceneResponse,
   VisualGenerationJob,
   VisualReviewStatus,
   VisualGenerationProviderDescriptor,
@@ -452,6 +460,106 @@ const mockImageQualityPresets: ImageQualityPreset[] = [
     seedMode: "reuse",
     timeoutMs: 480000,
     recommendedUse: "Climax and hero scenes."
+  }
+];
+
+const mockNarrationProviders: NarrationProviderDescriptor[] = [
+  {
+    id: "mock-tts",
+    name: "Mock TTS",
+    description: "Provider offline deterministico para validar pipeline local.",
+    available: true,
+    enabled: true,
+    requiresWindows: false,
+    offline: true,
+    status: "ready",
+    reason: null
+  },
+  {
+    id: "windows-sapi-local",
+    name: "Windows SAPI Local",
+    description: "Provider opcional usando a voz instalada no Windows.",
+    available: false,
+    enabled: false,
+    requiresWindows: true,
+    offline: true,
+    status: "disabled",
+    reason: "Habilite NARRATION_WINDOWS_SAPI_ENABLED=true na API local."
+  }
+];
+
+const mockNarrationVoicePacks: NarrationVoicePack[] = [
+  {
+    id: "narrator_clean_ptbr",
+    name: "Narrador Clean PT-BR",
+    description: "Locucao limpa e neutra para explicacoes diretas.",
+    language: "pt-BR",
+    tone: "clean",
+    rate: -1,
+    pitch: null,
+    volume: 90,
+    recommendedUse: "Explicacoes gerais, demos e cortes informativos.",
+    safetyNotes: "Nao representa voz real especifica."
+  },
+  {
+    id: "documentary_ptbr",
+    name: "Documentary PT-BR",
+    description: "Cadencia documental mais pausada para contexto e fatos.",
+    language: "pt-BR",
+    tone: "documentary",
+    rate: -2,
+    pitch: null,
+    volume: 92,
+    recommendedUse: "Docu-style, lore e explicacoes investigativas.",
+    safetyNotes: "Mantem timbre generico e neutro."
+  },
+  {
+    id: "true_crime_dark_ptbr",
+    name: "True Crime Dark PT-BR",
+    description: "Cadencia densa para misterio e narrativas sombrias.",
+    language: "pt-BR",
+    tone: "dark",
+    rate: -3,
+    pitch: -1,
+    volume: 94,
+    recommendedUse: "True crime, horror leve e suspense documental.",
+    safetyNotes: "Nao imita narradores reconheciveis."
+  },
+  {
+    id: "story_epic_ptbr",
+    name: "Story Epic PT-BR",
+    description: "Ritmo mais energico para viradas e revelacoes.",
+    language: "pt-BR",
+    tone: "epic",
+    rate: 0,
+    pitch: 1,
+    volume: 96,
+    recommendedUse: "Lore heroico, games e storytelling com energia.",
+    safetyNotes: "Uso generico, sem personagem real."
+  },
+  {
+    id: "sports_hype_ptbr",
+    name: "Sports Hype PT-BR",
+    description: "Ataque mais rapido para highlights e hype.",
+    language: "pt-BR",
+    tone: "hype",
+    rate: 1,
+    pitch: 1,
+    volume: 96,
+    recommendedUse: "Clipes esportivos, chamadas e energia alta.",
+    safetyNotes: "Evita assinatura vocal de apresentadores reais."
+  },
+  {
+    id: "calm_explainer_ptbr",
+    name: "Calm Explainer PT-BR",
+    description: "Narracao suave para fluxo calmo e didatico.",
+    language: "pt-BR",
+    tone: "calm",
+    rate: -2,
+    pitch: null,
+    volume: 88,
+    recommendedUse: "Explicadores, historia e contexto longo.",
+    safetyNotes: "Timbre abstrato e generico."
   }
 ];
 
@@ -1027,6 +1135,127 @@ export async function getSceneGeneratedImagesSnapshot(sceneId: string): Promise<
     logServerFallback(`scenes/${sceneId}/generated-images`, error);
     return { items: [], source: "mock" };
   }
+}
+
+export async function getNarrationProvidersRequest() {
+  return requestJson<NarrationProviderDescriptor[]>("/narration/providers");
+}
+
+export async function getNarrationProvidersSnapshot(): Promise<{
+  items: NarrationProviderDescriptor[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getNarrationProvidersRequest();
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("narration/providers", error);
+    return { items: cloneValue(mockNarrationProviders), source: "mock" };
+  }
+}
+
+export async function getNarrationVoicePacksRequest() {
+  return requestJson<NarrationVoicePack[]>("/narration/voice-packs");
+}
+
+export async function getNarrationVoicePacksSnapshot(): Promise<{
+  items: NarrationVoicePack[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getNarrationVoicePacksRequest();
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("narration/voice-packs", error);
+    return { items: cloneValue(mockNarrationVoicePacks), source: "mock" };
+  }
+}
+
+export async function getGeneratedAudioGalleryRequest(
+  filters: GeneratedNarrationGalleryFilters = {}
+) {
+  const query = buildQueryString({
+    projectId: filters.projectId,
+    sceneId: filters.sceneId,
+    provider: filters.provider,
+    voicePackId: filters.voicePackId,
+    status: filters.status
+  });
+
+  return requestJson<GeneratedAudioGalleryItem[]>(`/narration/jobs${query}`);
+}
+
+export async function getGeneratedAudioGallerySnapshot(
+  filters: GeneratedNarrationGalleryFilters = {}
+): Promise<{
+  items: GeneratedAudioGalleryItem[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getGeneratedAudioGalleryRequest(filters);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("narration/jobs", error);
+    return { items: [], source: "mock" };
+  }
+}
+
+export async function getSceneNarrationsRequest(sceneId: string) {
+  return requestJson<GeneratedAudioGalleryItem[]>(
+    `/scenes/${encodeURIComponent(sceneId)}/narrations`
+  );
+}
+
+export async function getSceneNarrationsSnapshot(sceneId: string): Promise<{
+  items: GeneratedAudioGalleryItem[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getSceneNarrationsRequest(sceneId);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback(`scenes/${sceneId}/narrations`, error);
+    return { items: [], source: "mock" };
+  }
+}
+
+export async function generateSceneNarrationRequest(
+  sceneId: string,
+  payload: GenerateNarrationPayload
+) {
+  return requestJson<GenerateNarrationResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/generate-narration`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function useSceneNarrationRequest(sceneId: string, assetId: string) {
+  return requestJson<UseNarrationForSceneResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/use-narration/${encodeURIComponent(assetId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
+export async function getNarrationJobRequest(jobId: string) {
+  return requestJson<GeneratedAudioGalleryItem>(
+    `/narration/jobs/${encodeURIComponent(jobId)}`
+  );
+}
+
+export async function cancelNarrationJobRequest(jobId: string) {
+  return requestJson<NarrationJob>(
+    `/narration/jobs/${encodeURIComponent(jobId)}/cancel`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
 }
 
 export async function getProjectStoryAnalysisRequest(projectId: string) {

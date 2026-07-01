@@ -230,6 +230,29 @@ Entregue:
 - provider local `mock-svg` para planejar visuals sem IA externa;
 - smoke `npm run smoke:hybrid-visual`.
 
+## Etapa 11A - Local Narration Pipeline V1
+
+Entregue:
+
+- migration `local_narration_pipeline_v1`;
+- package `packages/narration-engine`;
+- modelo `NarrationJob`;
+- campos de narracao em `Scene` para asset gerado, provider, voice pack e
+  status;
+- endpoints `/narration/*`, `/scenes/:sceneId/narrations`,
+  `/scenes/:sceneId/generate-narration` e
+  `/scenes/:sceneId/use-narration/:assetId`;
+- provider offline `mock-tts`;
+- provider opcional `windows-sapi-local`;
+- voice packs genericos em PT-BR;
+- pagina `/generated-audio`;
+- painel `Local Narration` em `/projects/[id]`;
+- bloco `Narration Preview` em `/prompt-lab`;
+- blueprint com `effectiveNarrationAssetId`,
+  `effectiveNarrationAssetPath` e `narrationSource`;
+- smokes `npm run smoke:narration-engine` e
+  `npm run smoke:narration-windows-sapi:local`.
+
 ## Proxima etapa operacional sugerida
 
 - Etapa 10I concluida: Workflow Packs + Image Quality Presets para ComfyUI

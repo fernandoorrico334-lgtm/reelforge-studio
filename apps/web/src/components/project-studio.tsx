@@ -19,7 +19,9 @@ import { StoryEnginePanel } from "./story-engine-panel";
 import {
   createSceneRequest,
   deleteSceneRequest,
+  generateSceneNarrationRequest,
   generateSceneVisualRequest,
+  getSceneNarrationsRequest,
   getProjectCaptionAnalysisSnapshot,
   getProjectProductionChecklistSnapshot,
   getProjectRenderBlueprintSnapshot,
@@ -27,6 +29,7 @@ import {
   markVisualGenerationJobReviewedRequest,
   regenerateVisualGenerationJobRequest,
   reorderScenesRequest,
+  useSceneNarrationRequest,
   useGeneratedImageForSceneRequest,
   updateProjectRequest,
   updateSceneRequest
@@ -42,7 +45,11 @@ import type {
   ComfyWorkflowPack,
   DataSource,
   EmotionTag,
+  GeneratedAudioGalleryItem,
   GeneratedImageGalleryItem,
+  NarrationProviderDescriptor,
+  NarrationJob,
+  NarrationVoicePack,
   ImageQualityPreset,
   ProjectCaptionAnalysisResponse,
   ProjectPayload,
@@ -79,6 +86,12 @@ interface ProjectStudioProps {
   qualityPresetsSource: DataSource;
   initialGeneratedImages: GeneratedImageGalleryItem[];
   initialGeneratedImagesSource: DataSource;
+  narrationProviders: NarrationProviderDescriptor[];
+  narrationProvidersSource: DataSource;
+  narrationVoicePacks: NarrationVoicePack[];
+  narrationVoicePacksSource: DataSource;
+  initialGeneratedNarrations: GeneratedAudioGalleryItem[];
+  initialGeneratedNarrationsSource: DataSource;
 }
 
 interface ProjectFormState {
@@ -484,6 +497,23 @@ function mergeSceneGeneratedImages(
   ]);
 }
 
+function sortNarrationItems(items: GeneratedAudioGalleryItem[]) {
+  return [...items].sort((left, right) =>
+    right.job.createdAt.localeCompare(left.job.createdAt)
+  );
+}
+
+function mergeSceneNarrations(
+  items: GeneratedAudioGalleryItem[],
+  sceneId: string,
+  nextItems: GeneratedAudioGalleryItem[]
+) {
+  return sortNarrationItems([
+    ...items.filter((item) => item.scene?.id !== sceneId),
+    ...nextItems
+  ]);
+}
+
 function readGeneratedMetadataString(
   item: GeneratedImageGalleryItem | null | undefined,
   key: string
@@ -571,6 +601,57 @@ function buildGeneratedImageGalleryItem(
   };
 }
 
+function buildGeneratedNarrationItem(
+  project: StudioProject,
+  scene: ProjectScene,
+  job: NarrationJob,
+  asset: StudioAsset | null
+): GeneratedAudioGalleryItem {
+  return {
+    job: {
+      ...job,
+      generatedAsset: asset ?? job.generatedAsset ?? null
+    },
+    asset: asset ?? job.generatedAsset ?? null,
+    scene: {
+      id: scene.id,
+      order: scene.order,
+      title: scene.title,
+      videoProjectId: project.id,
+      narrationText: job.text,
+      duration: scene.duration,
+      generatedNarrationAssetId:
+        job.generatedAssetId ?? scene.generatedNarrationAssetId ?? null,
+      narrationStatus: job.status,
+      narrationProvider: job.provider,
+      narrationVoicePackId: job.voicePackId
+    },
+    project: {
+      id: project.id,
+      title: project.title,
+      status: project.status,
+      channelId: project.channelId,
+      channelName: project.channel.name,
+      format: project.format
+    },
+    metadata: job.metadata ?? null,
+    previewUrl:
+      asset?.id || job.generatedAssetId
+        ? `/media/assets/${encodeURIComponent(asset?.id ?? job.generatedAssetId ?? "")}`
+        : null,
+    isCurrentSceneNarration: Boolean(
+      (job.generatedAssetId ?? scene.generatedNarrationAssetId ?? null) &&
+        (job.generatedAssetId ?? scene.generatedNarrationAssetId) ===
+          (asset?.id ?? job.generatedAssetId)
+    ),
+    isSceneEffectiveNarration: Boolean(
+      (job.generatedAssetId ?? scene.generatedNarrationAssetId ?? null) &&
+        (job.generatedAssetId ?? scene.generatedNarrationAssetId) ===
+          (asset?.id ?? job.generatedAssetId)
+    )
+  };
+}
+
 export function ProjectStudio({
   assets,
   assetsSource,
@@ -583,7 +664,13 @@ export function ProjectStudio({
   qualityPresets,
   qualityPresetsSource,
   initialGeneratedImages,
-  initialGeneratedImagesSource
+  initialGeneratedImagesSource,
+  narrationProviders,
+  narrationProvidersSource,
+  narrationVoicePacks,
+  narrationVoicePacksSource,
+  initialGeneratedNarrations,
+  initialGeneratedNarrationsSource
 }: ProjectStudioProps) {
   const [project, setProject] = useState<StudioProject>({
     ...initialProject,
@@ -634,6 +721,30 @@ export function ProjectStudio({
   const [generatedImagesSource, setGeneratedImagesSource] = useState<DataSource>(
     initialGeneratedImagesSource
   );
+  const [narrationProviderId, setNarrationProviderId] = useState<
+    NarrationProviderDescriptor["id"]
+  >(
+    narrationProviders.find((provider) => provider.id === "mock-tts")?.id ??
+      narrationProviders[0]?.id ??
+      "mock-tts"
+  );
+  const [narrationVoicePackId, setNarrationVoicePackId] = useState(
+    narrationVoicePacks.find((voicePack) => voicePack.id === "documentary_ptbr")?.id ??
+      narrationVoicePacks[0]?.id ??
+      ""
+  );
+  const [narrationTextDraft, setNarrationTextDraft] = useState(
+    initialProject.scenes[0]?.narrationText ??
+      initialProject.scenes[0]?.captionText ??
+      initialProject.script ??
+      ""
+  );
+  const [generatedNarrations, setGeneratedNarrations] = useState<
+    GeneratedAudioGalleryItem[]
+  >(sortNarrationItems(initialGeneratedNarrations));
+  const [generatedNarrationsSource, setGeneratedNarrationsSource] = useState<DataSource>(
+    initialGeneratedNarrationsSource
+  );
 
   const orderedScenes = sortScenes(project.scenes);
   const selectedVisualScene =
@@ -653,6 +764,13 @@ export function ProjectStudio({
   const sceneGeneratedImages = selectedVisualScene
     ? generatedImages.filter((item) => item.scene?.id === selectedVisualScene.id)
     : [];
+  const sceneNarrations = selectedVisualScene
+    ? generatedNarrations.filter((item) => item.scene?.id === selectedVisualScene.id)
+    : [];
+  const currentSceneNarration =
+    sceneNarrations.find((item) => item.isCurrentSceneNarration) ??
+    sceneNarrations[0] ??
+    null;
   const selectedWorkflowPack =
     workflowPacks.find((pack) => pack.id === visualWorkflowPackId) ??
     workflowPacks.find((pack) => pack.id === "cinematic_story") ??
@@ -723,6 +841,9 @@ export function ProjectStudio({
   const generatedVisualCount =
     liveProductionChecklist?.generatedVisualScenes ??
     orderedScenes.filter((scene) => isGeneratedAssetActive(scene)).length;
+  const narrationReadyCount = orderedScenes.filter(
+    (scene) => Boolean(scene.generatedNarrationAssetId)
+  ).length;
   const qualityAlerts = [
     ...new Set(
       [
@@ -762,6 +883,20 @@ export function ProjectStudio({
       active = false;
     };
   }, [project]);
+
+  useEffect(() => {
+    if (!selectedVisualScene) {
+      setNarrationTextDraft(project.script ?? "");
+      return;
+    }
+
+    setNarrationTextDraft(
+      selectedVisualScene.narrationText ??
+        selectedVisualScene.captionText ??
+        project.script ??
+        ""
+    );
+  }, [project.script, selectedVisualScene]);
 
   function resetSceneComposer(nextOrder?: number) {
     setEditingSceneId(null);
@@ -882,6 +1017,69 @@ export function ProjectStudio({
     setGeneratedImages((current) => mergeSceneGeneratedImages(current, sceneId, nextItems));
     setGeneratedImagesSource("api");
     return nextItems;
+  }
+
+  async function refreshNarrationsForScene(sceneId: string) {
+    const nextItems = await getSceneNarrationsRequest(sceneId);
+    setGeneratedNarrations((current) => mergeSceneNarrations(current, sceneId, nextItems));
+    setGeneratedNarrationsSource("api");
+    return nextItems;
+  }
+
+  async function handleGenerateNarration() {
+    if (!selectedVisualScene) {
+      setStatusMessage("Selecione uma cena antes de gerar narracao.");
+      return;
+    }
+
+    try {
+      const result = await generateSceneNarrationRequest(selectedVisualScene.id, {
+        provider: narrationProviderId,
+        voicePackId: narrationVoicePackId || null,
+        text: narrationTextDraft.trim() || null,
+        language: project.channel.language ?? "pt-BR",
+        autoAttach: true
+      });
+      const nextScene: ProjectScene =
+        result.scene ??
+        {
+          ...selectedVisualScene,
+          narrationText: narrationTextDraft.trim() || selectedVisualScene.narrationText,
+          generatedNarrationAssetId:
+            result.job.generatedAssetId ?? selectedVisualScene.generatedNarrationAssetId ?? null,
+          generatedNarrationAsset:
+            result.asset ?? selectedVisualScene.generatedNarrationAsset ?? null,
+          narrationStatus: result.job.status,
+          narrationProvider: result.job.provider,
+          narrationVoicePackId: result.job.voicePackId,
+          updatedAt: new Date().toISOString()
+        };
+      const nextProject: StudioProject = {
+        ...project,
+        scenes: replaceScene(project.scenes, nextScene)
+      };
+
+      setProject(nextProject);
+      setSource("api");
+
+      try {
+        await refreshNarrationsForScene(selectedVisualScene.id);
+      } catch {
+        setGeneratedNarrations((current) =>
+          sortNarrationItems([
+            buildGeneratedNarrationItem(nextProject, nextScene, result.job, result.asset),
+            ...current.filter((item) => item.job.id !== result.job.id)
+          ])
+        );
+      }
+
+      await loadBlueprintFor(nextProject);
+      setStatusMessage(
+        `Narracao ${result.job.provider} concluida com pack ${result.job.voicePackId ?? "auto"}.`
+      );
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
   }
 
   async function handleGenerateVisual(provider: "mock-svg" | "comfyui-local") {
@@ -1011,6 +1209,29 @@ export function ProjectStudio({
       await refreshGeneratedImagesForScene(item.scene.id);
       await loadBlueprintFor(nextProject);
       setStatusMessage(`Cena ${result.scene.order} agora usa o asset ${item.asset.id}.`);
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
+  }
+
+  async function handleUseNarration(item: GeneratedAudioGalleryItem) {
+    if (!item.scene?.id || !item.asset?.id) {
+      setStatusMessage("Apenas narracoes com cena associada podem ser aplicadas.");
+      return;
+    }
+
+    try {
+      const result = await useSceneNarrationRequest(item.scene.id, item.asset.id);
+      const nextProject: StudioProject = {
+        ...project,
+        scenes: replaceScene(project.scenes, result.scene)
+      };
+
+      setProject(nextProject);
+      setSource("api");
+      await refreshNarrationsForScene(item.scene.id);
+      await loadBlueprintFor(nextProject);
+      setStatusMessage(`Cena ${result.scene.order} agora usa a narracao ${item.asset.id}.`);
     } catch (error) {
       setStatusMessage(extractErrorMessage(error));
     }
@@ -1314,7 +1535,7 @@ export function ProjectStudio({
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-4 xl:grid-cols-4">
+                  <div className="mt-4 grid gap-4 xl:grid-cols-5">
                     <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
                       <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
                         Visual efetivo
@@ -1345,6 +1566,29 @@ export function ProjectStudio({
                       </div>
                       <p className="mt-2 text-xs text-mist/55">
                         source {formatEffectiveVisualSourceLabel(sceneEffectiveSource)}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                        Narracao
+                      </p>
+                      <p className="mt-2 text-sm text-white">
+                        {scene.generatedNarrationAssetId ? "Narracao pronta" : "Sem narracao"}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
+                            scene.generatedNarrationAssetId
+                              ? "border-[#7be0ff]/25 bg-[#7be0ff]/10 text-[#d8f8ff]"
+                              : "border-white/10 bg-black/20 text-mist/68"
+                          }`}
+                        >
+                          {scene.generatedNarrationAssetId ? "Narracao pronta" : "Sem narracao"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-mist/55">
+                        {scene.narrationProvider ?? "provider n/a"} /{" "}
+                        {scene.narrationVoicePackId ?? "voice pack n/a"}
                       </p>
                     </div>
                     <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
@@ -1467,7 +1711,8 @@ export function ProjectStudio({
               </p>
               <p className="mt-2 text-xs leading-6 text-mist/60">
                 legenda pendente {storyAnalysis.analysis.missingCaptions} / generated
-                ativos {generatedVisualCount} / fonte {productionChecklistSource}
+                ativos {generatedVisualCount} / narracoes prontas {narrationReadyCount} /
+                fonte {productionChecklistSource}
               </p>
             </div>
           </div>
@@ -2387,6 +2632,205 @@ export function ProjectStudio({
                 </div>
               )}
             </div>
+          </div>
+        </article>
+
+        <article className="rounded-[1.9rem] border border-[#7be0ff]/20 bg-[#7be0ff]/8 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                Local Narration
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">
+                Narração local por cena
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                Gere WAV offline com `mock-tts` ou use `windows-sapi-local`
+                quando estiver habilitado no Windows.
+              </p>
+            </div>
+            <a
+              href="/generated-audio"
+              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-mist/75"
+            >
+              Abrir galeria completa
+            </a>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Cena</span>
+              <select
+                value={selectedVisualScene?.id ?? ""}
+                onChange={(event) => setVisualSceneId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {orderedScenes.map((scene) => (
+                  <option key={scene.id} value={scene.id}>
+                    {scene.order}. {scene.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Provider</span>
+              <select
+                value={narrationProviderId}
+                onChange={(event) =>
+                  setNarrationProviderId(
+                    event.target.value as NarrationProviderDescriptor["id"]
+                  )
+                }
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {narrationProviders.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name} - {provider.status}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Voice pack</span>
+              <select
+                value={narrationVoicePackId}
+                onChange={(event) => setNarrationVoicePackId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {narrationVoicePacks.map((voicePack) => (
+                  <option key={voicePack.id} value={voicePack.id}>
+                    {voicePack.name} - {voicePack.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Provider feed
+              </p>
+              <p className="mt-2 text-sm text-white">
+                providers {narrationProvidersSource} / voice packs {narrationVoicePacksSource}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/65">
+                {narrationProviders.find((provider) => provider.id === narrationProviderId)
+                  ?.description ?? "Provider local selecionado."}
+              </p>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Cena atual
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {selectedVisualScene?.generatedNarrationAssetId
+                  ? "Narracao pronta"
+                  : "Sem narracao gerada"}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/65">
+                generatedNarrationAssetId {selectedVisualScene?.generatedNarrationAssetId ?? "n/a"}
+              </p>
+            </div>
+          </div>
+
+          <label className="mt-4 block">
+            <span className="mb-2 block text-sm text-mist/65">Texto de narração</span>
+            <textarea
+              rows={5}
+              value={narrationTextDraft}
+              onChange={(event) => setNarrationTextDraft(event.target.value)}
+              placeholder="Cole o texto ou aproveite a narracao da cena."
+              className="w-full rounded-[1.6rem] border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-signal/50"
+            />
+          </label>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                void handleGenerateNarration();
+              }}
+              disabled={!selectedVisualScene}
+              className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-4 py-2 text-xs text-[#d8f8ff] disabled:opacity-45"
+            >
+              Gerar narração
+            </button>
+          </div>
+
+          {currentSceneNarration?.asset ? (
+            <div className="mt-5 overflow-hidden rounded-[1.35rem] border border-white/10">
+              <AssetMediaPreview
+                asset={currentSceneNarration.asset}
+                source={generatedNarrationsSource}
+              />
+            </div>
+          ) : null}
+
+          {currentSceneNarration ? (
+            <div className="mt-5 rounded-[1.2rem] border border-emerald-400/20 bg-emerald-400/10 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100/70">
+                Ultima narracao
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {currentSceneNarration.job.id} - {currentSceneNarration.job.status}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/65">
+                provider {currentSceneNarration.job.provider} / pack{" "}
+                {currentSceneNarration.job.voicePackId ?? "n/a"} / duration{" "}
+                {formatDuration(currentSceneNarration.job.durationSeconds)}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/65">
+                asset {currentSceneNarration.asset?.id ?? currentSceneNarration.job.generatedAssetId ?? "n/a"} / path{" "}
+                {currentSceneNarration.job.outputPath ?? "n/a"}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {sceneNarrations.length > 0 ? (
+              sceneNarrations.map((item) => (
+                <div
+                  key={item.job.id}
+                  className="rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-4"
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                      {item.job.status}
+                    </span>
+                    {item.isCurrentSceneNarration ? (
+                      <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
+                        current
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-4 text-sm font-medium text-white">
+                    asset {item.asset?.id ?? item.job.generatedAssetId ?? "n/a"}
+                  </p>
+                  <p className="mt-2 text-xs leading-6 text-mist/65">
+                    {item.job.provider} / {item.job.voicePackId ?? "n/a"} /{" "}
+                    {formatDuration(item.job.durationSeconds)}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleUseNarration(item);
+                      }}
+                      disabled={!item.asset?.id}
+                      className="rounded-full border border-signal/30 bg-signal/12 px-3 py-2 text-xs text-signal disabled:opacity-45"
+                    >
+                      Usar esta narração
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-6 text-sm text-mist/55 md:col-span-2">
+                Nenhuma narracao gerada ainda para esta cena. Gere um WAV mock
+                para validar o pipeline local.
+              </div>
+            )}
           </div>
         </article>
 

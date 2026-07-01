@@ -87,6 +87,11 @@ export interface BlueprintSceneInput {
   asset: BlueprintAssetInput | null;
   generatedAssetId?: string | null;
   generatedAsset?: BlueprintAssetInput | null;
+  generatedNarrationAssetId?: string | null;
+  generatedNarrationAsset?: BlueprintAssetInput | null;
+  narrationStatus?: string | null;
+  narrationProvider?: string | null;
+  narrationVoicePackId?: string | null;
   visualSourceMode?: string | null;
   sfxAssetId: string | null;
   sfxAsset: BlueprintAssetInput | null;
@@ -200,6 +205,15 @@ export interface RenderBlueprintScene {
     | "generated_asset"
     | "fallback_generated"
     | "missing";
+  generatedNarrationAssetId: string | null;
+  generatedNarrationAsset: BlueprintAssetInput | null;
+  effectiveNarrationAsset: BlueprintAssetInput | null;
+  effectiveNarrationAssetId: string | null;
+  effectiveNarrationAssetPath: string | null;
+  narrationSource: "generated" | "manual" | "missing";
+  narrationStatus: string | null;
+  narrationProvider: string | null;
+  narrationVoicePackId: string | null;
   visualSourceMode: string | null;
   transition: string;
   visualPreset: ResolvedScenePreset;
@@ -377,6 +391,95 @@ function resolveEffectiveAsset(
       : baseAsset
         ? "project_asset"
         : "missing"
+  };
+}
+
+function resolveEffectiveNarration(
+  scene: BlueprintSceneInput,
+  project: BlueprintProjectInput
+): Pick<
+  RenderBlueprintScene,
+  | "generatedNarrationAssetId"
+  | "generatedNarrationAsset"
+  | "effectiveNarrationAsset"
+  | "effectiveNarrationAssetId"
+  | "effectiveNarrationAssetPath"
+  | "narrationSource"
+  | "narrationStatus"
+  | "narrationProvider"
+  | "narrationVoicePackId"
+> {
+  const generatedNarrationAsset =
+    "generatedNarrationAsset" in scene
+      ? (
+          scene as BlueprintSceneInput & {
+            generatedNarrationAsset?: BlueprintAssetInput | null;
+          }
+        ).generatedNarrationAsset ?? null
+      : null;
+  const generatedNarrationAssetId =
+    "generatedNarrationAssetId" in scene
+      ? (
+          scene as BlueprintSceneInput & {
+            generatedNarrationAssetId?: string | null;
+          }
+        ).generatedNarrationAssetId ?? null
+      : null;
+
+  if (generatedNarrationAsset || generatedNarrationAssetId) {
+    return {
+      generatedNarrationAssetId,
+      generatedNarrationAsset,
+      effectiveNarrationAsset: generatedNarrationAsset,
+      effectiveNarrationAssetId: generatedNarrationAssetId,
+      effectiveNarrationAssetPath: generatedNarrationAsset?.path ?? null,
+      narrationSource: "generated",
+      narrationStatus:
+        "narrationStatus" in scene
+          ? (scene as BlueprintSceneInput & { narrationStatus?: string | null })
+              .narrationStatus ?? null
+          : null,
+      narrationProvider:
+        "narrationProvider" in scene
+          ? (scene as BlueprintSceneInput & { narrationProvider?: string | null })
+              .narrationProvider ?? null
+          : null,
+      narrationVoicePackId:
+        "narrationVoicePackId" in scene
+          ? (
+              scene as BlueprintSceneInput & {
+                narrationVoicePackId?: string | null;
+              }
+            ).narrationVoicePackId ?? null
+          : null
+    };
+  }
+
+  return {
+    generatedNarrationAssetId,
+    generatedNarrationAsset,
+    effectiveNarrationAsset: project.voiceoverAsset,
+    effectiveNarrationAssetId: project.voiceoverAssetId,
+    effectiveNarrationAssetPath: project.voiceoverAsset?.path ?? null,
+    narrationSource: project.voiceoverAssetId ? "manual" : "missing",
+    narrationStatus:
+      "narrationStatus" in scene
+        ? (scene as BlueprintSceneInput & { narrationStatus?: string | null })
+            .narrationStatus ?? null
+        : null,
+    narrationProvider:
+      "narrationProvider" in scene
+        ? (scene as BlueprintSceneInput & { narrationProvider?: string | null })
+            .narrationProvider ?? null
+        : null,
+    narrationVoicePackId:
+      "narrationVoicePackId" in scene
+        ? (
+            scene as BlueprintSceneInput & {
+              narrationVoicePackId?: string | null;
+            }
+          ).narrationVoicePackId ?? null
+        : null
   };
 }
 
@@ -738,6 +841,7 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
       resolvedPreset.preset.suggestedTransition ??
       resolvedTemplate.template.defaultTransition;
     const effectiveVisual = resolveEffectiveAsset(scene);
+    const effectiveNarration = resolveEffectiveNarration(scene, project);
     const warnings: string[] = [];
 
     if (!effectiveVisual.effectiveAssetId) {
@@ -767,6 +871,7 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
       assetId: scene.assetId,
       asset: scene.asset,
       ...effectiveVisual,
+      ...effectiveNarration,
       visualSourceMode: scene.visualSourceMode ?? null,
       transition,
       visualPreset: resolvedPreset,

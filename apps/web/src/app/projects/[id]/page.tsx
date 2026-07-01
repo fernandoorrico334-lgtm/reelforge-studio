@@ -4,8 +4,11 @@ import {
   getAssetsSnapshot,
   getChannelsSnapshot,
   getComfyWorkflowPacksSnapshot,
+  getGeneratedAudioGallerySnapshot,
   getGeneratedImagesGallerySnapshot,
   getImageQualityPresetsSnapshot,
+  getNarrationProvidersSnapshot,
+  getNarrationVoicePacksSnapshot,
   getProjectDetailSnapshot
 } from "../../../lib/studio-api";
 
@@ -29,14 +32,20 @@ export default async function ProjectDetailPage({
     channelsSnapshot,
     workflowPacksSnapshot,
     qualityPresetsSnapshot,
-    generatedImagesSnapshot
+    generatedImagesSnapshot,
+    generatedNarrationsSnapshot,
+    narrationProvidersSnapshot,
+    narrationVoicePacksSnapshot
   ] = await Promise.all([
     getProjectDetailSnapshot(id),
     getAssetsSnapshot(),
     getChannelsSnapshot(),
     getComfyWorkflowPacksSnapshot(),
     getImageQualityPresetsSnapshot(),
-    getGeneratedImagesGallerySnapshot({ projectId: id })
+    getGeneratedImagesGallerySnapshot({ projectId: id }),
+    getGeneratedAudioGallerySnapshot({ projectId: id }),
+    getNarrationProvidersSnapshot(),
+    getNarrationVoicePacksSnapshot()
   ]);
 
   if (!projectSnapshot.item) {
@@ -102,6 +111,12 @@ export default async function ProjectDetailPage({
         qualityPresetsSource={qualityPresetsSnapshot.source}
         initialGeneratedImages={generatedImagesSnapshot.items}
         initialGeneratedImagesSource={generatedImagesSnapshot.source}
+        narrationProviders={narrationProvidersSnapshot.items}
+        narrationProvidersSource={narrationProvidersSnapshot.source}
+        narrationVoicePacks={narrationVoicePacksSnapshot.items}
+        narrationVoicePacksSource={narrationVoicePacksSnapshot.source}
+        initialGeneratedNarrations={generatedNarrationsSnapshot.items}
+        initialGeneratedNarrationsSource={generatedNarrationsSnapshot.source}
       />
     </div>
   );

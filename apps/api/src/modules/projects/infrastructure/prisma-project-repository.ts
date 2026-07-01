@@ -158,6 +158,7 @@ function mapScene(scene: {
   emotion: ProjectScene["emotion"];
   assetId: string | null;
   generatedAssetId: string | null;
+  generatedNarrationAssetId: string | null;
   characterProfileId: string | null;
   sfxAssetId: string | null;
   sfxStartTime: number;
@@ -175,10 +176,14 @@ function mapScene(scene: {
   captionPosition: string | null;
   captionEmphasisWords: string | null;
   energyLevel: number | null;
+  narrationStatus: ProjectScene["narrationStatus"];
+  narrationProvider: string | null;
+  narrationVoicePackId: string | null;
   createdAt: Date;
   updatedAt: Date;
   asset: Parameters<typeof mapAsset>[0] | null;
   generatedAsset: Parameters<typeof mapAsset>[0] | null;
+  generatedNarrationAsset: Parameters<typeof mapAsset>[0] | null;
 }): ProjectScene {
   return {
     id: scene.id,
@@ -192,6 +197,10 @@ function mapScene(scene: {
     asset: scene.asset ? mapAsset(scene.asset) : null,
     generatedAssetId: scene.generatedAssetId,
     generatedAsset: scene.generatedAsset ? mapAsset(scene.generatedAsset) : null,
+    generatedNarrationAssetId: scene.generatedNarrationAssetId,
+    generatedNarrationAsset: scene.generatedNarrationAsset
+      ? mapAsset(scene.generatedNarrationAsset)
+      : null,
     characterProfileId: scene.characterProfileId,
     sfxAssetId: scene.sfxAssetId,
     sfxStartTime: scene.sfxStartTime,
@@ -210,6 +219,10 @@ function mapScene(scene: {
     captionPosition: normalizeCaptionPosition(scene.captionPosition),
     captionEmphasisWords: parseSerializedTags(scene.captionEmphasisWords ?? "[]"),
     energyLevel: scene.energyLevel,
+    narrationStatus: scene.narrationStatus,
+    narrationProvider:
+      scene.narrationProvider as ProjectScene["narrationProvider"],
+    narrationVoicePackId: scene.narrationVoicePackId,
     createdAt: toIsoString(scene.createdAt),
     updatedAt: toIsoString(scene.updatedAt)
   };
@@ -331,6 +344,7 @@ function serializeCreateSceneInput(
     emotion: input.emotion,
     assetId: input.assetId,
     generatedAssetId: input.generatedAssetId,
+    generatedNarrationAssetId: input.generatedNarrationAssetId,
     characterProfileId: input.characterProfileId,
     sfxAssetId: input.sfxAssetId,
     sfxStartTime: input.sfxStartTime ?? 0,
@@ -347,7 +361,10 @@ function serializeCreateSceneInput(
     captionStyle: input.captionStyle,
     captionPosition: input.captionPosition,
     captionEmphasisWords: JSON.stringify(input.captionEmphasisWords ?? []),
-    energyLevel: input.energyLevel
+    energyLevel: input.energyLevel,
+    narrationStatus: input.narrationStatus,
+    narrationProvider: input.narrationProvider,
+    narrationVoicePackId: input.narrationVoicePackId
   };
 }
 
@@ -382,6 +399,10 @@ function serializeUpdateSceneInput(
 
   if ("generatedAssetId" in input) {
     data.generatedAssetId = input.generatedAssetId;
+  }
+
+  if ("generatedNarrationAssetId" in input) {
+    data.generatedNarrationAssetId = input.generatedNarrationAssetId;
   }
 
   if ("characterProfileId" in input) {
@@ -452,6 +473,18 @@ function serializeUpdateSceneInput(
     data.energyLevel = input.energyLevel;
   }
 
+  if ("narrationStatus" in input) {
+    data.narrationStatus = input.narrationStatus;
+  }
+
+  if ("narrationProvider" in input) {
+    data.narrationProvider = input.narrationProvider;
+  }
+
+  if ("narrationVoicePackId" in input) {
+    data.narrationVoicePackId = input.narrationVoicePackId;
+  }
+
   return data;
 }
 
@@ -463,14 +496,16 @@ const projectInclude = {
     },
     include: {
       asset: true,
-      generatedAsset: true
+      generatedAsset: true,
+      generatedNarrationAsset: true
     }
   }
 } as const;
 
 const sceneInclude = {
   asset: true,
-  generatedAsset: true
+  generatedAsset: true,
+  generatedNarrationAsset: true
 } as const;
 
 async function applySceneOrder(
@@ -525,7 +560,8 @@ export function createPrismaProjectRepository({
             },
             include: {
               asset: true,
-              generatedAsset: true
+              generatedAsset: true,
+              generatedNarrationAsset: true
             }
           }
         },

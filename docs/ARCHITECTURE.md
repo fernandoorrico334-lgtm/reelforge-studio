@@ -27,6 +27,7 @@ Hoje isso ja esta aplicado em:
 - `assets`;
 - `characters`;
 - `hybrid-visual`;
+- `narration`;
 - `intake`;
 - `research`;
 - `render-jobs`;
@@ -158,6 +159,20 @@ Na Etapa 10E, a arquitetura ganhou continuidade visual local e reutilizavel:
   `/scenes/:sceneId/generate-visual` e
   `/research/asset-requirements/:id/generate-visual`.
 
+Na Etapa 11A, a arquitetura ganhou tambem narracao local por cena:
+
+- `packages/narration-engine` concentra providers, voice packs, plano de
+  narracao, geracao offline em WAV e o adaptador opcional de `windows-sapi-local`;
+- `modules/narration` concentra o dominio `NarrationJob`, os casos de uso,
+  a persistencia e as rotas HTTP;
+- `http/routes/narration-routes.ts` expoe catalogos, jobs, listagem por cena,
+  geracao local e promocao do WAV para a cena;
+- `project-video-engine-mapper.ts` e `packages/video-engine` passaram a
+  carregar `generatedNarrationAssetId`, `effectiveNarrationAssetId`,
+  `effectiveNarrationAssetPath` e `narrationSource` no blueprint;
+- `project-audio-plan-service.ts` ja resolve narrações geradas como assets de
+  audio validos dentro do catalogo do projeto, sem quebrar o audio plan atual.
+
 No caso de `assets`, a Etapa 4 adicionou dois blocos importantes:
 
 - `application/asset-storage.ts`: contrato para salvar e resolver arquivos;
@@ -232,6 +247,15 @@ Na Etapa 10E, a camada Prisma passou a persistir tambem:
   `generationProvider` e `generationSeed`;
 - novos campos equivalentes em `ResearchAssetRequirement` para permitir
   geracao visual a partir do dossier antes da criacao do projeto final.
+
+Na Etapa 11A, a camada Prisma passou a persistir tambem:
+
+- `NarrationJob`;
+- novos campos de narracao em `Scene`:
+  `generatedNarrationAssetId`,
+  `narrationStatus`,
+  `narrationProvider` e
+  `narrationVoicePackId`.
 
 Na Etapa 8, a camada Prisma tambem passou a persistir:
 

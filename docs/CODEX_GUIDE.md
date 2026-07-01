@@ -22,12 +22,17 @@ Ajudar qualquer futura sessao do Codex a expandir ReelForge Studio sem quebrar a
 - manter `packages/caption-engine`, `packages/templates` e
   `packages/video-engine` como fontes unicas das regras criativas locais;
 - manter `packages/audio-engine` como fonte unica das regras de mixagem local;
+- manter `packages/narration-engine` como fonte unica das regras de narracao
+  local;
 - manter `packages/research-collector` como fonte unica das heuristicas de
   busca assistida, facts, timeline e outline de pesquisa;
 - manter `packages/story-engine` como fonte unica do `create-from-script`,
   smart picker e checklist de producao;
 - manter `@reelforge/video-engine` browser-safe e reservar
   `@reelforge/video-engine/render-server` para API/worker;
+- nao importar `@reelforge/narration-engine` diretamente dentro do bundle do
+  frontend; quando o web precisar fallback local, usar tipos/constantes
+  browser-safe e deixar a logica Node-only no package server-side;
 - manter o FFmpeg encapsulado no worker e nos adapters server-side.
 - manter `storage/inbox` como fronteira de intake manual e nunca versionar
   arquivos reais do usuario colocados ali;
@@ -153,6 +158,16 @@ ser:
 5. validar `/characters`
 6. validar `/projects/[id]`
 7. validar `/research/[id]`
+
+Ao tocar no Local Narration Pipeline, a sequencia minima passa a ser:
+
+1. `npm run db:generate`
+2. `npm run db:migrate:dev`
+3. `npm run db:seed`
+4. `npm run smoke:narration-engine`
+5. validar `/generated-audio`
+6. validar `/projects/[id]`
+7. validar `/prompt-lab`
 
 Ao tocar no Media Collector, a sequencia minima passa a ser:
 

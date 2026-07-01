@@ -14,6 +14,7 @@ Estado atual:
 - wizard rapido de producao em `/produce`;
 - gestao de canais em `/channels`;
 - biblioteca local de assets em `/assets`;
+- galeria de audio gerado em `/generated-audio`;
 - CRUD de projetos em `/projects`;
 - timeline inicial e editor de cenas em `/projects/[id]`;
 - painel de renderizacoes por projeto e monitor global em `/renders`.
@@ -117,6 +118,16 @@ Na Etapa 10E, `apps/web` ganhou ainda:
 - geracao mock local por cena e em lote;
 - cards de preview de assets gerados no projeto e em `Asset Requirements`.
 
+Na Etapa 11A, `apps/web` ganhou tambem:
+
+- painel `Local Narration` em `/projects/[id]`;
+- badge de `Narracao pronta` na timeline quando houver
+  `generatedNarrationAssetId`;
+- pagina `/generated-audio` para ouvir, revisar e promover WAVs gerados;
+- bloco `Narration Preview` em `/prompt-lab`;
+- leitura de `effectiveNarrationAssetId`, `effectiveNarrationAssetPath` e
+  `narrationSource` no painel de blueprint.
+
 ## apps/api
 
 Responsavel por expor os contratos HTTP e orquestrar os casos de uso.
@@ -127,6 +138,7 @@ Estado atual:
 - modulo `assets` com CRUD manual, upload real e preview por `assetId`;
 - modulo `characters` com perfis, referencias e prompt-base;
 - modulo `hybrid-visual` com relatorio, jobs e geracao mock local;
+- modulo `narration` com jobs, providers, voice packs e geracao WAV local;
 - modulo `intake` com scan local, revisao de candidatos e importacao em lote;
 - modulo `media-collector` com busca segura, review e importacao aprovada;
 - modulo `research` com dossies, fontes e analise editorial local;
@@ -222,6 +234,15 @@ Rotas atuais:
 - `GET /visual-generation/jobs`
 - `GET /visual-generation/jobs/:id`
 - `POST /visual-generation/jobs/:id/cancel`
+- `GET /narration/providers`
+- `GET /narration/voice-packs`
+- `GET /narration/voice-packs/:id`
+- `GET /narration/jobs`
+- `GET /narration/jobs/:id`
+- `POST /narration/jobs/:id/cancel`
+- `GET /scenes/:sceneId/narrations`
+- `POST /scenes/:sceneId/generate-narration`
+- `POST /scenes/:sceneId/use-narration/:assetId`
 - `GET /video-projects/:id/missing-visual-report`
 - `POST /video-projects/:id/generate-missing-visuals`
 - `POST /scenes/:sceneId/generate-visual`
@@ -273,6 +294,16 @@ Pecas novas relevantes no modulo `hybrid-visual`:
 - `modules/hybrid-visual/infrastructure/in-memory-visual-generation-job-repository.ts`
 - `modules/hybrid-visual/infrastructure/visual-generation-job-repository-factory.ts`
 - `http/routes/hybrid-visual-routes.ts`
+
+Pecas novas relevantes no modulo `narration`:
+
+- `modules/narration/domain/narration.ts`
+- `modules/narration/application/narration-job-repository.ts`
+- `modules/narration/application/narration-service.ts`
+- `modules/narration/infrastructure/prisma-narration-job-repository.ts`
+- `modules/narration/infrastructure/in-memory-narration-job-repository.ts`
+- `modules/narration/infrastructure/narration-job-repository-factory.ts`
+- `http/routes/narration-routes.ts`
 
 Pecas novas relevantes no modulo `assets`:
 
@@ -403,6 +434,8 @@ Estado atual:
 - `scripts/smoke-research.mjs`
 - `scripts/smoke-media-collector.mjs`
 - `scripts/smoke-hybrid-visual.mjs`
+- `scripts/smoke-narration-engine.mjs`
+- `scripts/smoke-narration-windows-sapi-local.mjs`
 
 Comandos novos relevantes da Etapa 10B:
 
@@ -430,6 +463,19 @@ Proximos passos:
 - automacao temporal de volume;
 - sidechain real;
 - composicao multi-faixa mais rica.
+
+## packages/narration-engine
+
+Camada local de narracao.
+
+Estado atual:
+
+- providers `mock-tts` e `windows-sapi-local`;
+- voice packs genericos em PT-BR;
+- `buildNarrationTextFromScene` e `buildNarrationPlan`;
+- geracao WAV offline deterministica para validar pipeline e player;
+- integracao opcional com vozes ja instaladas no Windows via SAPI;
+- resumo reutilizavel de `NarrationJob`.
 
 ## packages/hybrid-visual-engine
 

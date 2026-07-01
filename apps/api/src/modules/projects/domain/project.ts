@@ -58,6 +58,26 @@ export const visualGenerationStatuses = [
 export type VisualGenerationStatus =
   (typeof visualGenerationStatuses)[number];
 
+export const narrationProviders = [
+  "mock-tts",
+  "windows-sapi-local",
+  "manual",
+  "other"
+] as const;
+
+export type NarrationProvider = (typeof narrationProviders)[number];
+
+export const narrationStatuses = [
+  "draft",
+  "queued",
+  "generating",
+  "completed",
+  "failed",
+  "cancelled"
+] as const;
+
+export type NarrationStatus = (typeof narrationStatuses)[number];
+
 export interface ProjectScene {
   id: string;
   order: number;
@@ -70,6 +90,8 @@ export interface ProjectScene {
   asset: StudioAsset | null;
   generatedAssetId: string | null;
   generatedAsset: StudioAsset | null;
+  generatedNarrationAssetId: string | null;
+  generatedNarrationAsset: StudioAsset | null;
   characterProfileId: string | null;
   sfxAssetId: string | null;
   sfxStartTime: number;
@@ -87,6 +109,9 @@ export interface ProjectScene {
   captionPosition: CaptionPosition | null;
   captionEmphasisWords: string[];
   energyLevel: number | null;
+  narrationStatus: NarrationStatus | null;
+  narrationProvider: NarrationProvider | null;
+  narrationVoicePackId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -145,6 +170,7 @@ export interface CreateSceneInput {
   emotion: EmotionTag | null;
   assetId: string | null;
   generatedAssetId: string | null;
+  generatedNarrationAssetId: string | null;
   characterProfileId: string | null;
   sfxAssetId: string | null;
   sfxStartTime: number | null;
@@ -162,6 +188,9 @@ export interface CreateSceneInput {
   captionPosition: CaptionPosition | null;
   captionEmphasisWords: string[];
   energyLevel: number | null;
+  narrationStatus: NarrationStatus | null;
+  narrationProvider: NarrationProvider | null;
+  narrationVoicePackId: string | null;
 }
 
 export type UpdateSceneInput = Partial<CreateSceneInput>;
@@ -433,6 +462,60 @@ function normalizeOptionalVisualGenerationStatusValue(
   }
 
   return normalized as VisualGenerationStatus;
+}
+
+function normalizeOptionalNarrationProviderValue(
+  value: unknown,
+  fieldName = "narrationProvider"
+): NarrationProvider | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new ValidationError(`${fieldName} must be a string or null.`);
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (!narrationProviders.includes(normalized as NarrationProvider)) {
+    throw new ValidationError(
+      `${fieldName} must be one of: ${narrationProviders.join(", ")}.`
+    );
+  }
+
+  return normalized as NarrationProvider;
+}
+
+function normalizeOptionalNarrationStatusValue(
+  value: unknown,
+  fieldName = "narrationStatus"
+): NarrationStatus | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new ValidationError(`${fieldName} must be a string or null.`);
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (!narrationStatuses.includes(normalized as NarrationStatus)) {
+    throw new ValidationError(
+      `${fieldName} must be one of: ${narrationStatuses.join(", ")}.`
+    );
+  }
+
+  return normalized as NarrationStatus;
 }
 
 function normalizeOptionalEnergyLevel(
@@ -720,6 +803,8 @@ export function validateCreateSceneInput(payload: unknown): CreateSceneInput {
     emotion: normalizeOptionalEmotionTagValue(record.emotion) ?? null,
     assetId: readOptionalString(record, "assetId") ?? null,
     generatedAssetId: readOptionalString(record, "generatedAssetId") ?? null,
+    generatedNarrationAssetId:
+      readOptionalString(record, "generatedNarrationAssetId") ?? null,
     characterProfileId:
       readOptionalString(record, "characterProfileId") ?? null,
     sfxAssetId: readOptionalString(record, "sfxAssetId") ?? null,
@@ -760,7 +845,19 @@ export function validateCreateSceneInput(payload: unknown): CreateSceneInput {
         record.captionEmphasisWords,
         "captionEmphasisWords"
       ) ?? [],
-    energyLevel: normalizeOptionalEnergyLevel(record.energyLevel) ?? null
+    energyLevel: normalizeOptionalEnergyLevel(record.energyLevel) ?? null,
+    narrationStatus:
+      normalizeOptionalNarrationStatusValue(
+        record.narrationStatus,
+        "narrationStatus"
+      ) ?? null,
+    narrationProvider:
+      normalizeOptionalNarrationProviderValue(
+        record.narrationProvider,
+        "narrationProvider"
+      ) ?? null,
+    narrationVoicePackId:
+      readOptionalString(record, "narrationVoicePackId") ?? null
   };
 }
 
@@ -803,6 +900,11 @@ export function validateUpdateSceneInput(payload: unknown): UpdateSceneInput {
   if ("generatedAssetId" in record) {
     update.generatedAssetId =
       readOptionalString(record, "generatedAssetId") ?? null;
+  }
+
+  if ("generatedNarrationAssetId" in record) {
+    update.generatedNarrationAssetId =
+      readOptionalString(record, "generatedNarrationAssetId") ?? null;
   }
 
   if ("characterProfileId" in record) {
@@ -897,6 +999,27 @@ export function validateUpdateSceneInput(payload: unknown): UpdateSceneInput {
 
   if ("energyLevel" in record) {
     update.energyLevel = normalizeOptionalEnergyLevel(record.energyLevel) ?? null;
+  }
+
+  if ("narrationStatus" in record) {
+    update.narrationStatus =
+      normalizeOptionalNarrationStatusValue(
+        record.narrationStatus,
+        "narrationStatus"
+      ) ?? null;
+  }
+
+  if ("narrationProvider" in record) {
+    update.narrationProvider =
+      normalizeOptionalNarrationProviderValue(
+        record.narrationProvider,
+        "narrationProvider"
+      ) ?? null;
+  }
+
+  if ("narrationVoicePackId" in record) {
+    update.narrationVoicePackId =
+      readOptionalString(record, "narrationVoicePackId") ?? null;
   }
 
   if (Object.keys(update).length === 0) {

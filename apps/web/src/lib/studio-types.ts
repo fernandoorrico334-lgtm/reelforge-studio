@@ -154,6 +154,26 @@ export const audioMoodPresetIds = [
 
 export type AudioMoodPresetId = (typeof audioMoodPresetIds)[number];
 
+export const narrationProviders = [
+  "mock-tts",
+  "windows-sapi-local",
+  "manual",
+  "other"
+] as const;
+
+export type NarrationProvider = (typeof narrationProviders)[number];
+
+export const narrationJobStatuses = [
+  "draft",
+  "queued",
+  "generating",
+  "completed",
+  "failed",
+  "cancelled"
+] as const;
+
+export type NarrationJobStatus = (typeof narrationJobStatuses)[number];
+
 export const templateIds = [
   "anime_dark",
   "comic_drama",
@@ -663,6 +683,116 @@ export interface VisualGenerationJob {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+export interface NarrationProviderDescriptor {
+  id: "mock-tts" | "windows-sapi-local";
+  name: string;
+  description: string;
+  available: boolean;
+  enabled: boolean;
+  requiresWindows: boolean;
+  offline: boolean;
+  status: "ready" | "disabled" | "unavailable";
+  reason: string | null;
+}
+
+export interface NarrationVoicePack {
+  id: string;
+  name: string;
+  description: string;
+  language: string;
+  tone: string;
+  rate: number;
+  pitch: number | null;
+  volume: number;
+  recommendedUse: string;
+  safetyNotes: string;
+}
+
+export interface NarrationJob {
+  id: string;
+  videoProjectId: string | null;
+  sceneId: string | null;
+  provider: NarrationProvider;
+  voicePackId: string | null;
+  language: string;
+  status: NarrationJobStatus;
+  text: string;
+  outputPath: string | null;
+  generatedAssetId: string | null;
+  generatedAsset: StudioAsset | null;
+  durationSeconds: number | null;
+  sampleRate: number | null;
+  errorMessage: string | null;
+  metadata: Record<string, unknown> | null;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface GeneratedNarrationGalleryProjectSummary {
+  id: string;
+  title: string;
+  status: ProjectStatus;
+  channelId: string;
+  channelName: string;
+  format: string;
+}
+
+export interface GeneratedNarrationGallerySceneSummary {
+  id: string;
+  order: number;
+  title: string;
+  videoProjectId: string;
+  narrationText: string | null;
+  duration: number | null;
+  generatedNarrationAssetId: string | null;
+  narrationStatus: NarrationJobStatus | null;
+  narrationProvider: NarrationProvider | null;
+  narrationVoicePackId: string | null;
+}
+
+export interface GeneratedAudioGalleryItem {
+  job: NarrationJob;
+  asset: StudioAsset | null;
+  scene: GeneratedNarrationGallerySceneSummary | null;
+  project: GeneratedNarrationGalleryProjectSummary | null;
+  metadata: Record<string, unknown> | null;
+  previewUrl: string | null;
+  isCurrentSceneNarration: boolean;
+  isSceneEffectiveNarration: boolean;
+}
+
+export interface GeneratedNarrationGalleryFilters {
+  projectId?: string;
+  sceneId?: string;
+  provider?: NarrationProvider;
+  voicePackId?: string;
+  status?: NarrationJobStatus;
+}
+
+export interface GenerateNarrationPayload {
+  provider: NarrationProvider;
+  voicePackId: string | null;
+  text: string | null;
+  language: string | null;
+  autoAttach: boolean;
+}
+
+export interface GenerateNarrationResponse {
+  job: NarrationJob;
+  asset: StudioAsset | null;
+  scene: ProjectScene | null;
+}
+
+export interface UseNarrationForSceneResponse {
+  scene: ProjectScene;
+  projectId: string;
+  assetId: string;
+  selectedJobId: string | null;
 }
 
 export const visualReviewStatuses = ["approved", "rejected", "favorite"] as const;
@@ -1542,6 +1672,8 @@ export interface ProjectScene {
   asset: StudioAsset | null;
   generatedAssetId?: string | null;
   generatedAsset?: StudioAsset | null;
+  generatedNarrationAssetId?: string | null;
+  generatedNarrationAsset?: StudioAsset | null;
   characterProfileId?: string | null;
   sfxAssetId?: string | null;
   sfxStartTime?: number | null;
@@ -1559,6 +1691,9 @@ export interface ProjectScene {
   captionPosition: CaptionPosition | null;
   captionEmphasisWords: string[];
   energyLevel: number | null;
+  narrationStatus?: NarrationJobStatus | null;
+  narrationProvider?: NarrationProvider | null;
+  narrationVoicePackId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1583,6 +1718,7 @@ export interface ScenePayload {
   emotion: EmotionTag | null;
   assetId: string | null;
   generatedAssetId?: string | null;
+  generatedNarrationAssetId?: string | null;
   characterProfileId?: string | null;
   sfxAssetId?: string | null;
   sfxStartTime?: number | null;
@@ -1600,6 +1736,9 @@ export interface ScenePayload {
   captionPosition: CaptionPosition | null;
   captionEmphasisWords: string[];
   energyLevel: number | null;
+  narrationStatus?: NarrationJobStatus | null;
+  narrationProvider?: NarrationProvider | null;
+  narrationVoicePackId?: string | null;
 }
 
 export interface SceneReorderPayload {
@@ -1879,9 +2018,18 @@ export interface RenderBlueprintScene {
   asset: RenderBlueprintAsset | null;
   generatedAssetId?: string | null;
   generatedAsset?: RenderBlueprintAsset | null;
+  generatedNarrationAssetId?: string | null;
+  generatedNarrationAsset?: RenderBlueprintAsset | null;
   effectiveAssetId: string | null;
   effectiveAssetPath: string | null;
   effectiveAsset: RenderBlueprintAsset | null;
+  effectiveNarrationAssetId: string | null;
+  effectiveNarrationAssetPath: string | null;
+  effectiveNarrationAsset: RenderBlueprintAsset | null;
+  narrationSource: "generated" | "manual" | "missing";
+  narrationStatus?: NarrationJobStatus | null;
+  narrationProvider?: NarrationProvider | null;
+  narrationVoicePackId?: string | null;
   effectiveVisualSource?: RenderBlueprintEffectiveSource;
   effectiveAssetSource: RenderBlueprintEffectiveSource;
   effectiveAssetReason?: string | null;

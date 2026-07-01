@@ -107,6 +107,14 @@ function toBlueprintProjectInput(
       asset: mapBlueprintAsset(scene.asset),
       generatedAssetId: scene.generatedAssetId ?? null,
       generatedAsset: mapBlueprintAsset(scene.generatedAsset ?? null),
+      generatedNarrationAssetId: scene.generatedNarrationAssetId ?? null,
+      generatedNarrationAsset: mapBlueprintAsset(
+        scene.generatedNarrationAsset ??
+          resolveAssetById(assetsCatalog, scene.generatedNarrationAssetId ?? null)
+      ),
+      narrationStatus: scene.narrationStatus ?? null,
+      narrationProvider: scene.narrationProvider ?? null,
+      narrationVoicePackId: scene.narrationVoicePackId ?? null,
       sfxAssetId: scene.sfxAssetId ?? null,
       sfxAsset: mapBlueprintAsset(
         resolveAssetById(assetsCatalog, scene.sfxAssetId ?? null)
@@ -213,6 +221,9 @@ export function buildLocalAudioPlan(
   const audioAssets = [
     resolveAssetById(assetsCatalog, project.backgroundMusicAssetId ?? null),
     resolveAssetById(assetsCatalog, project.voiceoverAssetId ?? null),
+    ...project.scenes.map((scene) =>
+      resolveAssetById(assetsCatalog, scene.generatedNarrationAssetId ?? null)
+    ),
     ...project.scenes.map((scene) =>
       resolveAssetById(assetsCatalog, scene.sfxAssetId ?? null)
     )

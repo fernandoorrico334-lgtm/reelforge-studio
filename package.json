@@ -35,7 +35,9 @@
     "smoke:comfy-provider:local": "node scripts/smoke-comfy-provider-local.mjs",
     "smoke:comfy-workflow-pack:local": "node scripts/smoke-comfy-workflow-pack-local.mjs",
     "smoke:workflow-pack-quality": "node scripts/smoke-workflow-pack-quality.mjs",
-    "smoke:prompt-engine": "node scripts/smoke-prompt-engine.mjs"
+    "smoke:prompt-engine": "node scripts/smoke-prompt-engine.mjs",
+    "smoke:narration-engine": "node scripts/smoke-narration-engine.mjs",
+    "smoke:narration-windows-sapi:local": "node scripts/smoke-narration-windows-sapi-local.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

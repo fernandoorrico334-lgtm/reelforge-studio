@@ -6,6 +6,7 @@ import { resolveCharacterRepository } from "./modules/characters/infrastructure/
 import { resolveChannelRepository } from "./modules/channels/infrastructure/channel-repository-factory.js";
 import { resolveVisualGenerationJobRepository } from "./modules/hybrid-visual/infrastructure/visual-generation-job-repository-factory.js";
 import { resolveIntakeRepository } from "./modules/intake/infrastructure/intake-repository-factory.js";
+import { resolveNarrationJobRepository } from "./modules/narration/infrastructure/narration-job-repository-factory.js";
 import { resolveProjectRepository } from "./modules/projects/infrastructure/project-repository-factory.js";
 import { resolveResearchRepository } from "./modules/research/infrastructure/research-repository-factory.js";
 import { resolveRenderJobRepository } from "./modules/render-jobs/infrastructure/render-job-repository-factory.js";
@@ -19,6 +20,7 @@ const [
   assetBinding,
   characterBinding,
   intakeBinding,
+  narrationJobBinding,
   researchBinding,
   renderJobBinding,
   visualGenerationJobBinding
@@ -28,6 +30,7 @@ const [
   resolveAssetRepository(dataBackend),
   resolveCharacterRepository(dataBackend),
   resolveIntakeRepository(dataBackend),
+  resolveNarrationJobRepository(dataBackend),
   resolveResearchRepository(dataBackend),
   resolveRenderJobRepository(dataBackend),
   resolveVisualGenerationJobRepository(dataBackend)
@@ -38,7 +41,8 @@ const repositoryMode =
   channelBinding.backend === assetBinding.backend &&
   assetBinding.backend === characterBinding.backend &&
   characterBinding.backend === intakeBinding.backend &&
-  intakeBinding.backend === researchBinding.backend &&
+  intakeBinding.backend === narrationJobBinding.backend &&
+  narrationJobBinding.backend === researchBinding.backend &&
   researchBinding.backend === renderJobBinding.backend &&
   renderJobBinding.backend === visualGenerationJobBinding.backend
     ? projectBinding.backend
@@ -54,6 +58,7 @@ const app = createApp({
   assetRepository: assetBinding.repository,
   characterRepository: characterBinding.repository,
   intakeRepository: intakeBinding.repository,
+  narrationJobRepository: narrationJobBinding.repository,
   renderJobRepository: renderJobBinding.repository,
   renderStorage: createLocalRenderStorage(),
   visualGenerationJobRepository: visualGenerationJobBinding.repository
@@ -61,7 +66,7 @@ const app = createApp({
 
 app.listen(port, () => {
   console.log(
-    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
+    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, narration=${narrationJobBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
   );
 });
 

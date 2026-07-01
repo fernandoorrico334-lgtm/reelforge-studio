@@ -814,6 +814,7 @@ export async function createProductionFromResearchDossier(
       emotion: outlineScene.emotion,
       assetId: outlineScene.assetRequirement?.fulfilledAssetId ?? null,
       generatedAssetId: outlineScene.assetRequirement?.generatedAssetId ?? null,
+      generatedNarrationAssetId: null,
       characterProfileId: outlineScene.assetRequirement?.characterProfileId ?? null,
       sfxAssetId: null,
       sfxStartTime: 0,
@@ -830,7 +831,10 @@ export async function createProductionFromResearchDossier(
       captionStyle: channel.defaultCaptionStyle ?? null,
       captionPosition: null,
       captionEmphasisWords: [],
-      energyLevel: null
+      energyLevel: null,
+      narrationStatus: null,
+      narrationProvider: null,
+      narrationVoicePackId: null
     });
     scenesCreated += 1;
   }

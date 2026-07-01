@@ -59,6 +59,7 @@ export interface MemorySceneRecord {
   emotion: EmotionTag | null;
   assetId: string | null;
   generatedAssetId: string | null;
+  generatedNarrationAssetId: string | null;
   characterProfileId: string | null;
   sfxAssetId: string | null;
   sfxStartTime: number;
@@ -76,6 +77,30 @@ export interface MemorySceneRecord {
   captionPosition: ProjectScene["captionPosition"];
   captionEmphasisWords: string[];
   energyLevel: number | null;
+  narrationStatus: ProjectScene["narrationStatus"];
+  narrationProvider: ProjectScene["narrationProvider"];
+  narrationVoicePackId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryNarrationJobRecord {
+  id: string;
+  videoProjectId: string | null;
+  sceneId: string | null;
+  provider: string;
+  voicePackId: string | null;
+  language: string;
+  status: ProjectScene["narrationStatus"];
+  text: string;
+  outputPath: string | null;
+  generatedAssetId: string | null;
+  durationSeconds: number | null;
+  sampleRate: number | null;
+  errorMessage: string | null;
+  metadata: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -249,6 +274,7 @@ interface MemoryStudioState {
   scenes: MemorySceneRecord[];
   renderJobs: MemoryRenderJobRecord[];
   visualGenerationJobs: any[];
+  narrationJobs: MemoryNarrationJobRecord[];
 }
 
 function createInitialState(): MemoryStudioState {
@@ -762,6 +788,7 @@ function createInitialState(): MemoryStudioState {
         emotion: "MYSTERIOUS",
         assetId: "asset-anime-001",
         generatedAssetId: null,
+        generatedNarrationAssetId: null,
         characterProfileId: null,
         sfxAssetId: "asset-sfx-001",
         sfxStartTime: 0.2,
@@ -779,6 +806,9 @@ function createInitialState(): MemoryStudioState {
         captionPosition: "split",
         captionEmphasisWords: ["historia", "massacre"],
         energyLevel: 88,
+        narrationStatus: null,
+        narrationProvider: null,
+        narrationVoicePackId: null,
         createdAt,
         updatedAt: createdAt
       },
@@ -794,6 +824,7 @@ function createInitialState(): MemoryStudioState {
         emotion: "DARK",
         assetId: "asset-anime-002",
         generatedAssetId: null,
+        generatedNarrationAssetId: null,
         characterProfileId: null,
         sfxAssetId: "asset-sfx-001",
         sfxStartTime: 0.9,
@@ -811,6 +842,9 @@ function createInitialState(): MemoryStudioState {
         captionPosition: "lower-third",
         captionEmphasisWords: ["medo", "poder"],
         energyLevel: 64,
+        narrationStatus: null,
+        narrationProvider: null,
+        narrationVoicePackId: null,
         createdAt,
         updatedAt: createdAt
       },
@@ -826,6 +860,7 @@ function createInitialState(): MemoryStudioState {
         emotion: "CURIOUS",
         assetId: null,
         generatedAssetId: null,
+        generatedNarrationAssetId: null,
         characterProfileId: null,
         sfxAssetId: "asset-sfx-001",
         sfxStartTime: 0.35,
@@ -843,12 +878,16 @@ function createInitialState(): MemoryStudioState {
         captionPosition: null,
         captionEmphasisWords: ["ponto", "retorno"],
         energyLevel: 74,
+        narrationStatus: null,
+        narrationProvider: null,
+        narrationVoicePackId: null,
         createdAt,
         updatedAt: createdAt
       }
     ],
     renderJobs: [],
-    visualGenerationJobs: []
+    visualGenerationJobs: [],
+    narrationJobs: []
   };
 }
 

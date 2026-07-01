@@ -6,6 +6,7 @@ import type { CharacterRepository } from "../modules/characters/application/char
 import type { ChannelRepository } from "../modules/channels/application/channel-repository.js";
 import type { VisualGenerationJobRepository } from "../modules/hybrid-visual/application/visual-generation-job-repository.js";
 import type { IntakeRepository } from "../modules/intake/application/intake-repository.js";
+import type { NarrationJobRepository } from "../modules/narration/application/narration-job-repository.js";
 import { createStudioManifest } from "../modules/projects/application/create-studio-manifest.js";
 import type { ProjectRepository } from "../modules/projects/application/project-repository.js";
 import type { ResearchRepository } from "../modules/research/application/research-repository.js";
@@ -21,6 +22,7 @@ import { handleChannelRoute } from "./routes/channels-routes.js";
 import { handleHybridVisualRoute } from "./routes/hybrid-visual-routes.js";
 import { handleIntakeRoute } from "./routes/intake-routes.js";
 import { handleMediaCollectorRoute } from "./routes/media-collector-routes.js";
+import { handleNarrationRoute } from "./routes/narration-routes.js";
 import { handleProductionRoute } from "./routes/production-routes.js";
 import { handlePromptEngineRoute } from "./routes/prompt-engine-routes.js";
 import { handleResearchRoute } from "./routes/research-routes.js";
@@ -43,6 +45,7 @@ interface AppDependencies {
   characterRepository: CharacterRepository;
   channelRepository: ChannelRepository;
   intakeRepository: IntakeRepository;
+  narrationJobRepository: NarrationJobRepository;
   repositoryMode: RepositoryMode;
   projectRepository: ProjectRepository;
   researchRepository: ResearchRepository;
@@ -58,6 +61,7 @@ export function createApp({
   characterRepository,
   channelRepository,
   intakeRepository,
+  narrationJobRepository,
   repositoryMode,
   projectRepository,
   researchRepository,
@@ -96,6 +100,22 @@ export function createApp({
         {
           channelRepository,
           assetRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
+      await handleNarrationRoute(
+        request,
+        response,
+        url,
+        {
+          appEnv,
+          assetRepository,
+          narrationJobRepository,
+          projectRepository
         }
       )
     ) {

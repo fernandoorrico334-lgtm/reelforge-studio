@@ -8,8 +8,10 @@ import {
 } from "@reelforge/prompt-engine";
 import { getTemplates } from "@reelforge/templates";
 import { useEffect, useState } from "react";
+import { AssetMediaPreview } from "./asset-media-preview";
 import {
   buildResearchRequirementVisualPromptRequest,
+  generateSceneNarrationRequest,
   buildSceneVisualPromptRequest,
   generateRequirementVisualRequest,
   generateSceneVisualRequest
@@ -18,8 +20,11 @@ import type {
   CharacterProfile,
   ComfyWorkflowPack,
   DataSource,
+  GeneratedAudioGalleryItem,
   GeneratedImageGalleryItem,
   ImageQualityPreset,
+  NarrationProviderDescriptor,
+  NarrationVoicePack,
   NegativePromptPack,
   ProjectScene,
   PromptVariantType,
@@ -61,6 +66,12 @@ interface PromptLabStudioProps {
   visualGenerationProvidersSource: DataSource;
   recentGeneratedImages: GeneratedImageGalleryItem[];
   recentGeneratedImagesSource: DataSource;
+  narrationProviders: NarrationProviderDescriptor[];
+  narrationProvidersSource: DataSource;
+  narrationVoicePacks: NarrationVoicePack[];
+  narrationVoicePacksSource: DataSource;
+  recentGeneratedAudio: GeneratedAudioGalleryItem[];
+  recentGeneratedAudioSource: DataSource;
 }
 
 function formatSourceLabel(value: DataSource) {
@@ -99,7 +110,13 @@ export function PromptLabStudio({
   visualGenerationProviders,
   visualGenerationProvidersSource,
   recentGeneratedImages,
-  recentGeneratedImagesSource
+  recentGeneratedImagesSource,
+  narrationProviders,
+  narrationProvidersSource,
+  narrationVoicePacks,
+  narrationVoicePacksSource,
+  recentGeneratedAudio,
+  recentGeneratedAudioSource
 }: PromptLabStudioProps) {
   const templates = getTemplates();
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "");
@@ -129,6 +146,26 @@ export function PromptLabStudio({
   );
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("txt2img-basic");
   const [selectedSeedMode, setSelectedSeedMode] = useState("reuse");
+  const [selectedNarrationProviderId, setSelectedNarrationProviderId] = useState<
+    NarrationProviderDescriptor["id"]
+  >(
+    narrationProviders.find((provider) => provider.id === "mock-tts")?.id ??
+      narrationProviders[0]?.id ??
+      "mock-tts"
+  );
+  const [selectedNarrationVoicePackId, setSelectedNarrationVoicePackId] = useState(
+    narrationVoicePacks.find((voicePack) => voicePack.id === "documentary_ptbr")?.id ??
+      narrationVoicePacks[0]?.id ??
+      ""
+  );
+  const [narrationPreviewText, setNarrationPreviewText] = useState(
+    projects[0]?.scenes[0]?.narrationText ??
+      projects[0]?.scenes[0]?.captionText ??
+      projects[0]?.script ??
+      ""
+  );
+  const [lastGeneratedNarration, setLastGeneratedNarration] =
+    useState<GeneratedAudioGalleryItem | null>(recentGeneratedAudio[0] ?? null);
   const [statusMessage, setStatusMessage] = useState(
     "Monte um contexto e gere um prompt premium reutilizavel."
   );
@@ -279,6 +316,15 @@ export function PromptLabStudio({
     }
   }, [selectedProject, selectedSceneId]);
 
+  useEffect(() => {
+    setNarrationPreviewText(
+      selectedScene?.narrationText ??
+        selectedScene?.captionText ??
+        selectedProject?.script ??
+        ""
+    );
+  }, [selectedProject?.script, selectedScene]);
+
   async function handleCopyPrompt() {
     try {
       await navigator.clipboard.writeText(preview.prompt);
@@ -381,6 +427,68 @@ export function PromptLabStudio({
         error instanceof Error && error.message.trim()
           ? error.message.trim()
           : `Falha ao gerar visual da cena com ${provider}.`
+      );
+    }
+  }
+
+  async function handleGenerateNarrationPreview() {
+    if (!selectedScene) {
+      setStatusMessage("Selecione uma cena antes de gerar narracao.");
+      return;
+    }
+
+    try {
+      const result = await generateSceneNarrationRequest(selectedScene.id, {
+        provider: selectedNarrationProviderId,
+        voicePackId: selectedNarrationVoicePackId || null,
+        text: narrationPreviewText.trim() || null,
+        language: selectedProject?.channel.language ?? "pt-BR",
+        autoAttach: true
+      });
+
+      setLastGeneratedNarration({
+        job: result.job,
+        asset: result.asset,
+        scene: result.scene
+          ? {
+              id: result.scene.id,
+              order: result.scene.order,
+              title: result.scene.title,
+              videoProjectId: selectedProject?.id ?? "",
+              narrationText: result.scene.narrationText,
+              duration: result.scene.duration,
+              generatedNarrationAssetId: result.scene.generatedNarrationAssetId ?? null,
+              narrationStatus: result.scene.narrationStatus ?? null,
+              narrationProvider: result.scene.narrationProvider ?? null,
+              narrationVoicePackId: result.scene.narrationVoicePackId ?? null
+            }
+          : null,
+        project: selectedProject
+          ? {
+              id: selectedProject.id,
+              title: selectedProject.title,
+              status: selectedProject.status,
+              channelId: selectedProject.channelId,
+              channelName: selectedProject.channel.name,
+              format: selectedProject.format
+            }
+          : null,
+        metadata: result.job.metadata ?? null,
+        previewUrl: result.asset?.id
+          ? `/media/assets/${encodeURIComponent(result.asset.id)}`
+          : null,
+        isCurrentSceneNarration: true,
+        isSceneEffectiveNarration: true
+      });
+
+      setStatusMessage(
+        `Narracao local gerada com ${result.job.provider}. Asset ${result.asset?.filename ?? "sem arquivo"} pronto. Revise em /generated-audio.`
+      );
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : "Falha ao gerar narracao local."
       );
     }
   }
@@ -965,6 +1073,125 @@ export function PromptLabStudio({
               O mock provider continua sendo o baseline deterministico para preview
               e smoke 100% local.
             </p>
+          </div>
+
+          <div className="rounded-[1.35rem] border border-[#7be0ff]/20 bg-[#7be0ff]/8 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                  Narration Preview
+                </p>
+                <h3 className="mt-2 text-xl font-semibold text-white">
+                  Mock TTS e provider local opcional
+                </h3>
+                <p className="mt-2 text-sm leading-7 text-mist/68">
+                  Gere uma narracao local para a cena atual e revise em{" "}
+                  <Link href="/generated-audio" className="text-signal underline-offset-4 hover:underline">
+                    /generated-audio
+                  </Link>.
+                </p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/72">
+                providers {formatSourceLabel(narrationProvidersSource)} / packs{" "}
+                {formatSourceLabel(narrationVoicePacksSource)}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Provider</span>
+                <select
+                  value={selectedNarrationProviderId}
+                  onChange={(event) =>
+                    setSelectedNarrationProviderId(
+                      event.target.value as NarrationProviderDescriptor["id"]
+                    )
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                >
+                  {narrationProviders.map((provider) => (
+                    <option key={provider.id} value={provider.id}>
+                      {provider.name} - {provider.status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Voice pack</span>
+                <select
+                  value={selectedNarrationVoicePackId}
+                  onChange={(event) => setSelectedNarrationVoicePackId(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                >
+                  {narrationVoicePacks.map((voicePack) => (
+                    <option key={voicePack.id} value={voicePack.id}>
+                      {voicePack.name} - {voicePack.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label className="mt-4 block">
+              <span className="mb-2 block text-sm text-mist/65">Texto de narração</span>
+              <textarea
+                rows={4}
+                value={narrationPreviewText}
+                onChange={(event) => setNarrationPreviewText(event.target.value)}
+                placeholder="Cole o texto ou use a cena selecionada."
+                className="w-full rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              />
+            </label>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleGenerateNarrationPreview();
+                }}
+                disabled={!selectedScene}
+                className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-4 py-2 text-xs text-[#d8f8ff] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Gerar narração local
+              </button>
+            </div>
+
+            {lastGeneratedNarration?.asset ? (
+              <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-white/10">
+                <div className="bg-black/20 p-4">
+                  <p className="text-sm font-medium text-white">
+                    Ultima narracao - {lastGeneratedNarration.job.provider}
+                  </p>
+                  <p className="mt-2 text-xs text-mist/60">
+                    {lastGeneratedNarration.job.voicePackId ?? "n/a"} /{" "}
+                    {lastGeneratedNarration.job.status} / feed{" "}
+                    {formatSourceLabel(recentGeneratedAudioSource)}
+                  </p>
+                </div>
+                <div className="border-t border-white/10">
+                  {/* Asset preview already supports audio controls. */}
+                  <div className="p-4">
+                    <Link
+                      href="/generated-audio"
+                      className="mb-4 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-mist/75"
+                    >
+                      Abrir galeria de narrações
+                    </Link>
+                    <div className="overflow-hidden rounded-[1rem] border border-white/10">
+                      <AssetMediaPreview
+                        asset={lastGeneratedNarration.asset}
+                        source="api"
+                      />
+                    </div>
+                    <div className="mt-4">
+                      <p className="text-xs text-mist/60">
+                        jobs recentes {recentGeneratedAudio.length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-3">

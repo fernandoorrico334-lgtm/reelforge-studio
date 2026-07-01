@@ -3,6 +3,7 @@ import { DashboardCard } from "../components/dashboard-card";
 import {
   getCharactersSnapshot,
   getDashboardSnapshot,
+  getGeneratedAudioGallerySnapshot,
   getGeneratedImagesGallerySnapshot,
   getMediaCollectionsSnapshot,
   getResearchDossiersSnapshot
@@ -22,13 +23,15 @@ export default async function HomePage() {
     researchSnapshot,
     mediaCollectionsSnapshot,
     charactersSnapshot,
-    generatedImagesSnapshot
+    generatedImagesSnapshot,
+    generatedAudioSnapshot
   ] = await Promise.all([
     getDashboardSnapshot(),
     getResearchDossiersSnapshot(),
     getMediaCollectionsSnapshot(),
     getCharactersSnapshot(),
-    getGeneratedImagesGallerySnapshot()
+    getGeneratedImagesGallerySnapshot(),
+    getGeneratedAudioGallerySnapshot()
   ]);
   const totalScenes = snapshot.projects.reduce(
     (total, project) => total + project.scenes.length,
@@ -182,6 +185,13 @@ export default async function HomePage() {
           value={String(generatedImagesSnapshot.items.length)}
           description="Galeria de revisao para escolher, aprovar e reaproveitar visuais gerados."
           accent="#7ef7d8"
+        />
+        <DashboardCard
+          href="/generated-audio"
+          title="Narrações Geradas"
+          value={String(generatedAudioSnapshot.items.length)}
+          description="Galeria de WAVs locais para ouvir, revisar e aplicar por cena."
+          accent="#7be0ff"
         />
         <DashboardCard
           href="/projects"

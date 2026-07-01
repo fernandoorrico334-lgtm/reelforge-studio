@@ -3,8 +3,11 @@ import {
   getChannelsSnapshot,
   getCharactersSnapshot,
   getComfyWorkflowPacksSnapshot,
+  getGeneratedAudioGallerySnapshot,
   getGeneratedImagesGallerySnapshot,
   getImageQualityPresetsSnapshot,
+  getNarrationProvidersSnapshot,
+  getNarrationVoicePacksSnapshot,
   getNegativePromptPacksSnapshot,
   getProjectsSnapshot,
   getPromptPacksSnapshot,
@@ -28,7 +31,10 @@ export default async function PromptLabPage() {
     qualityPresetsSnapshot,
     researchSnapshot,
     visualProvidersSnapshot,
-    generatedImagesSnapshot
+    generatedImagesSnapshot,
+    narrationProvidersSnapshot,
+    narrationVoicePacksSnapshot,
+    generatedAudioSnapshot
   ] = await Promise.all([
     getProjectsSnapshot(),
     getChannelsSnapshot(),
@@ -39,7 +45,10 @@ export default async function PromptLabPage() {
     getImageQualityPresetsSnapshot(),
     getResearchDossiersSnapshot(),
     getVisualGenerationProvidersSnapshot(),
-    getGeneratedImagesGallerySnapshot()
+    getGeneratedImagesGallerySnapshot(),
+    getNarrationProvidersSnapshot(),
+    getNarrationVoicePacksSnapshot(),
+    getGeneratedAudioGallerySnapshot()
   ]);
 
   const researchDetails = await Promise.all(
@@ -134,6 +143,12 @@ export default async function PromptLabPage() {
         visualGenerationProvidersSource={visualProvidersSnapshot.source}
         recentGeneratedImages={generatedImagesSnapshot.items.slice(0, 6)}
         recentGeneratedImagesSource={generatedImagesSnapshot.source}
+        narrationProviders={narrationProvidersSnapshot.items}
+        narrationProvidersSource={narrationProvidersSnapshot.source}
+        narrationVoicePacks={narrationVoicePacksSnapshot.items}
+        narrationVoicePacksSource={narrationVoicePacksSnapshot.source}
+        recentGeneratedAudio={generatedAudioSnapshot.items.slice(0, 6)}
+        recentGeneratedAudioSource={generatedAudioSnapshot.source}
       />
     </div>
   );

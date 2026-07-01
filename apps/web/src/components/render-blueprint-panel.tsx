@@ -45,6 +45,17 @@ function renderEffectiveAssetSourceLabel(
   }
 }
 
+function renderNarrationSourceLabel(source: "generated" | "manual" | "missing") {
+  switch (source) {
+    case "generated":
+      return "generated";
+    case "manual":
+      return "manual";
+    default:
+      return "missing";
+  }
+}
+
 export function RenderBlueprintPanel({
   blueprint,
   source,
@@ -171,6 +182,21 @@ export function RenderBlueprintPanel({
                 </p>
                 <p className="mt-2 text-xs text-mist/55">
                   effectiveAssetPath {scene.effectiveAssetPath ?? "n/a"}
+                </p>
+                <p className="mt-3 text-sm text-white">
+                  Narracao efetiva:{" "}
+                  {scene.effectiveNarrationAsset?.filename ?? "sem narracao"}
+                </p>
+                <p className="mt-2 text-xs text-mist/60">
+                  narration {renderNarrationSourceLabel(scene.narrationSource)} /{" "}
+                  {scene.narrationProvider ?? "provider n/a"} /{" "}
+                  {scene.narrationVoicePackId ?? "voice pack n/a"}
+                </p>
+                <p className="mt-2 text-xs text-mist/55">
+                  effectiveNarrationAssetId {scene.effectiveNarrationAssetId ?? "n/a"}
+                </p>
+                <p className="mt-2 text-xs text-mist/55">
+                  effectiveNarrationAssetPath {scene.effectiveNarrationAssetPath ?? "n/a"}
                 </p>
                 <p className="mt-2 text-xs text-mist/55">
                   {scene.effectiveAssetReason ??

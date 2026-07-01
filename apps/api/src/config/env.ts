@@ -7,6 +7,7 @@ export interface AppEnv {
   comfyUiEnabled: boolean;
   comfyUiWorkflowDir: string;
   comfyUiTimeoutMs: number;
+  narrationWindowsSapiEnabled: boolean;
   port: number;
 }
 
@@ -45,6 +46,10 @@ export function loadEnv(): AppEnv {
       (process.env.COMFYUI_WORKFLOW_DIR ?? "storage/comfyui/workflows").trim() ||
       "storage/comfyui/workflows",
     comfyUiTimeoutMs,
+    narrationWindowsSapiEnabled:
+      String(process.env.NARRATION_WINDOWS_SAPI_ENABLED ?? "false")
+        .trim()
+        .toLowerCase() === "true",
     port
   };
 }

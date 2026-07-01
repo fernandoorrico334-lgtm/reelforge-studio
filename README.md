@@ -29,6 +29,10 @@ Esta base agora cobre quinze camadas do produto:
 - Hybrid Visual Engine + Character Reference System com `/characters`,
   perfis reutilizaveis, referencias visuais, relatorio de cenas fracas,
   geracao mock local via SVG, jobs de visual generation e smoke dedicado.
+- Local Narration Pipeline V1 com `packages/narration-engine`, jobs de
+  narracao, WAV local gerado por cena, provider offline `mock-tts`, provider
+  opcional `windows-sapi-local`, pagina `/generated-audio` e integracao basica
+  com blueprint/audio plan.
 
 Continuam fora do escopo nesta etapa:
 
@@ -47,8 +51,11 @@ Continuam fora do escopo nesta etapa:
 - `apps/worker` processando fila local com Prisma + SQLite.
 - `apps/web` com pagina `/characters` e paineis de Hybrid Visual em
   `/projects/[id]` e `/research/[id]`.
+- `apps/web` com pagina `/generated-audio` e painel `Local Narration` em
+  `/projects/[id]` e `/prompt-lab`.
 - `prisma/` com schema, seed e migrations para SQLite.
 - `storage/assets` para intake local.
+- `storage/assets/generated/narrations` para WAVs gerados localmente.
 - `storage/inbox` para ingestao manual, revisao e organizacao de materiais.
 - `storage/research` para textos brutos importados de fontes publicas.
 - `storage/renders` para blueprints, logs, legendas e MP4s exportados.
@@ -61,6 +68,7 @@ Continuam fora do escopo nesta etapa:
   receitas visuais, relatorio de cenas fracas e SVGs mock locais.
 - `packages/caption-engine` com catalogo de estilos, analise de leitura e
   exportacao SRT/ASS.
+- `packages/narration-engine` com providers, voice packs e geracao WAV local.
 - `packages/templates` com templates premium por nicho.
 - `packages/video-engine` com composicao de blueprint, Render V1 e
   Cinematic V2 server-side.
@@ -95,6 +103,7 @@ reelforge-studio/
     hybrid-visual-engine/
     cinematic-engine/
     caption-engine/
+    narration-engine/
     templates/
     audio-engine/
   prisma/
@@ -103,6 +112,8 @@ reelforge-studio/
     migrations/
   storage/
     assets/
+      generated/
+        narrations/
     inbox/
     research/
     renders/
@@ -194,6 +205,45 @@ Para validar a API pelo bundle compilado sem `tsx watch`, rode:
 npm run build --workspace @reelforge/api
 npm run start --workspace @reelforge/api
 ```
+
+## Local Narration Pipeline V1
+
+- `packages/narration-engine` concentra `mock-tts`, voice packs e o provider
+  opcional `windows-sapi-local`.
+- Os WAVs gerados ficam em
+  `storage/assets/generated/narrations/{narrationJobId}.wav`.
+- A API expoe:
+  `GET /narration/providers`,
+  `GET /narration/voice-packs`,
+  `GET /narration/jobs`,
+  `GET /scenes/:sceneId/narrations`,
+  `POST /scenes/:sceneId/generate-narration` e
+  `POST /scenes/:sceneId/use-narration/:assetId`.
+- O blueprint agora devolve tambem
+  `effectiveNarrationAssetId`,
+  `effectiveNarrationAssetPath` e
+  `narrationSource`.
+- A validacao offline principal da etapa e:
+
+```bash
+npm run smoke:narration-engine
+```
+
+- A validacao opcional de voz local do Windows e:
+
+```powershell
+$env:NARRATION_WINDOWS_SAPI_ENABLED="true"
+npm run smoke:narration-windows-sapi:local
+```
+
+Limitacoes da V1:
+
+- `mock-tts` valida pipeline, player, asset e blueprint, mas nao tenta soar
+  como fala humana real.
+- `windows-sapi-local` depende apenas das vozes ja instaladas no Windows e pode
+  ficar `disabled` por padrao.
+- clonagem de voz, imitacao de pessoa real e qualquer uso de API externa ficam
+  fora desta etapa.
 
 ## Manual Intake
 

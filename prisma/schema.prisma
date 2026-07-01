@@ -215,6 +215,15 @@ enum VisualGenerationStatus {
   cancelled
 }
 
+enum NarrationJobStatus {
+  draft
+  queued
+  generating
+  completed
+  failed
+  cancelled
+}
+
 enum CharacterReferenceType {
   face
   full_body
@@ -285,11 +294,13 @@ model Asset {
   importedCandidates            MediaCandidate[]
   scenes                        Scene[]                      @relation("ScenePrimaryAsset")
   generatedScenes               Scene[]                      @relation("SceneGeneratedAsset")
+  generatedNarrationScenes      Scene[]                      @relation("SceneGeneratedNarrationAsset")
   sfxScenes                     Scene[]                      @relation("SceneSfxAsset")
   characterReferences           CharacterReference[]         @relation("CharacterReferenceAsset")
   fulfilledResearchRequirements ResearchAssetRequirement[]   @relation("ResearchRequirementFulfilledAsset")
   generatedResearchRequirements ResearchAssetRequirement[]   @relation("ResearchRequirementGeneratedAsset")
   visualGenerationJobs          VisualGenerationJob[]        @relation("VisualJobGeneratedAsset")
+  narrationJobs                 NarrationJob[]               @relation("NarrationJobGeneratedAsset")
 
   @@index([type, category])
   @@index([franchise, character])
@@ -568,6 +579,7 @@ model VideoProject {
   scenes                Scene[]
   renderJobs            RenderJob[]
   visualGenerationJobs  VisualGenerationJob[]
+  narrationJobs         NarrationJob[]
 
   @@index([channelId, status])
 }
@@ -583,6 +595,7 @@ model Scene {
   emotion              EmotionTag?
   assetId              String?
   generatedAssetId     String?
+  generatedNarrationAssetId String?
   characterProfileId   String?
   sfxAssetId           String?
   sfxStartTime         Float                   @default(0)
@@ -600,18 +613,24 @@ model Scene {
   captionPosition      String?
   captionEmphasisWords String?
   energyLevel          Int?
+  narrationStatus      NarrationJobStatus?
+  narrationProvider    String?
+  narrationVoicePackId String?
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
   videoProject         VideoProject            @relation(fields: [videoProjectId], references: [id], onDelete: Cascade)
   asset                Asset?                  @relation("ScenePrimaryAsset", fields: [assetId], references: [id], onDelete: SetNull)
   generatedAsset       Asset?                  @relation("SceneGeneratedAsset", fields: [generatedAssetId], references: [id], onDelete: SetNull)
+  generatedNarrationAsset Asset?               @relation("SceneGeneratedNarrationAsset", fields: [generatedNarrationAssetId], references: [id], onDelete: SetNull)
   characterProfile     CharacterProfile?       @relation(fields: [characterProfileId], references: [id], onDelete: SetNull)
   sfxAsset             Asset?                  @relation("SceneSfxAsset", fields: [sfxAssetId], references: [id], onDelete: SetNull)
   visualGenerationJobs VisualGenerationJob[]   @relation("SceneVisualJobs")
+  narrationJobs        NarrationJob[]          @relation("SceneNarrationJobs")
 
   @@unique([videoProjectId, order])
   @@index([assetId])
   @@index([generatedAssetId])
+  @@index([generatedNarrationAssetId])
   @@index([characterProfileId])
   @@index([sfxAssetId])
 }
@@ -731,5 +750,34 @@ model VisualGenerationJob {
   @@index([sceneId, status])
   @@index([characterProfileId, status])
   @@index([researchAssetRequirementId, status])
+  @@index([generatedAssetId])
+}
+
+model NarrationJob {
+  id               String             @id @default(cuid())
+  videoProjectId   String?
+  sceneId          String?
+  provider         String
+  voicePackId      String?
+  language         String
+  status           NarrationJobStatus @default(draft)
+  text             String
+  outputPath       String?
+  generatedAssetId String?
+  durationSeconds  Float?
+  sampleRate       Int?
+  errorMessage     String?
+  metadata         String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  videoProject     VideoProject?      @relation(fields: [videoProjectId], references: [id], onDelete: SetNull)
+  scene            Scene?             @relation("SceneNarrationJobs", fields: [sceneId], references: [id], onDelete: SetNull)
+  generatedAsset   Asset?             @relation("NarrationJobGeneratedAsset", fields: [generatedAssetId], references: [id], onDelete: SetNull)
+
+  @@index([videoProjectId, status])
+  @@index([sceneId, status])
+  @@index([provider, status])
   @@index([generatedAssetId])
 }
