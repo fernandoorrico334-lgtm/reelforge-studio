@@ -1619,6 +1619,8 @@ export interface StoryAnalysisSummary {
   totalDuration: number;
   sceneCount: number;
   missingAssets: number;
+  missingVisuals?: number;
+  visualReadyScenes?: number;
   missingCaptions: number;
   openingStrength: number;
   openingStrengthLabel: string;
@@ -1666,6 +1668,9 @@ export interface ProductionChecklistSummary {
   totalScenes: number;
   totalDuration: number;
   missingAssets: number;
+  missingVisuals?: number;
+  visualReadyScenes?: number;
+  generatedVisualScenes?: number;
   missingCaptions: number;
   missingVisualPresets: number;
   missingDurations: number;
@@ -1718,6 +1723,10 @@ export interface ProjectSceneAssetSuggestions {
   emotion: EmotionTag | null;
   currentAssetId: string | null;
   currentAsset: StudioAsset | null;
+  hasEffectiveVisual?: boolean;
+  effectiveAssetId?: string | null;
+  effectiveAssetSource?: "base" | "generated" | "fallback" | "missing";
+  generatedVisualReady?: boolean;
   suggestions: AssetSuggestionMatch[];
 }
 

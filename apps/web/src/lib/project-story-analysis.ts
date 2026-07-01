@@ -10,6 +10,7 @@ import {
   analyzeStoryProject,
   type StoryAnalysis
 } from "@reelforge/story-engine";
+import { sceneHasEffectiveAsset } from "./effective-assets";
 import type {
   EmotionTag,
   ProjectStoryAnalysisResponse,
@@ -44,7 +45,7 @@ function toStoryAnalysis(project: StudioProject) {
       captionText: scene.captionText,
       duration: scene.duration,
       emotion: scene.emotion,
-      hasAsset: Boolean(scene.assetId),
+      hasAsset: sceneHasEffectiveAsset(scene),
       visualPreset: scene.visualPreset
     }))
   });

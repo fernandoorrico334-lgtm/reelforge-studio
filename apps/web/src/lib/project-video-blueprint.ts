@@ -125,13 +125,19 @@ function toBlueprintProjectInput(
 }
 
 function normalizeEffectiveAssetSource(
-  source: "project_asset" | "generated_asset" | "missing"
+  source:
+    | "project_asset"
+    | "generated_asset"
+    | "fallback_generated"
+    | "missing"
 ): RenderBlueprintResponse["scenes"][number]["effectiveAssetSource"] {
   switch (source) {
     case "project_asset":
       return "asset";
     case "generated_asset":
       return "generated";
+    case "fallback_generated":
+      return "fallback_generated";
     default:
       return "placeholder";
   }
@@ -169,18 +175,22 @@ function normalizeRenderBlueprintResponse(
 
       return {
         ...scene,
-        assetId:
-          effectiveAssetSource === "asset" ? scene.effectiveAssetId : null,
+        assetId: scene.assetId ?? (effectiveAssetSource === "asset" ? scene.effectiveAssetId : null),
+        asset: scene.asset ?? null,
         generatedAssetId:
-          effectiveAssetSource === "generated" ? scene.effectiveAssetId : null,
+          scene.generatedAssetId ??
+          (effectiveAssetSource === "generated" ? scene.effectiveAssetId : null),
         generatedAsset:
-          effectiveAssetSource === "generated" ? scene.effectiveAsset : null,
+          scene.generatedAsset ??
+          (effectiveAssetSource === "generated" ? scene.effectiveAsset : null),
         effectiveVisualSource: effectiveAssetSource,
         effectiveAssetSource,
-        visualSourceMode: null,
+        visualSourceMode: scene.visualSourceMode ?? null,
         effectiveAssetReason: scene.effectiveAsset
           ? effectiveAssetSource === "generated"
             ? "Visual gerado promovido como asset efetivo."
+            : effectiveAssetSource === "fallback_generated"
+              ? "Blueprint resolveu a cena via estrategia de fallback visual."
             : "Asset do projeto usado como fonte efetiva."
           : "Cena sem asset efetivo associado.",
         renderReadyVisual: inferRenderReadyVisual(scene)

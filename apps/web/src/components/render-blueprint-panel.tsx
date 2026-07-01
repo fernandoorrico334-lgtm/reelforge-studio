@@ -33,14 +33,15 @@ function renderEffectiveAssetSourceLabel(
   switch (source) {
     case "generated":
     case "generated_asset":
+      return "generated";
     case "fallback_generated":
-      return "gerado";
+      return "fallback";
     case "library":
     case "asset":
     case "project_asset":
-      return "biblioteca";
+      return "base";
     default:
-      return "sem asset";
+      return "missing";
   }
 }
 
@@ -157,13 +158,19 @@ export function RenderBlueprintPanel({
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-white">
-                  Asset efetivo: {scene.effectiveAsset?.filename ?? "sem asset"}
+                  Visual efetivo: {scene.effectiveAsset?.filename ?? "sem visual"}
                 </p>
                 <p className="mt-2 text-xs text-mist/60">
                   origem {renderEffectiveAssetSourceLabel(scene.effectiveAssetSource)} -{" "}
                   {(scene.renderReadyVisual ?? Boolean(scene.effectiveAsset))
                     ? "render-ready"
                     : "precisa raster"}
+                </p>
+                <p className="mt-2 text-xs text-mist/55">
+                  effectiveAssetId {scene.effectiveAssetId ?? "n/a"}
+                </p>
+                <p className="mt-2 text-xs text-mist/55">
+                  effectiveAssetPath {scene.effectiveAssetPath ?? "n/a"}
                 </p>
                 <p className="mt-2 text-xs text-mist/55">
                   {scene.effectiveAssetReason ??

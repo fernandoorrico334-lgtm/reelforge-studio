@@ -34,6 +34,14 @@ export interface ProjectStoryAnalysisResponse {
   sceneInsights: ProjectStorySceneInsight[];
 }
 
+function sceneHasEffectiveVisual(scene: ProjectScene) {
+  if (scene.generatedAssetId) {
+    return true;
+  }
+
+  return Boolean(scene.assetId);
+}
+
 function toStoryProjectInput(project: StudioProject): StoryProjectInput {
   return {
     id: project.id,
@@ -47,7 +55,7 @@ function toStoryProjectInput(project: StudioProject): StoryProjectInput {
       captionText: scene.captionText,
       duration: scene.duration,
       emotion: scene.emotion,
-      hasAsset: Boolean(scene.assetId),
+      hasAsset: sceneHasEffectiveVisual(scene),
       visualPreset: scene.visualPreset,
       energyLevel: scene.energyLevel
     }))

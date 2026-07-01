@@ -68,6 +68,16 @@ export const narrativeSceneRoles = [
 
 export type NarrativeSceneRole = (typeof narrativeSceneRoles)[number];
 
+export const storyVisualSourceModes = [
+  "asset_only",
+  "generated_only",
+  "hybrid_overlay",
+  "fallback_generated",
+  "mixed_sequence"
+] as const;
+
+export type StoryVisualSourceMode = (typeof storyVisualSourceModes)[number];
+
 export type StoryEmotionTag =
   | "NEUTRAL"
   | "CURIOUS"
@@ -111,6 +121,8 @@ export interface StoryAnalysis {
   totalDuration: number;
   sceneCount: number;
   missingAssets: number;
+  missingVisuals: number;
+  visualReadyScenes: number;
   missingCaptions: number;
   openingStrength: number;
   openingStrengthLabel: string;
@@ -200,6 +212,9 @@ export interface ProductionChecklistInputScene {
   duration: number | null;
   captionText: string | null;
   assetId: string | null;
+  generatedAssetId?: string | null;
+  effectiveAssetId?: string | null;
+  visualSourceMode?: StoryVisualSourceMode | null;
   visualPreset?: string | null;
   emotion: StoryEmotionTag | null;
 }
@@ -236,6 +251,9 @@ export interface ProductionChecklist {
   totalScenes: number;
   totalDuration: number;
   missingAssets: number;
+  missingVisuals: number;
+  visualReadyScenes: number;
+  generatedVisualScenes: number;
   missingCaptions: number;
   missingVisualPresets: number;
   missingDurations: number;
@@ -601,6 +619,117 @@ function buildPacingWarnings(
   return warnings;
 }
 
+function normalizeStoryVisualSourceMode(
+  value: string | null | undefined
+): StoryVisualSourceMode | null {
+  switch (value) {
+    case "asset_only":
+    case "generated_only":
+    case "hybrid_overlay":
+    case "fallback_generated":
+    case "mixed_sequence":
+      return value;
+    default:
+      return null;
+  }
+}
+
+function resolveSceneEffectiveVisual(
+  scene: ProductionChecklistInputScene
+): {
+  assetId: string | null;
+  source: "base" | "generated" | "fallback" | "missing";
+  usesGenerated: boolean;
+  hasEffectiveVisual: boolean;
+} {
+  const assetId = scene.assetId ?? null;
+  const generatedAssetId = scene.generatedAssetId ?? null;
+  const effectiveAssetId = scene.effectiveAssetId ?? null;
+  const visualSourceMode = normalizeStoryVisualSourceMode(
+    scene.visualSourceMode ?? null
+  );
+
+  switch (visualSourceMode) {
+    case "asset_only":
+      return {
+        assetId: assetId ?? effectiveAssetId,
+        source: assetId ?? effectiveAssetId ? "base" : "missing",
+        usesGenerated: false,
+        hasEffectiveVisual: Boolean(assetId ?? effectiveAssetId)
+      };
+    case "generated_only":
+      return {
+        assetId: generatedAssetId ?? effectiveAssetId,
+        source:
+          generatedAssetId ?? effectiveAssetId ? "generated" : "missing",
+        usesGenerated: Boolean(generatedAssetId ?? effectiveAssetId),
+        hasEffectiveVisual: Boolean(generatedAssetId ?? effectiveAssetId)
+      };
+    case "fallback_generated":
+      return {
+        assetId: assetId ?? generatedAssetId ?? effectiveAssetId,
+        source:
+          assetId ?? generatedAssetId ?? effectiveAssetId
+            ? "fallback"
+            : "missing",
+        usesGenerated: !assetId && Boolean(generatedAssetId ?? effectiveAssetId),
+        hasEffectiveVisual: Boolean(
+          assetId ?? generatedAssetId ?? effectiveAssetId
+        )
+      };
+    case "mixed_sequence":
+      return {
+        assetId: generatedAssetId ?? effectiveAssetId ?? assetId,
+        source:
+          generatedAssetId ?? effectiveAssetId
+            ? "generated"
+            : assetId
+              ? "base"
+              : "missing",
+        usesGenerated: Boolean(generatedAssetId ?? effectiveAssetId),
+        hasEffectiveVisual: Boolean(generatedAssetId ?? effectiveAssetId ?? assetId)
+      };
+    case "hybrid_overlay":
+      return {
+        assetId: assetId ?? generatedAssetId ?? effectiveAssetId,
+        source: assetId
+          ? "base"
+          : generatedAssetId || effectiveAssetId
+            ? "generated"
+            : "missing",
+        usesGenerated: !assetId && Boolean(generatedAssetId ?? effectiveAssetId),
+        hasEffectiveVisual: Boolean(
+          assetId ?? generatedAssetId ?? effectiveAssetId
+        )
+      };
+    default:
+      if (generatedAssetId ?? effectiveAssetId) {
+        return {
+          assetId: generatedAssetId ?? effectiveAssetId,
+          source: "generated",
+          usesGenerated: true,
+          hasEffectiveVisual: true
+        };
+      }
+
+      if (assetId) {
+        return {
+          assetId,
+          source: "base",
+          usesGenerated: false,
+          hasEffectiveVisual: true
+        };
+      }
+
+      return {
+        assetId: null,
+        source: "missing",
+        usesGenerated: false,
+        hasEffectiveVisual: false
+      };
+    }
+}
+
 export function analyzeStoryProject(project: StoryProjectInput): StoryAnalysis {
   const scenes = [...project.scenes].sort((left, right) => left.order - right.order);
   const sceneCount = scenes.length;
@@ -666,6 +795,8 @@ export function analyzeStoryProject(project: StoryProjectInput): StoryAnalysis {
     totalDuration,
     sceneCount,
     missingAssets,
+    missingVisuals: missingAssets,
+    visualReadyScenes: Math.max(sceneCount - missingAssets, 0),
     missingCaptions,
     openingStrength,
     openingStrengthLabel: describeOpeningStrength(openingStrength),
@@ -1135,11 +1266,14 @@ export function buildProductionChecklist(
   channel: ProductionChecklistInputChannel | null = null
 ): ProductionChecklist {
   const orderedScenes = [...project.scenes].sort((left, right) => left.order - right.order);
+  const effectiveVisuals = orderedScenes.map((scene) =>
+    resolveSceneEffectiveVisual(scene)
+  );
   const storyAnalysis = analyzeStoryProject({
     id: project.id,
     title: project.title,
     script: project.script,
-    scenes: orderedScenes.map((scene) => ({
+    scenes: orderedScenes.map((scene, index) => ({
       id: scene.id,
       order: scene.order,
       title: scene.title,
@@ -1147,13 +1281,20 @@ export function buildProductionChecklist(
       captionText: scene.captionText,
       duration: scene.duration,
       emotion: scene.emotion,
-      hasAsset: Boolean(scene.assetId),
+      hasAsset: effectiveVisuals[index]?.hasEffectiveVisual ?? false,
       visualPreset: scene.visualPreset ?? null,
       energyLevel: null
     }))
   });
   const totalScenes = orderedScenes.length;
-  const missingAssets = orderedScenes.filter((scene) => !scene.assetId).length;
+  const missingAssets = effectiveVisuals.filter(
+    (scene) => !scene.hasEffectiveVisual
+  ).length;
+  const missingVisuals = missingAssets;
+  const visualReadyScenes = totalScenes - missingVisuals;
+  const generatedVisualScenes = effectiveVisuals.filter(
+    (scene) => scene.usesGenerated
+  ).length;
   const missingCaptions = orderedScenes.filter(
     (scene) => !scene.captionText?.trim()
   ).length;
@@ -1182,14 +1323,14 @@ export function buildProductionChecklist(
   const coreReady =
     Boolean(project.channelId) &&
     totalScenes > 0 &&
-    missingAssets === 0 &&
+    missingVisuals === 0 &&
     missingCaptions === 0 &&
     missingDurations === 0 &&
     templateResolved &&
     captionStyleResolved;
   let readinessScore = 100;
 
-  readinessScore -= missingAssets * 12;
+  readinessScore -= missingVisuals * 12;
   readinessScore -= missingCaptions * 10;
   readinessScore -= missingVisualPresets * 6;
   readinessScore -= missingDurations * 8;
@@ -1220,8 +1361,8 @@ export function buildProductionChecklist(
       : null
   ].filter((entry): entry is string => Boolean(entry));
   const suggestions = [
-    missingAssets > 0
-      ? `${missingAssets} cena(s) ainda precisam de asset visual.`
+    missingVisuals > 0
+      ? `${missingVisuals} cena(s) ainda precisam de visual efetivo.`
       : null,
     missingCaptions > 0
       ? `${missingCaptions} cena(s) ainda precisam de legenda.`
@@ -1239,6 +1380,9 @@ export function buildProductionChecklist(
     totalScenes,
     totalDuration: storyAnalysis.totalDuration,
     missingAssets,
+    missingVisuals,
+    visualReadyScenes,
+    generatedVisualScenes,
     missingCaptions,
     missingVisualPresets,
     missingDurations,
@@ -1280,12 +1424,12 @@ export function buildProductionChecklist(
       },
       {
         id: "assets",
-        label: "Assets vinculados",
-        done: missingAssets === 0 && totalScenes > 0,
+        label: "Visuais efetivos",
+        done: missingVisuals === 0 && totalScenes > 0,
         detail:
-          missingAssets === 0
-            ? "Todas as cenas possuem asset visual."
-            : `${missingAssets} cena(s) ainda sem asset.`
+          missingVisuals === 0
+            ? "Todas as cenas possuem visual efetivo."
+            : `${missingVisuals} cena(s) ainda sem visual.`
       },
       {
         id: "captions",

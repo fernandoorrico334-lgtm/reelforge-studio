@@ -21,6 +21,7 @@ import {
   deleteSceneRequest,
   generateSceneVisualRequest,
   getProjectCaptionAnalysisSnapshot,
+  getProjectProductionChecklistSnapshot,
   getProjectRenderBlueprintSnapshot,
   getSceneGeneratedImagesRequest,
   markVisualGenerationJobReviewedRequest,
@@ -45,6 +46,7 @@ import type {
   ImageQualityPreset,
   ProjectCaptionAnalysisResponse,
   ProjectPayload,
+  ProjectProductionChecklistResponse,
   ProjectScene,
   ProjectStatus,
   RenderBlueprintResponse,
@@ -55,6 +57,14 @@ import type {
   VisualGenerationJob
 } from "../lib/studio-types";
 import { captionPositions, emotionTags, projectStatuses } from "../lib/studio-types";
+import {
+  getSceneEffectiveAssetId,
+  getSceneEffectiveAssetLabel,
+  getSceneEffectiveAssetSource,
+  isBaseAssetActive,
+  isGeneratedAssetActive,
+  sceneHasEffectiveAsset
+} from "../lib/effective-assets";
 
 interface ProjectStudioProps {
   assets: StudioAsset[];
@@ -134,6 +144,19 @@ function formatTagLabel(value: string) {
 
 function formatRoleLabel(value: string) {
   return value.toUpperCase();
+}
+
+function formatEffectiveVisualSourceLabel(value: "base" | "generated" | "fallback" | "missing") {
+  switch (value) {
+    case "base":
+      return "base";
+    case "generated":
+      return "generated";
+    case "fallback":
+      return "fallback";
+    default:
+      return "missing";
+  }
 }
 
 function extractErrorMessage(error: unknown) {
@@ -583,6 +606,10 @@ export function ProjectStudio({
     useState<ProjectCaptionAnalysisResponse | null>(null);
   const [captionAnalysisSource, setCaptionAnalysisSource] =
     useState<DataSource>("mock");
+  const [productionChecklist, setProductionChecklist] =
+    useState<ProjectProductionChecklistResponse | null>(null);
+  const [productionChecklistSource, setProductionChecklistSource] =
+    useState<DataSource>("mock");
   const [blueprint, setBlueprint] = useState<RenderBlueprintResponse | null>(null);
   const [blueprintSource, setBlueprintSource] = useState<DataSource | null>(null);
   const [blueprintLoading, setBlueprintLoading] = useState(false);
@@ -611,6 +638,18 @@ export function ProjectStudio({
   const orderedScenes = sortScenes(project.scenes);
   const selectedVisualScene =
     orderedScenes.find((scene) => scene.id === visualSceneId) ?? orderedScenes[0] ?? null;
+  const selectedVisualSceneEffectiveAssetId = selectedVisualScene
+    ? getSceneEffectiveAssetId(selectedVisualScene)
+    : null;
+  const selectedVisualSceneEffectiveAssetLabel = selectedVisualScene
+    ? getSceneEffectiveAssetLabel(selectedVisualScene)
+    : "Sem visual efetivo";
+  const selectedVisualSceneEffectiveAssetSource = selectedVisualScene
+    ? getSceneEffectiveAssetSource(selectedVisualScene)
+    : "missing";
+  const selectedVisualSceneHasVisual = selectedVisualScene
+    ? sceneHasEffectiveAsset(selectedVisualScene)
+    : false;
   const sceneGeneratedImages = selectedVisualScene
     ? generatedImages.filter((item) => item.scene?.id === selectedVisualScene.id)
     : [];
@@ -672,13 +711,32 @@ export function ProjectStudio({
       : []);
   const effectiveEmphasisWords = parseCommaList(sceneForm.captionEmphasisWords);
   const liveCaptionAnalysis = captionAnalysis;
+  const liveProductionChecklist = productionChecklist?.checklist ?? null;
+  const missingVisualCount =
+    liveProductionChecklist?.missingVisuals ??
+    liveProductionChecklist?.missingAssets ??
+    storyAnalysis.analysis.missingVisuals ??
+    storyAnalysis.analysis.missingAssets;
+  const visualReadyCount =
+    liveProductionChecklist?.visualReadyScenes ??
+    Math.max(storyAnalysis.analysis.sceneCount - missingVisualCount, 0);
+  const generatedVisualCount =
+    liveProductionChecklist?.generatedVisualScenes ??
+    orderedScenes.filter((scene) => isGeneratedAssetActive(scene)).length;
   const qualityAlerts = [
-    ...storyAnalysis.analysis.alerts,
-    ...(liveCaptionAnalysis?.summary.alerts ?? []),
-    !project.channelId || !project.channel
-      ? "Projeto sem canal associado."
-      : null
-  ].filter((value): value is string => Boolean(value));
+    ...new Set(
+      [
+        ...storyAnalysis.analysis.alerts,
+        ...storyAnalysis.analysis.pacingWarnings,
+        ...(liveCaptionAnalysis?.summary.alerts ?? []),
+        ...(liveProductionChecklist?.alerts ?? []),
+        ...(liveProductionChecklist?.warnings ?? []),
+        !project.channelId || !project.channel
+          ? "Projeto sem canal associado."
+          : null
+      ].filter((value): value is string => Boolean(value))
+    )
+  ];
 
   useEffect(() => {
     let active = true;
@@ -686,13 +744,18 @@ export function ProjectStudio({
     setBlueprint(null);
     setBlueprintSource(null);
 
-    getProjectCaptionAnalysisSnapshot(project.id, project).then((snapshot) => {
+    Promise.all([
+      getProjectCaptionAnalysisSnapshot(project.id, project),
+      getProjectProductionChecklistSnapshot(project.id, project)
+    ]).then(([captionSnapshot, checklistSnapshot]) => {
       if (!active) {
         return;
       }
 
-      setCaptionAnalysis(snapshot.item);
-      setCaptionAnalysisSource(snapshot.source);
+      setCaptionAnalysis(captionSnapshot.item);
+      setCaptionAnalysisSource(captionSnapshot.source);
+      setProductionChecklist(checklistSnapshot.item);
+      setProductionChecklistSource(checklistSnapshot.source);
     });
 
     return () => {
@@ -1186,6 +1249,9 @@ export function ProjectStudio({
               const analysisForScene =
                 liveCaptionAnalysis?.scenes.find((entry) => entry.sceneId === scene.id) ??
                 null;
+              const sceneEffectiveLabel = getSceneEffectiveAssetLabel(scene);
+              const sceneEffectiveSource = getSceneEffectiveAssetSource(scene);
+              const sceneReadyVisual = sceneHasEffectiveAsset(scene);
 
               return (
                 <article
@@ -1251,10 +1317,34 @@ export function ProjectStudio({
                   <div className="mt-4 grid gap-4 xl:grid-cols-4">
                     <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
                       <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
-                        Asset
+                        Visual efetivo
                       </p>
                       <p className="mt-2 text-sm text-white">
-                        {scene.asset?.filename ?? "Sem asset"}
+                        {sceneEffectiveLabel}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
+                            sceneReadyVisual
+                              ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-100"
+                              : "border-[#ff8b8b]/20 bg-[#ff8b8b]/10 text-[#ffd4d4]"
+                          }`}
+                        >
+                          {sceneReadyVisual ? "Effective Asset" : "Sem visual"}
+                        </span>
+                        {isBaseAssetActive(scene) ? (
+                          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-mist/68">
+                            Base Asset
+                          </span>
+                        ) : null}
+                        {isGeneratedAssetActive(scene) ? (
+                          <span className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[#e2e8ff]">
+                            Generated Asset
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-xs text-mist/55">
+                        source {formatEffectiveVisualSourceLabel(sceneEffectiveSource)}
                       </p>
                     </div>
                     <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
@@ -1372,9 +1462,12 @@ export function ProjectStudio({
                 Checklist
               </p>
               <p className="mt-2 text-sm font-medium text-white">
-                {storyAnalysis.analysis.sceneCount} cenas -{" "}
-                {storyAnalysis.analysis.missingAssets} sem asset -{" "}
-                {storyAnalysis.analysis.missingCaptions} sem legenda
+                {storyAnalysis.analysis.sceneCount} cenas - {visualReadyCount} com
+                visual - {missingVisualCount} sem visual
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/60">
+                legenda pendente {storyAnalysis.analysis.missingCaptions} / generated
+                ativos {generatedVisualCount} / fonte {productionChecklistSource}
               </p>
             </div>
           </div>
@@ -2150,8 +2243,11 @@ export function ProjectStudio({
                     : "Selecione uma cena"}
                 </h3>
                 <p className="mt-2 text-sm leading-7 text-mist/68">
-                  Imagem atual {selectedVisualScene?.generatedAssetId ?? "n/d"} / feed{" "}
-                  {generatedImagesSource}
+                  Visual atual {selectedVisualSceneEffectiveAssetId ?? "n/d"} -{" "}
+                  {formatEffectiveVisualSourceLabel(
+                    selectedVisualSceneEffectiveAssetSource
+                  )}{" "}
+                  / feed {generatedImagesSource}
                 </p>
               </div>
               <a
@@ -2162,18 +2258,47 @@ export function ProjectStudio({
               </a>
             </div>
 
-            {selectedVisualScene?.generatedAsset ? (
+            {selectedVisualScene && selectedVisualSceneHasVisual ? (
               <div className="mt-5 rounded-[1.2rem] border border-emerald-400/20 bg-emerald-400/10 p-4">
                 <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100/70">
                   Imagem em uso
                 </p>
                 <p className="mt-2 text-sm text-white">
-                  generatedAssetId {selectedVisualScene.generatedAssetId ?? "n/a"}
+                  effectiveAssetId {selectedVisualSceneEffectiveAssetId ?? "n/a"}
+                </p>
+                <p className="mt-2 text-sm text-white">
+                  {selectedVisualSceneEffectiveAssetLabel}
                 </p>
                 <p className="mt-2 text-xs leading-6 text-mist/70">
-                  source {selectedVisualScene.generationProvider ?? "n/a"} / mode{" "}
-                  {selectedVisualScene.visualSourceMode ?? "n/a"}
+                  source{" "}
+                  {formatEffectiveVisualSourceLabel(
+                    selectedVisualSceneEffectiveAssetSource
+                  )}{" "}
+                  / mode {selectedVisualScene.visualSourceMode ?? "n/a"}
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-emerald-100">
+                    Effective Asset
+                  </span>
+                  {selectedVisualScene && isBaseAssetActive(selectedVisualScene) ? (
+                    <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-mist/68">
+                      Base Asset
+                    </span>
+                  ) : null}
+                  {selectedVisualScene &&
+                  isGeneratedAssetActive(selectedVisualScene) ? (
+                    <span className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[#e2e8ff]">
+                      Generated Asset
+                    </span>
+                  ) : null}
+                </div>
+                {selectedVisualScene &&
+                isGeneratedAssetActive(selectedVisualScene) ? (
+                  <p className="mt-3 text-xs leading-6 text-mist/70">
+                    Esta cena ja possui visual gerado ativo e deixa de entrar
+                    nas pendencias do checklist.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -2200,6 +2325,11 @@ export function ProjectStudio({
                         {item.isCurrentSceneGeneratedAsset ? (
                           <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
                             current
+                          </span>
+                        ) : null}
+                        {item.isSceneEffectiveAsset ? (
+                          <span className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-3 py-1 text-[11px] text-[#d8f8ff]">
+                            effective
                           </span>
                         ) : null}
                         {item.isFavorite ? (

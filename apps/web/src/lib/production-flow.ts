@@ -4,6 +4,11 @@ import {
   createScenesFromScript,
   suggestAssetsForScene
 } from "@reelforge/story-engine";
+import {
+  getSceneEffectiveAssetId,
+  getSceneEffectiveAssetSource,
+  sceneHasEffectiveAsset
+} from "./effective-assets";
 import type {
   ApplyChannelDefaultsResponse,
   AssetSuggestionMatch,
@@ -59,6 +64,9 @@ function buildChecklist(project: StudioProject) {
         duration: scene.duration,
         captionText: scene.captionText,
         assetId: scene.assetId,
+        generatedAssetId: scene.generatedAssetId ?? null,
+        visualSourceMode: scene.visualSourceMode ?? null,
+        effectiveAssetId: getSceneEffectiveAssetId(scene),
         visualPreset: scene.visualPreset,
         emotion: scene.emotion
       }))
@@ -97,9 +105,11 @@ export function buildLocalProjectAssetSuggestions(
     projectId: project.id,
     channelId: project.channelId,
     scenes: sortScenes(project.scenes).map((scene, index, orderedScenes) => {
+      const effectiveAssetId = getSceneEffectiveAssetId(scene);
+      const effectiveAssetSource = getSceneEffectiveAssetSource(scene);
       const recentlyUsedAssetIds = orderedScenes
         .slice(0, index)
-        .map((entry) => entry.assetId)
+        .map((entry) => getSceneEffectiveAssetId(entry))
         .filter((assetId): assetId is string => Boolean(assetId));
       const suggestions = suggestAssetsForScene(
         {
@@ -140,8 +150,17 @@ export function buildLocalProjectAssetSuggestions(
         order: scene.order,
         title: scene.title,
         emotion: scene.emotion,
-        currentAssetId: scene.assetId,
-        currentAsset: scene.asset,
+        currentAssetId: effectiveAssetId,
+        currentAsset:
+          effectiveAssetSource === "generated"
+            ? scene.generatedAsset ?? null
+            : scene.asset ?? scene.generatedAsset ?? null,
+        hasEffectiveVisual: sceneHasEffectiveAsset(scene),
+        effectiveAssetId,
+        effectiveAssetSource,
+        generatedVisualReady:
+          effectiveAssetSource === "generated" ||
+          (effectiveAssetSource === "fallback" && !scene.assetId),
         suggestions: buildSuggestionMatches(suggestions, assetMap)
       };
     })

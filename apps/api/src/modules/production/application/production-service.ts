@@ -22,6 +22,86 @@ import type { ProjectRepository } from "../../projects/application/project-repos
 import type { StudioProject } from "../../projects/domain/project.js";
 import type { CreateProductionFromScriptInput } from "../domain/production.js";
 
+function resolveEffectiveSceneVisual(scene: StudioProject["scenes"][number]) {
+  const assetId = scene.assetId ?? null;
+  const generatedAssetId = scene.generatedAssetId ?? null;
+  const visualSourceMode = scene.visualSourceMode ?? null;
+
+  if (visualSourceMode === "asset_only") {
+    return {
+      assetId,
+      asset: scene.asset ?? null,
+      source: assetId ? ("base" as const) : ("missing" as const)
+    };
+  }
+
+  if (visualSourceMode === "generated_only") {
+    return {
+      assetId: generatedAssetId,
+      asset: scene.generatedAsset ?? null,
+      source: generatedAssetId ? ("generated" as const) : ("missing" as const)
+    };
+  }
+
+  if (visualSourceMode === "fallback_generated") {
+    const effectiveAssetId = assetId ?? generatedAssetId;
+
+    return {
+      assetId: effectiveAssetId,
+      asset: scene.asset ?? scene.generatedAsset ?? null,
+      source: effectiveAssetId ? ("fallback" as const) : ("missing" as const)
+    };
+  }
+
+  if (visualSourceMode === "mixed_sequence") {
+    const effectiveAssetId = generatedAssetId ?? assetId;
+
+    return {
+      assetId: effectiveAssetId,
+      asset: scene.generatedAsset ?? scene.asset ?? null,
+      source: generatedAssetId
+        ? ("generated" as const)
+        : assetId
+          ? ("base" as const)
+          : ("missing" as const)
+    };
+  }
+
+  if (visualSourceMode === "hybrid_overlay") {
+    return {
+      assetId: assetId ?? generatedAssetId,
+      asset: scene.asset ?? scene.generatedAsset ?? null,
+      source: assetId
+        ? ("base" as const)
+        : generatedAssetId
+          ? ("generated" as const)
+          : ("missing" as const)
+    };
+  }
+
+  if (generatedAssetId) {
+    return {
+      assetId: generatedAssetId,
+      asset: scene.generatedAsset ?? null,
+      source: "generated" as const
+    };
+  }
+
+  if (assetId) {
+    return {
+      assetId,
+      asset: scene.asset ?? null,
+      source: "base" as const
+    };
+  }
+
+  return {
+    assetId: null,
+    asset: null,
+    source: "missing" as const
+  };
+}
+
 function toChecklistProject(project: StudioProject) {
   return {
     id: project.id,
@@ -41,6 +121,8 @@ function toChecklistProject(project: StudioProject) {
       duration: scene.duration,
       captionText: scene.captionText,
       assetId: scene.assetId,
+      generatedAssetId: scene.generatedAssetId,
+      visualSourceMode: scene.visualSourceMode,
       visualPreset: scene.visualPreset,
       emotion: scene.emotion
     }))
@@ -135,9 +217,10 @@ async function buildProjectAssetSuggestions(
     .slice()
     .sort((left, right) => left.order - right.order)
     .map((scene, index, orderedScenes) => {
+      const effectiveVisual = resolveEffectiveSceneVisual(scene);
       const recentlyUsedAssetIds = orderedScenes
         .slice(0, index)
-        .map((entry) => entry.assetId)
+        .map((entry) => resolveEffectiveSceneVisual(entry).assetId)
         .filter((assetId): assetId is string => Boolean(assetId));
       const suggestions = suggestAssetsForScene(
         {
@@ -162,8 +245,14 @@ async function buildProjectAssetSuggestions(
         order: scene.order,
         title: scene.title,
         emotion: scene.emotion,
-        currentAssetId: scene.assetId,
-        currentAsset: scene.asset,
+        currentAssetId: effectiveVisual.assetId,
+        currentAsset: effectiveVisual.asset,
+        hasEffectiveVisual: Boolean(effectiveVisual.assetId),
+        effectiveAssetId: effectiveVisual.assetId,
+        effectiveAssetSource: effectiveVisual.source,
+        generatedVisualReady:
+          effectiveVisual.source === "generated" ||
+          (effectiveVisual.source === "fallback" && !scene.assetId),
         suggestions: mapSuggestion(suggestions, assetMap)
       };
     });

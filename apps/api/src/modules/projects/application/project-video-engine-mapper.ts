@@ -48,6 +48,7 @@ function mapScene(scene: ProjectScene): BlueprintSceneInput {
     asset: mapAsset(scene.asset),
     generatedAssetId: scene.generatedAssetId,
     generatedAsset: mapAsset(scene.generatedAsset),
+    visualSourceMode: scene.visualSourceMode,
     sfxAssetId: scene.sfxAssetId,
     sfxAsset: null,
     sfxStartTime: scene.sfxStartTime,

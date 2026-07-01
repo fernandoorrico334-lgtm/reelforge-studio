@@ -87,6 +87,7 @@ export interface BlueprintSceneInput {
   asset: BlueprintAssetInput | null;
   generatedAssetId?: string | null;
   generatedAsset?: BlueprintAssetInput | null;
+  visualSourceMode?: string | null;
   sfxAssetId: string | null;
   sfxAsset: BlueprintAssetInput | null;
   sfxStartTime: number;
@@ -187,11 +188,19 @@ export interface RenderBlueprintScene {
   duration: number | null;
   emotion: CaptionEmotionTag | null;
   energyLevel: number;
+  assetId: string | null;
   asset: BlueprintAssetInput | null;
+  generatedAssetId: string | null;
+  generatedAsset: BlueprintAssetInput | null;
   effectiveAsset: BlueprintAssetInput | null;
   effectiveAssetId: string | null;
   effectiveAssetPath: string | null;
-  effectiveAssetSource: "project_asset" | "generated_asset" | "missing";
+  effectiveAssetSource:
+    | "project_asset"
+    | "generated_asset"
+    | "fallback_generated"
+    | "missing";
+  visualSourceMode: string | null;
   transition: string;
   visualPreset: ResolvedScenePreset;
   captionStyle: ResolvedCaptionStyle & {
@@ -249,12 +258,32 @@ function normalizeSceneOrder(left: BlueprintSceneInput, right: BlueprintSceneInp
   return left.order - right.order;
 }
 
+function normalizeVisualSourceMode(value: string | null | undefined) {
+  switch (value) {
+    case "asset_only":
+    case "generated_only":
+    case "hybrid_overlay":
+    case "fallback_generated":
+    case "mixed_sequence":
+      return value;
+    default:
+      return null;
+  }
+}
+
 function resolveEffectiveAsset(
   scene: BlueprintSceneInput
 ): Pick<
   RenderBlueprintScene,
-  "effectiveAsset" | "effectiveAssetId" | "effectiveAssetPath" | "effectiveAssetSource"
+  | "effectiveAsset"
+  | "effectiveAssetId"
+  | "effectiveAssetPath"
+  | "effectiveAssetSource"
+  | "generatedAsset"
+  | "generatedAssetId"
 > {
+  const baseAsset = scene.asset;
+  const baseAssetId = scene.assetId ?? null;
   const generatedAsset =
     "generatedAsset" in scene
       ? ((scene as BlueprintSceneInput & { generatedAsset?: BlueprintAssetInput | null })
@@ -265,15 +294,87 @@ function resolveEffectiveAsset(
       ? ((scene as BlueprintSceneInput & { generatedAssetId?: string | null })
           .generatedAssetId ?? null)
       : null;
-  const effectiveAsset = generatedAsset ?? scene.asset;
+  const mode = normalizeVisualSourceMode(scene.visualSourceMode);
+
+  if (mode === "asset_only") {
+    return {
+      generatedAsset,
+      generatedAssetId,
+      effectiveAsset: baseAsset,
+      effectiveAssetId: baseAssetId,
+      effectiveAssetPath: baseAsset?.path ?? null,
+      effectiveAssetSource: baseAsset ? "project_asset" : "missing"
+    };
+  }
+
+  if (mode === "generated_only") {
+    const effectiveAsset = generatedAsset;
+    return {
+      generatedAsset,
+      generatedAssetId,
+      effectiveAsset,
+      effectiveAssetId: generatedAssetId,
+      effectiveAssetPath: effectiveAsset?.path ?? null,
+      effectiveAssetSource: effectiveAsset ? "generated_asset" : "missing"
+    };
+  }
+
+  if (mode === "fallback_generated") {
+    const effectiveAsset = baseAsset ?? generatedAsset;
+    const effectiveAssetId = baseAssetId ?? generatedAssetId;
+    return {
+      generatedAsset,
+      generatedAssetId,
+      effectiveAsset,
+      effectiveAssetId,
+      effectiveAssetPath: effectiveAsset?.path ?? null,
+      effectiveAssetSource: effectiveAsset ? "fallback_generated" : "missing"
+    };
+  }
+
+  if (mode === "mixed_sequence") {
+    const effectiveAsset = generatedAsset ?? baseAsset;
+    return {
+      generatedAsset,
+      generatedAssetId,
+      effectiveAsset,
+      effectiveAssetId: generatedAssetId ?? baseAssetId,
+      effectiveAssetPath: effectiveAsset?.path ?? null,
+      effectiveAssetSource: effectiveAsset
+        ? generatedAsset
+          ? "generated_asset"
+          : "project_asset"
+        : "missing"
+    };
+  }
+
+  if (mode === "hybrid_overlay") {
+    const effectiveAsset = baseAsset ?? generatedAsset;
+    return {
+      generatedAsset,
+      generatedAssetId,
+      effectiveAsset,
+      effectiveAssetId: baseAssetId ?? generatedAssetId,
+      effectiveAssetPath: effectiveAsset?.path ?? null,
+      effectiveAssetSource: effectiveAsset
+        ? baseAsset
+          ? "project_asset"
+          : "generated_asset"
+        : "missing"
+    };
+  }
+
+  const effectiveAsset = generatedAsset ?? baseAsset;
 
   return {
+    generatedAsset,
+    generatedAssetId,
     effectiveAsset,
-    effectiveAssetId: generatedAssetId ?? scene.assetId,
+    effectiveAssetId: generatedAssetId ?? baseAssetId,
     effectiveAssetPath: effectiveAsset?.path ?? null,
     effectiveAssetSource: generatedAsset
       ? "generated_asset"
-      : scene.asset
+      : baseAsset
         ? "project_asset"
         : "missing"
   };
@@ -322,18 +423,22 @@ function toStoryProjectInput(project: BlueprintProjectInput) {
     id: project.id,
     title: project.title,
     script: project.script,
-    scenes: [...project.scenes].sort(normalizeSceneOrder).map((scene) => ({
-      id: scene.id,
-      order: scene.order,
-      title: scene.title,
-      narrationText: scene.narrationText,
-      captionText: scene.captionText,
-      duration: scene.duration,
-      emotion: scene.emotion,
-      hasAsset: Boolean(scene.assetId),
-      visualPreset: scene.visualPreset,
-      energyLevel: scene.energyLevel
-    }))
+    scenes: [...project.scenes].sort(normalizeSceneOrder).map((scene) => {
+      const effectiveAsset = resolveEffectiveAsset(scene);
+
+      return {
+        id: scene.id,
+        order: scene.order,
+        title: scene.title,
+        narrationText: scene.narrationText,
+        captionText: scene.captionText,
+        duration: scene.duration,
+        emotion: scene.emotion,
+        hasAsset: Boolean(effectiveAsset.effectiveAssetId),
+        visualPreset: scene.visualPreset,
+        energyLevel: scene.energyLevel
+      };
+    })
   };
 }
 
@@ -632,10 +737,11 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
       scene.transition ??
       resolvedPreset.preset.suggestedTransition ??
       resolvedTemplate.template.defaultTransition;
+    const effectiveVisual = resolveEffectiveAsset(scene);
     const warnings: string[] = [];
 
-    if (!scene.asset) {
-      warnings.push("Cena sem asset associado.");
+    if (!effectiveVisual.effectiveAssetId) {
+      warnings.push("Cena sem visual efetivo associado.");
     }
 
     if (!scene.captionText?.trim()) {
@@ -658,8 +764,10 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
       duration: scene.duration,
       emotion: normalizeEmotionTag(scene.emotion),
       energyLevel: scene.energyLevel ?? role?.energyScore ?? 40,
+      assetId: scene.assetId,
       asset: scene.asset,
-      ...resolveEffectiveAsset(scene),
+      ...effectiveVisual,
+      visualSourceMode: scene.visualSourceMode ?? null,
       transition,
       visualPreset: resolvedPreset,
       captionStyle: {
