@@ -15,6 +15,11 @@ import {
   toForwardSlashes,
   toRelativeStoragePath
 } from "./render-paths.js";
+import {
+  checkFfmpegAvailable as checkResolvedFfmpegAvailable,
+  getFfmpegCommand,
+  type BinaryAvailability
+} from "./ffmpeg-runtime.js";
 
 export const renderPipelineSteps = [
   "reading_blueprint",
@@ -36,6 +41,11 @@ export interface FfmpegAvailability {
   available: boolean;
   versionOutput: string;
   errorMessage: string | null;
+  command?: string;
+  source?: "env" | "path";
+  envVar?: "FFMPEG_PATH" | "FFPROBE_PATH";
+  blockedByEnvironment?: boolean;
+  notFound?: boolean;
 }
 
 export interface RenderBlueprintV1Options {
@@ -71,6 +81,8 @@ interface LogContext {
   projectId: string;
   label?: string;
 }
+
+const maxCapturedCommandOutputChars = 200_000;
 
 class CommandExecutionError extends Error {
   readonly command: string;
@@ -160,8 +172,36 @@ function formatLogChunk(text: string, context: LogContext, source: "stdout" | "s
   return formatted.length > 0 ? `${formatted}\n` : "";
 }
 
+function appendCapturedOutput(current: string, chunk: string) {
+  const nextValue = current + chunk;
+
+  if (nextValue.length <= maxCapturedCommandOutputChars) {
+    return nextValue;
+  }
+
+  return nextValue.slice(-maxCapturedCommandOutputChars);
+}
+
+const logWriteQueues = new Map<string, Promise<void>>();
+
+function queueLogAppend(logPath: string, contents: string) {
+  const previousWrite = logWriteQueues.get(logPath) ?? Promise.resolve();
+  const nextWrite = previousWrite
+    .catch(() => undefined)
+    .then(async () => {
+      if (!contents) {
+        return;
+      }
+
+      await appendFile(logPath, contents, "utf8");
+    });
+
+  logWriteQueues.set(logPath, nextWrite.catch(() => undefined));
+  return nextWrite;
+}
+
 async function appendLog(logPath: string, context: LogContext, message: string) {
-  await appendFile(logPath, `${buildLogPrefix(context)} ${message}\n`, "utf8");
+  await queueLogAppend(logPath, `${buildLogPrefix(context)} ${message}\n`);
 }
 
 async function runCommand(
@@ -185,14 +225,14 @@ async function runCommand(
 
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString();
-      stdout += text;
-      void appendFile(logPath, formatLogChunk(text, context, "stdout"), "utf8");
+      stdout = appendCapturedOutput(stdout, text);
+      void queueLogAppend(logPath, formatLogChunk(text, context, "stdout"));
     });
 
     child.stderr.on("data", (chunk) => {
       const text = chunk.toString();
-      stderr += text;
-      void appendFile(logPath, formatLogChunk(text, context, "stderr"), "utf8");
+      stderr = appendCapturedOutput(stderr, text);
+      void queueLogAppend(logPath, formatLogChunk(text, context, "stderr"));
     });
 
     child.on("error", (error) => {
@@ -200,20 +240,24 @@ async function runCommand(
     });
 
     child.on("close", (code) => {
-      if (code === 0) {
-        resolve({ stdout, stderr });
-        return;
-      }
+      void (async () => {
+        await (logWriteQueues.get(logPath) ?? Promise.resolve());
 
-      reject(
-        new CommandExecutionError({
-          command,
-          args,
-          code,
-          stdout,
-          stderr
-        })
-      );
+        if (code === 0) {
+          resolve({ stdout, stderr });
+          return;
+        }
+
+        reject(
+          new CommandExecutionError({
+            command,
+            args,
+            code,
+            stdout,
+            stderr
+          })
+        );
+      })();
     });
   });
 }
@@ -349,7 +393,7 @@ async function renderImageSegment(
     outputPath
   ];
 
-  await runCommand("ffmpeg", args, jobRoot, logPath, context);
+  await runCommand(getFfmpegCommand(), args, jobRoot, logPath, context);
 }
 
 async function renderVideoSegment(
@@ -385,7 +429,7 @@ async function renderVideoSegment(
     outputPath
   ];
 
-  await runCommand("ffmpeg", args, jobRoot, logPath, context);
+  await runCommand(getFfmpegCommand(), args, jobRoot, logPath, context);
 }
 
 async function renderPlaceholderSegment(
@@ -418,7 +462,7 @@ async function renderPlaceholderSegment(
     outputPath
   ];
 
-  await runCommand("ffmpeg", args, jobRoot, logPath, context);
+  await runCommand(getFfmpegCommand(), args, jobRoot, logPath, context);
 }
 
 async function renderSceneSegment(
@@ -606,7 +650,7 @@ async function concatSegments(
   ];
 
   try {
-    await runCommand("ffmpeg", args, jobRoot, logPath, context);
+    await runCommand(getFfmpegCommand(), args, jobRoot, logPath, context);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown concat error.";
@@ -645,7 +689,7 @@ async function burnSubtitlesToVideoOnly(
   ];
 
   try {
-    await runCommand("ffmpeg", args, jobRoot, logPath, context);
+    await runCommand(getFfmpegCommand(), args, jobRoot, logPath, context);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown subtitle burn error.";
@@ -706,42 +750,9 @@ async function throwIfCancellationRequested(
 }
 
 export async function checkFfmpegAvailable(): Promise<FfmpegAvailability> {
-  return new Promise((resolve) => {
-    const child = spawn("ffmpeg", ["-version"], {
-      shell: false,
-      windowsHide: true
-    });
+  const result: BinaryAvailability = await checkResolvedFfmpegAvailable();
 
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    child.on("error", (error) => {
-      resolve({
-        available: false,
-        versionOutput: "",
-        errorMessage: error.message
-      });
-    });
-
-    child.on("close", (code) => {
-      resolve({
-        available: code === 0,
-        versionOutput: `${stdout}${stderr}`.trim(),
-        errorMessage:
-          code === 0
-            ? null
-            : `ffmpeg -version exited with code ${code ?? "unknown"}.`
-      });
-    });
-  });
+  return result;
 }
 
 export async function renderBlueprintV1({
@@ -784,6 +795,11 @@ export async function renderBlueprintV1({
   await emitProgress(onProgress, 5);
   await throwIfCancellationRequested(shouldCancel, "reading_blueprint");
   await appendLog(paths.logPath, baseContext, "Render Engine V1 started.");
+  await appendLog(
+    paths.logPath,
+    baseContext,
+    `FFmpeg command resolved from ${ffmpegAvailability.source ?? "path"}: ${ffmpegAvailability.command ?? getFfmpegCommand()}`
+  );
   await appendLog(paths.logPath, baseContext, ffmpegAvailability.versionOutput);
   await appendLog(
     paths.logPath,

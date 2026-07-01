@@ -141,6 +141,14 @@ intencionalmente, use `npm install`.
 
 ```bash
 ffmpeg -version
+ffprobe -version
+```
+
+Se o binario nao estiver no `PATH`, defina antes de rodar os renders ou smokes:
+
+```bash
+$env:FFMPEG_PATH="C:/ffmpeg/bin/ffmpeg.exe"
+$env:FFPROBE_PATH="C:/ffmpeg/bin/ffprobe.exe"
 ```
 
 4. Gere o Prisma Client:
@@ -934,6 +942,7 @@ Se um render falhar:
 ```bash
 ffmpeg -version
 ffprobe -version
+npm run doctor:ffmpeg
 ```
 
 4. Para reprocessar um unico job sem subir o loop completo:
@@ -941,6 +950,12 @@ ffprobe -version
 ```bash
 npm run worker:once
 ```
+
+O `doctor:ffmpeg` separa tres classes de problema:
+
+- `PATH/env`: o shell nao acha `ffmpeg` ou `ffprobe`.
+- `spawn blocked`: o shell acha o binario, mas o Node nao consegue abrir o processo filho.
+- `render runtime`: o binario inicia, mas a geracao de MP4/WAV falha por comando, input ou output.
 
 ## Como testar upload
 

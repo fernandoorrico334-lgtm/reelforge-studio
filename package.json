@@ -21,6 +21,7 @@
     "db:seed": "prisma db seed --schema prisma/schema.prisma",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "doctor:ffmpeg": "node scripts/doctor-ffmpeg.mjs",
     "smoke:research": "node scripts/smoke-research.mjs",
     "smoke:intake": "node scripts/smoke-intake.mjs",
     "smoke:production:logic": "node scripts/smoke-production-flow.mjs",

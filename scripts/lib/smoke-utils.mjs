@@ -1,5 +1,5 @@
 import { access, mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 const minimalPngBuffer = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWOYAAAAASUVORK5CYII=",
@@ -71,6 +71,71 @@ export function isSpawnPermissionError(error) {
   return /spawn\s+EPERM/i.test(message) || /\bEPERM\b/i.test(message);
 }
 
+export function isBinaryNotFoundError(error) {
+  if (!error) {
+    return false;
+  }
+
+  const message =
+    error instanceof Error
+      ? `${error.code ?? ""} ${error.message}`
+      : String(error);
+
+  return /\bENOENT\b/i.test(message) || /not found/i.test(message);
+}
+
+const binaryEnvMap = {
+  ffmpeg: "FFMPEG_PATH",
+  ffprobe: "FFPROBE_PATH"
+};
+
+function normalizeConfiguredBinaryCommand(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
+    return trimmed.slice(1, -1).trim() || null;
+  }
+
+  return trimmed;
+}
+
+export function resolveBinaryCommand(binary) {
+  const envVar = binaryEnvMap[binary];
+  const configuredCommand = normalizeConfiguredBinaryCommand(process.env[envVar]);
+
+  return {
+    binary,
+    envVar,
+    command: configuredCommand ?? binary,
+    source: configuredCommand ? "env" : "path"
+  };
+}
+
+export function summarizePathForDiagnostics(pathValue = process.env.PATH ?? "") {
+  const entries = pathValue
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (entries.length <= 8) {
+    return entries;
+  }
+
+  return [
+    ...entries.slice(0, 4),
+    `... (${entries.length - 8} hidden entries) ...`,
+    ...entries.slice(-4)
+  ];
+}
+
 export function buildEnvironmentBlockerMessage(subject, fallbackCommand) {
   const fallbackText = fallbackCommand
     ? ` Rode em terminal elevado ou use ${fallbackCommand}.`
@@ -79,33 +144,67 @@ export function buildEnvironmentBlockerMessage(subject, fallbackCommand) {
   return `${subject} bloqueado pelo ambiente. FFmpeg/child_process nao puderam ser executados.${fallbackText}`;
 }
 
-export async function safeCheckFfmpeg(runCommand) {
+function formatBinaryError(resolution, error) {
+  const attemptedCommand = `${resolution.command} -version`;
+
+  if (isSpawnPermissionError(error)) {
+    return `child_process.spawn foi bloqueado ao executar '${attemptedCommand}'.`;
+  }
+
+  if (isBinaryNotFoundError(error)) {
+    return `${resolution.binary.toUpperCase()} nao foi encontrado usando '${resolution.command}'. Ajuste o PATH ou defina ${resolution.envVar}.`;
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return `${resolution.binary.toUpperCase()} falhou ao executar '${attemptedCommand}'. ${error.message.trim()}`;
+  }
+
+  return `${resolution.binary.toUpperCase()} falhou ao executar '${attemptedCommand}'.`;
+}
+
+export async function safeCheckBinary(binary, runCommand) {
+  const resolution = resolveBinaryCommand(binary);
+
   try {
-    const { stdout, stderr } = await runCommand("ffmpeg", ["-version"]);
+    const { stdout, stderr } = await runCommand(resolution.command, ["-version"]);
+    const versionOutput = `${stdout}${stderr}`.trim();
 
     return {
+      ...resolution,
       available: true,
       blockedByEnvironment: false,
-      versionOutput: `${stdout}${stderr}`.trim(),
-      errorMessage: null
+      notFound: false,
+      versionOutput,
+      versionLine: versionOutput.split(/\r?\n/u).find(Boolean) ?? null,
+      errorMessage: null,
+      rawErrorMessage: null
     };
   } catch (error) {
     return {
+      ...resolution,
       available: false,
       blockedByEnvironment: isSpawnPermissionError(error),
+      notFound: isBinaryNotFoundError(error),
       versionOutput: "",
-      errorMessage:
-        error instanceof Error ? error.message : "Unknown FFmpeg error."
+      versionLine: null,
+      errorMessage: formatBinaryError(resolution, error),
+      rawErrorMessage: error instanceof Error ? error.message : String(error)
     };
   }
 }
 
+export async function safeCheckFfmpeg(runCommand) {
+  return safeCheckBinary("ffmpeg", runCommand);
+}
+
+export async function safeCheckFfprobe(runCommand) {
+  return safeCheckBinary("ffprobe", runCommand);
+}
+
 export async function writeMinimalPng(absolutePath, variantToken = "") {
   await ensureFileParent(absolutePath);
-  const variantBuffer = variantToken
-    ? Buffer.from(`\n${variantToken}`, "utf8")
-    : Buffer.alloc(0);
-  await writeFile(absolutePath, Buffer.concat([minimalPngBuffer, variantBuffer]));
+  void variantToken;
+  await writeFile(absolutePath, minimalPngBuffer);
   return absolutePath;
 }
 

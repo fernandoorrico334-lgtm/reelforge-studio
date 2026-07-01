@@ -3,6 +3,8 @@ import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { RenderBlueprint, RenderBlueprintScene } from "@reelforge/video-engine";
 import {
+  getFfmpegCommand,
+  getFfprobeCommand,
   RenderCancellationError,
   type RenderPipelineStep,
   renderCinematicV2,
@@ -30,7 +32,13 @@ interface RenderOutputMetadata {
   outputDuration: number | null;
   outputCodec: string | null;
   outputFileSize: number | null;
+  hasAudio: boolean | null;
+  audioCodec: string | null;
+  audioChannels: number | null;
+  audioSampleRate: number | null;
 }
+
+const maxCapturedCommandOutputChars = 200_000;
 
 class WorkerCancellationError extends Error {
   readonly step: RenderPipelineStep;
@@ -103,6 +111,24 @@ function formatLogPrefix(renderJobId: string, videoProjectId: string) {
   return `[${new Date().toISOString()}][job:${renderJobId}][project:${videoProjectId}]`;
 }
 
+const logWriteQueues = new Map<string, Promise<void>>();
+
+function queueLogAppend(absoluteLogPath: string, contents: string) {
+  const previousWrite = logWriteQueues.get(absoluteLogPath) ?? Promise.resolve();
+  const nextWrite = previousWrite
+    .catch(() => undefined)
+    .then(async () => {
+      if (!contents) {
+        return;
+      }
+
+      await appendFile(absoluteLogPath, contents, "utf8");
+    });
+
+  logWriteQueues.set(absoluteLogPath, nextWrite.catch(() => undefined));
+  return nextWrite;
+}
+
 async function appendRenderLog(
   relativeLogPath: string | null,
   renderJobId: string,
@@ -116,10 +142,9 @@ async function appendRenderLog(
   try {
     const absoluteLogPath = resolveStoragePath(projectRoot, relativeLogPath);
     await mkdir(dirname(absoluteLogPath), { recursive: true });
-    await appendFile(
+    await queueLogAppend(
       absoluteLogPath,
-      `${formatLogPrefix(renderJobId, videoProjectId)} ${message}\n`,
-      "utf8"
+      `${formatLogPrefix(renderJobId, videoProjectId)} ${message}\n`
     );
   } catch {
     // Logging should never crash the worker loop.
@@ -128,6 +153,16 @@ async function appendRenderLog(
 
 function emitWorkerLog(options: WorkerLogOptions | undefined, message: string) {
   options?.logger?.(message);
+}
+
+function appendCapturedOutput(current: string, chunk: string) {
+  const nextValue = current + chunk;
+
+  if (nextValue.length <= maxCapturedCommandOutputChars) {
+    return nextValue;
+  }
+
+  return nextValue.slice(-maxCapturedCommandOutputChars);
 }
 
 async function ensureRenderLog(relativeLogPath: string | null) {
@@ -224,7 +259,7 @@ async function runLoggedCommand(
 
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString();
-      stdout += text;
+      stdout = appendCapturedOutput(stdout, text);
       void appendRenderLog(
         logPath,
         renderJobId,
@@ -235,7 +270,7 @@ async function runLoggedCommand(
 
     child.stderr.on("data", (chunk) => {
       const text = chunk.toString();
-      stderr += text;
+      stderr = appendCapturedOutput(stderr, text);
       void appendRenderLog(
         logPath,
         renderJobId,
@@ -249,16 +284,23 @@ async function runLoggedCommand(
     });
 
     child.on("close", (code) => {
-      if (code === 0) {
-        resolve({ stdout, stderr });
-        return;
-      }
+      void (async () => {
+        if (logPath) {
+          const absoluteLogPath = resolveStoragePath(projectRoot, logPath);
+          await (logWriteQueues.get(absoluteLogPath) ?? Promise.resolve());
+        }
 
-      reject(
-        new Error(
-          `Command '${command}' failed with code ${code ?? "unknown"}.`
-        )
-      );
+        if (code === 0) {
+          resolve({ stdout, stderr });
+          return;
+        }
+
+        reject(
+          new Error(
+            `Command '${formatCommandForLog(command, args)}' failed with code ${code ?? "unknown"}.`
+          )
+        );
+      })();
     });
   });
 }
@@ -279,7 +321,7 @@ async function generateThumbnail(
   for (const seekSeconds of attempts) {
     try {
       await runLoggedCommand(
-        "ffmpeg",
+        getFfmpegCommand(),
         [
           "-y",
           "-ss",
@@ -329,12 +371,16 @@ async function probeOutputMetadata(
     outputHeight: null,
     outputDuration: null,
     outputCodec: null,
-    outputFileSize: fileStats.size
+    outputFileSize: fileStats.size,
+    hasAudio: null,
+    audioCodec: null,
+    audioChannels: null,
+    audioSampleRate: null
   };
 
   try {
     const { stdout } = await runLoggedCommand(
-      "ffprobe",
+      getFfprobeCommand(),
       [
         "-v",
         "error",
@@ -355,6 +401,8 @@ async function probeOutputMetadata(
         height?: number | string;
         duration?: number | string;
         codec_name?: string;
+        channels?: number | string;
+        sample_rate?: number | string;
       }>;
       format?: {
         duration?: number | string;
@@ -362,6 +410,9 @@ async function probeOutputMetadata(
     };
     const videoStream = Array.isArray(parsed.streams)
       ? parsed.streams.find((stream) => stream.codec_type === "video")
+      : null;
+    const audioStream = Array.isArray(parsed.streams)
+      ? parsed.streams.find((stream) => stream.codec_type === "audio")
       : null;
     const durationValue = Number(
       parsed.format?.duration ?? videoStream?.duration ?? 0
@@ -378,7 +429,15 @@ async function probeOutputMetadata(
         videoStream.codec_name.trim().length > 0
           ? videoStream.codec_name.trim()
           : null,
-      outputFileSize: fileStats.size
+      outputFileSize: fileStats.size,
+      hasAudio: Boolean(audioStream),
+      audioCodec:
+        typeof audioStream?.codec_name === "string" &&
+        audioStream.codec_name.trim().length > 0
+          ? audioStream.codec_name.trim()
+          : null,
+      audioChannels: Number(audioStream?.channels ?? 0) || null,
+      audioSampleRate: Number(audioStream?.sample_rate ?? 0) || null
     };
 
     await appendRenderLog(
@@ -434,6 +493,12 @@ async function processRenderJob(renderJobId: string) {
     renderJobId,
     initialJob.videoProjectId,
     `Render mode: ${initialJob.renderMode ?? "v1"} | quality: ${initialJob.renderQuality ?? "standard"}.`
+  );
+  await appendRenderLog(
+    initialJob.logPath,
+    renderJobId,
+    initialJob.videoProjectId,
+    `Runtime binaries: ffmpeg='${getFfmpegCommand()}' | ffprobe='${getFfprobeCommand()}'.`
   );
 
   try {
@@ -572,6 +637,10 @@ async function processRenderJob(renderJobId: string) {
       outputHeight: outputMetadata.outputHeight,
       outputDuration: outputMetadata.outputDuration,
       outputCodec: outputMetadata.outputCodec,
+      hasAudio: outputMetadata.hasAudio,
+      audioCodec: outputMetadata.audioCodec,
+      audioChannels: outputMetadata.audioChannels,
+      audioSampleRate: outputMetadata.audioSampleRate,
       outputFileSize: outputMetadata.outputFileSize,
       currentStep: "completed",
       progress: 100,

@@ -188,6 +188,8 @@ Se o smoke falhar:
 - conferir se `hasAudio`, `audioCodec`, `audioChannels` e `audioSampleRate`
   foram persistidos quando houver audio;
 - confirmar `ffmpeg -version` e `ffprobe -version`;
+- se necessario, definir `FFMPEG_PATH` e `FFPROBE_PATH` sem hardcode pessoal;
+- rodar `npm run doctor:ffmpeg` para distinguir PATH ausente de bloqueio de `child_process.spawn`;
 - rerodar um unico job com `npm run worker:once` quando precisar isolar o
   problema do loop do worker.
 

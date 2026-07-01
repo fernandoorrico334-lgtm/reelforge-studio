@@ -9,8 +9,10 @@ import {
   isSpawnPermissionError,
   printSmokeSummary,
   resolveApiBuildRoot,
+  resolveBinaryCommand,
   resolveFirstExistingPath,
   safeCheckFfmpeg,
+  safeCheckFfprobe,
   writeMinimalPng
 } from "./lib/smoke-utils.mjs";
 
@@ -27,6 +29,55 @@ function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function formatCommand(command, args) {
+  return [command, ...args].join(" ");
+}
+
+function createCommandError(command, args, code, stdout, stderr) {
+  const tail = `${stderr}${stdout}`
+    .trim()
+    .split(/\r?\n/u)
+    .slice(-8)
+    .join(" | ");
+  const error = new Error(
+    `Command '${formatCommand(command, args)}' failed with code ${code ?? "unknown"}. ${tail || "No stdout/stderr output captured."}`
+  );
+
+  return Object.assign(error, {
+    command,
+    args: [...args],
+    stdout,
+    stderr,
+    code
+  });
+}
+
+function createSpawnError(command, args, error) {
+  const wrapped = new Error(
+    `Failed to spawn '${formatCommand(command, args)}'. ${error.message}`
+  );
+
+  return Object.assign(wrapped, {
+    command,
+    args: [...args],
+    stdout: "",
+    stderr: "",
+    code: error.code ?? null,
+    cause: error
+  });
+}
+
+function extractAttemptedCommand(error, fallbackCommand = null) {
+  if (error && typeof error === "object" && "command" in error && "args" in error) {
+    return formatCommand(
+      error.command,
+      Array.isArray(error.args) ? error.args : []
+    );
+  }
+
+  return fallbackCommand;
 }
 
 function runCommand(command, args, cwd = projectRoot) {
@@ -49,7 +100,7 @@ function runCommand(command, args, cwd = projectRoot) {
     });
 
     child.on("error", (error) => {
-      rejectPromise(error);
+      rejectPromise(createSpawnError(command, args, error));
     });
 
     child.on("close", (code) => {
@@ -58,16 +109,7 @@ function runCommand(command, args, cwd = projectRoot) {
         return;
       }
 
-      const tail = `${stderr}${stdout}`
-        .trim()
-        .split(/\r?\n/u)
-        .slice(-8)
-        .join(" | ");
-      rejectPromise(
-        new Error(
-          `Command '${command}' failed with code ${code ?? "unknown"}. ${tail || "No stdout/stderr output captured."}`
-        )
-      );
+      rejectPromise(createCommandError(command, args, code, stdout, stderr));
     });
   });
 }
@@ -366,7 +408,7 @@ async function prepareSmokeData(deps) {
   const project = await deps.apiPrisma.videoProject.create({
     data: {
       title: smokeProjectTitle,
-      status: "READY_TO_RENDER",
+      status: "SCENE_PLANNING",
       channelId: channel.id,
       script: "Projeto de smoke para validar mix local de narracao no render.",
       durationTarget: 6,
@@ -452,13 +494,15 @@ async function prepareSmokeData(deps) {
 }
 
 async function inspectWithFfprobe(absoluteOutputPath) {
+  const ffprobeCommand = resolveBinaryCommand("ffprobe").command;
+
   try {
-    await runCommand("ffprobe", ["-version"]);
+    await runCommand(ffprobeCommand, ["-version"]);
   } catch {
     return null;
   }
 
-  const { stdout } = await runCommand("ffprobe", [
+  const { stdout } = await runCommand(ffprobeCommand, [
     "-v",
     "error",
     "-print_format",
@@ -475,13 +519,20 @@ async function inspectWithFfprobe(absoluteOutputPath) {
   const audioStream = Array.isArray(parsed.streams)
     ? parsed.streams.find((stream) => stream.codec_type === "audio")
     : null;
+  const durationValue = Number(
+    parsed.format?.duration ?? videoStream?.duration ?? audioStream?.duration ?? 0
+  );
 
   return {
     hasAudio: Boolean(audioStream),
     audioCodec:
       typeof audioStream?.codec_name === "string" ? audioStream.codec_name : null,
     videoCodec:
-      typeof videoStream?.codec_name === "string" ? videoStream.codec_name : null
+      typeof videoStream?.codec_name === "string" ? videoStream.codec_name : null,
+    durationSeconds:
+      Number.isFinite(durationValue) && durationValue > 0
+        ? Math.round(durationValue * 1000) / 1000
+        : null
   };
 }
 
@@ -539,32 +590,58 @@ async function validateRenderResult(deps, smokeSetup) {
 }
 
 async function main() {
+  let currentStage = "ffmpeg-check";
+  let ffmpegAvailability = null;
+  let ffprobeAvailability = null;
+  let deps = null;
+  let lastAttemptedCommand = null;
+
+  const ffmpegResolution = resolveBinaryCommand("ffmpeg");
+  const ffprobeResolution = resolveBinaryCommand("ffprobe");
+
   log("Checking FFmpeg availability.");
-  const ffmpegAvailability = await safeCheckFfmpeg(runCommand);
-
-  if (!ffmpegAvailability.available) {
-    printSmokeSummary({
-      smoke: "render-with-narration",
-      status: "skipped",
-      reason: ffmpegAvailability.blockedByEnvironment
-        ? buildEnvironmentBlockerMessage(
-            "Smoke de render com narracao",
-            "`npm run smoke:narration-render-plan`"
-          )
-        : ffmpegAvailability.errorMessage ?? "FFmpeg unavailable."
-    });
-    return;
-  }
-
-  const { apiBuildRoot, workerBuildRoot } = await ensureBuildArtifacts();
-  const deps = await loadDependencies(apiBuildRoot, workerBuildRoot);
-
   try {
+    ffmpegAvailability = await safeCheckFfmpeg(runCommand);
+    ffprobeAvailability = await safeCheckFfprobe(runCommand);
+
+    if (!ffmpegAvailability.available) {
+      printSmokeSummary({
+        smoke: "render-with-narration",
+        status: "skipped",
+        stage: currentStage,
+        reason: ffmpegAvailability.blockedByEnvironment
+          ? buildEnvironmentBlockerMessage(
+              "Smoke de render com narracao",
+              "`npm run smoke:narration-render-plan`"
+            )
+          : ffmpegAvailability.errorMessage ?? "FFmpeg unavailable.",
+        ffmpegCommand: ffmpegAvailability.command,
+        ffmpegSource: ffmpegAvailability.source,
+        ffmpegEnvVar: ffmpegAvailability.envVar,
+        ffmpegError: ffmpegAvailability.errorMessage,
+        ffprobeCommand: ffprobeAvailability.command,
+        ffprobeSource: ffprobeAvailability.source,
+        ffprobeEnvVar: ffprobeAvailability.envVar,
+        ffprobeError: ffprobeAvailability.errorMessage,
+        suggestion: ffmpegAvailability.notFound
+          ? `Confirme o PATH ou defina ${ffmpegAvailability.envVar}.`
+          : "Rode o doctor para diagnosticar o runtime: `npm run doctor:ffmpeg`."
+      });
+      return;
+    }
+
+    currentStage = "build-artifacts";
+    const { apiBuildRoot, workerBuildRoot } = await ensureBuildArtifacts();
+    currentStage = "load-dependencies";
+    deps = await loadDependencies(apiBuildRoot, workerBuildRoot);
+
+    currentStage = "prepare-smoke-data";
     const smokeSetup = await prepareSmokeData(deps);
 
     let workerResult;
 
     try {
+      currentStage = "worker-run";
       workerResult = await deps.runRenderWorkerOnce({
         logger: (message) => {
           log(`[worker] ${message}`);
@@ -575,10 +652,23 @@ async function main() {
         printSmokeSummary({
           smoke: "render-with-narration",
           status: "skipped",
+          stage: currentStage,
           reason: buildEnvironmentBlockerMessage(
             "Smoke de render com narracao",
             "`npm run smoke:narration-render-plan`"
-          )
+          ),
+          ffmpegCommand: ffmpegAvailability.command,
+          ffmpegSource: ffmpegAvailability.source,
+          ffmpegError: ffmpegAvailability.errorMessage,
+          ffprobeCommand: ffprobeAvailability.command,
+          ffprobeSource: ffprobeAvailability.source,
+          ffprobeError: ffprobeAvailability.errorMessage,
+          attemptedCommand: extractAttemptedCommand(
+            error,
+            lastAttemptedCommand
+          ),
+          suggestion:
+            "O runtime do Node nao conseguiu abrir um processo filho. Rode `npm run doctor:ffmpeg` e depois execute o smoke em um terminal normal/elevado fora deste sandbox."
         });
         return;
       }
@@ -591,10 +681,19 @@ async function main() {
         printSmokeSummary({
           smoke: "render-with-narration",
           status: "skipped",
+          stage: currentStage,
           reason: buildEnvironmentBlockerMessage(
             "Smoke de render com narracao",
             "`npm run smoke:narration-render-plan`"
-          )
+          ),
+          ffmpegCommand: ffmpegAvailability.command,
+          ffmpegSource: ffmpegAvailability.source,
+          ffmpegError: ffmpegAvailability.errorMessage,
+          ffprobeCommand: ffprobeAvailability.command,
+          ffprobeSource: ffprobeAvailability.source,
+          ffprobeError: ffprobeAvailability.errorMessage,
+          suggestion:
+            "O worker encontrou bloqueio de spawn. Rode `npm run doctor:ffmpeg` para confirmar se o bloqueio e do ambiente ou do caminho do binario."
         });
         return;
       }
@@ -605,6 +704,7 @@ async function main() {
       );
     }
 
+    currentStage = "validate-render-output";
     const validation = await validateRenderResult(deps, smokeSetup);
 
     printSmokeSummary({
@@ -621,18 +721,53 @@ async function main() {
         validation.blueprint.audio.sceneNarrations.length > 0 &&
         Boolean(validation.renderJob.hasAudio),
       audioCodec: validation.renderJob.audioCodec ?? validation.ffprobe?.audioCodec ?? null,
+      durationSeconds:
+        validation.renderJob.outputDuration ?? validation.ffprobe?.durationSeconds ?? null,
+      ffmpegCommand: ffmpegAvailability.command,
+      ffmpegSource: ffmpegAvailability.source,
+      ffmpegVersion: ffmpegAvailability.versionLine,
+      ffprobeCommand: ffprobeAvailability.command,
+      ffprobeSource: ffprobeAvailability.source,
+      ffprobeVersion: ffprobeAvailability.versionLine,
       status: "completed"
     });
+  } catch (error) {
+    lastAttemptedCommand = extractAttemptedCommand(error, lastAttemptedCommand);
+
+    printSmokeSummary({
+      smoke: "render-with-narration",
+      status: isSpawnPermissionError(error) ? "skipped" : "failed",
+      stage: currentStage,
+      reason: error instanceof Error ? error.message : String(error),
+      ffmpegCommand: ffmpegAvailability?.command ?? ffmpegResolution.command,
+      ffmpegSource: ffmpegAvailability?.source ?? ffmpegResolution.source,
+      ffmpegEnvVar: ffmpegAvailability?.envVar ?? ffmpegResolution.envVar,
+      ffmpegError: ffmpegAvailability?.errorMessage ?? null,
+      ffprobeCommand: ffprobeAvailability?.command ?? ffprobeResolution.command,
+      ffprobeSource: ffprobeAvailability?.source ?? ffprobeResolution.source,
+      ffprobeEnvVar: ffprobeAvailability?.envVar ?? ffprobeResolution.envVar,
+      ffprobeError: ffprobeAvailability?.errorMessage ?? null,
+      attemptedCommand: lastAttemptedCommand,
+      suggestion: isSpawnPermissionError(error)
+        ? "O shell consegue ver o binario, mas o Node nao conseguiu abrir um subprocesso. Rode o smoke fora deste sandbox ou em terminal elevado."
+        : "Abra o render.log do job gerado e compare o comando tentado com `npm run doctor:ffmpeg`."
+    });
+
+    if (!isSpawnPermissionError(error)) {
+      process.exitCode = 1;
+    }
   } finally {
-    if (deps.workerPrisma !== deps.apiPrisma) {
+    if (deps?.workerPrisma && deps.workerPrisma !== deps.apiPrisma) {
       await deps.workerPrisma.$disconnect();
     }
 
-    await deps.apiPrisma.$disconnect();
+    if (deps?.apiPrisma) {
+      await deps.apiPrisma.$disconnect();
+    }
   }
 }
 
 main().catch((error) => {
-  console.error("[smoke:render-with-narration] failed", error);
+  console.error("[smoke:render-with-narration] failed unexpectedly", error);
   process.exitCode = 1;
 });

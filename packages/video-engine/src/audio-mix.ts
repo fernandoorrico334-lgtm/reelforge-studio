@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import type { RenderBlueprint } from "./index.js";
+import { getFfmpegCommand } from "./ffmpeg-runtime.js";
 import { resolveStoragePath } from "./render-paths.js";
 
 interface AudioMixLogContext {
@@ -160,7 +161,7 @@ export async function muxSilentAudioTrack(
   );
 
   await logger.runCommand(
-    "ffmpeg",
+    getFfmpegCommand(),
     [
       "-y",
       "-i",
@@ -417,7 +418,7 @@ export async function finalizeRenderAudio(
   );
 
   await logger.runCommand(
-    "ffmpeg",
+    getFfmpegCommand(),
     [
       "-y",
       "-i",
