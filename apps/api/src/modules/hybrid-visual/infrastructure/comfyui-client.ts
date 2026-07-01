@@ -185,6 +185,51 @@ function collectOutputImages(entry: Record<string, unknown>) {
   return images;
 }
 
+function extractHistoryErrorMessage(entry: Record<string, unknown>) {
+  const status = entry.status;
+
+  if (!status || typeof status !== "object") {
+    return null;
+  }
+
+  const messages = (status as Record<string, unknown>).messages;
+
+  if (!Array.isArray(messages)) {
+    return null;
+  }
+
+  for (const item of [...messages].reverse()) {
+    if (!Array.isArray(item) || item.length < 2) {
+      continue;
+    }
+
+    const [eventName, payload] = item;
+
+    if (eventName !== "execution_error" || !payload || typeof payload !== "object") {
+      continue;
+    }
+
+    const record = payload as Record<string, unknown>;
+    const exceptionMessage =
+      typeof record.exception_message === "string"
+        ? record.exception_message.trim()
+        : "";
+    const nodeType =
+      typeof record.node_type === "string" ? record.node_type.trim() : "";
+    const nodeId = typeof record.node_id === "string" ? record.node_id.trim() : "";
+
+    if (exceptionMessage) {
+      const location =
+        nodeType || nodeId
+          ? ` at ${nodeType || "node"}${nodeId ? ` (${nodeId})` : ""}`
+          : "";
+      return `ComfyUI execution error${location}: ${exceptionMessage}`;
+    }
+  }
+
+  return null;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -377,8 +422,10 @@ export async function waitForPromptCompletion(
           : null;
 
       if (typeof statusText === "string" && statusText.toLowerCase() === "error") {
+        const historyErrorMessage = extractHistoryErrorMessage(entry);
         throw new Error(
-          `ComfyUI prompt ${promptId} failed according to history status.`
+          historyErrorMessage ??
+            `ComfyUI prompt ${promptId} failed according to history status.`
         );
       }
 

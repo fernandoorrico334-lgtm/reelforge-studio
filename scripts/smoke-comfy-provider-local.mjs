@@ -2,8 +2,10 @@ import { access } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  apiArtifactPath,
   ensureArtifactsExist,
   printSmokeSummary,
+  resolveApiBuildRoot,
   writeMinimalPng
 } from "./lib/smoke-utils.mjs";
 
@@ -19,22 +21,29 @@ async function importModule(relativePath) {
 }
 
 async function ensureBuildArtifacts() {
-  await ensureArtifactsExist(
+  const apiBuildRoot = await resolveApiBuildRoot(
     projectRoot,
-    [
-      "packages/video-engine/dist/index.js",
-      "apps/api/dist/config/env.js",
-      "apps/api/dist/infrastructure/database/prisma-client.js",
-      "apps/api/dist/modules/assets/infrastructure/prisma-asset-repository.js",
-      "apps/api/dist/modules/characters/infrastructure/prisma-character-repository.js",
-      "apps/api/dist/modules/projects/infrastructure/prisma-project-repository.js",
-      "apps/api/dist/modules/projects/application/project-video-engine-mapper.js",
-      "apps/api/dist/modules/hybrid-visual/infrastructure/prisma-visual-generation-job-repository.js",
-      "apps/api/dist/modules/hybrid-visual/infrastructure/visual-generation-provider-registry.js",
-      "apps/api/dist/modules/hybrid-visual/application/hybrid-visual-service.js"
-    ],
     "Run 'npm run build' before running smoke:comfy-provider:local."
   );
+  const apiArtifacts = [
+    "config/env.js",
+    "infrastructure/database/prisma-client.js",
+    "modules/assets/infrastructure/prisma-asset-repository.js",
+    "modules/characters/infrastructure/prisma-character-repository.js",
+    "modules/projects/infrastructure/prisma-project-repository.js",
+    "modules/projects/application/project-video-engine-mapper.js",
+    "modules/hybrid-visual/infrastructure/prisma-visual-generation-job-repository.js",
+    "modules/hybrid-visual/infrastructure/visual-generation-provider-registry.js",
+    "modules/hybrid-visual/application/hybrid-visual-service.js"
+  ].map((relativePath) => apiArtifactPath(apiBuildRoot, relativePath));
+
+  await ensureArtifactsExist(
+    projectRoot,
+    ["packages/video-engine/dist/index.js", ...apiArtifacts],
+    "Run 'npm run build' before running smoke:comfy-provider:local."
+  );
+
+  return { apiBuildRoot };
 }
 
 function assert(condition, message) {
@@ -43,7 +52,7 @@ function assert(condition, message) {
   }
 }
 
-async function loadDependencies() {
+async function loadDependencies(apiBuildRoot) {
   const [
     envModule,
     prismaModule,
@@ -56,28 +65,51 @@ async function loadDependencies() {
     hybridVisualServiceModule,
     videoEngineModule
   ] = await Promise.all([
-    importModule("apps/api/dist/config/env.js"),
-    importModule("apps/api/dist/infrastructure/database/prisma-client.js"),
+    importModule(apiArtifactPath(apiBuildRoot, "config/env.js")),
     importModule(
-      "apps/api/dist/modules/assets/infrastructure/prisma-asset-repository.js"
+      apiArtifactPath(apiBuildRoot, "infrastructure/database/prisma-client.js")
     ),
     importModule(
-      "apps/api/dist/modules/characters/infrastructure/prisma-character-repository.js"
+      apiArtifactPath(
+        apiBuildRoot,
+        "modules/assets/infrastructure/prisma-asset-repository.js"
+      )
     ),
     importModule(
-      "apps/api/dist/modules/projects/infrastructure/prisma-project-repository.js"
+      apiArtifactPath(
+        apiBuildRoot,
+        "modules/characters/infrastructure/prisma-character-repository.js"
+      )
     ),
     importModule(
-      "apps/api/dist/modules/projects/application/project-video-engine-mapper.js"
+      apiArtifactPath(
+        apiBuildRoot,
+        "modules/projects/infrastructure/prisma-project-repository.js"
+      )
     ),
     importModule(
-      "apps/api/dist/modules/hybrid-visual/infrastructure/prisma-visual-generation-job-repository.js"
+      apiArtifactPath(
+        apiBuildRoot,
+        "modules/projects/application/project-video-engine-mapper.js"
+      )
     ),
     importModule(
-      "apps/api/dist/modules/hybrid-visual/infrastructure/visual-generation-provider-registry.js"
+      apiArtifactPath(
+        apiBuildRoot,
+        "modules/hybrid-visual/infrastructure/prisma-visual-generation-job-repository.js"
+      )
     ),
     importModule(
-      "apps/api/dist/modules/hybrid-visual/application/hybrid-visual-service.js"
+      apiArtifactPath(
+        apiBuildRoot,
+        "modules/hybrid-visual/infrastructure/visual-generation-provider-registry.js"
+      )
+    ),
+    importModule(
+      apiArtifactPath(
+        apiBuildRoot,
+        "modules/hybrid-visual/application/hybrid-visual-service.js"
+      )
     ),
     importModule("packages/video-engine/dist/index.js")
   ]);
@@ -286,8 +318,8 @@ async function assertFileExists(projectRelativePath) {
 }
 
 async function main() {
-  await ensureBuildArtifacts();
-  const deps = await loadDependencies();
+  const { apiBuildRoot } = await ensureBuildArtifacts();
+  const deps = await loadDependencies(apiBuildRoot);
   const appEnv = deps.loadEnv();
   const providerStatus = await deps.getComfyUiProviderStatus(appEnv);
 

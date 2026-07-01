@@ -113,6 +113,10 @@ function normalizeEnumToken(value: string) {
   return value.trim().replaceAll(" ", "_").replaceAll("-", "_").toLowerCase();
 }
 
+function normalizeVisualGenerationProviderToken(value: string) {
+  return value.trim().replaceAll(" ", "-").replaceAll("_", "-").toLowerCase();
+}
+
 function normalizeOptionalVisualSourceModeValue(
   value: unknown,
   fieldName = "visualSourceMode"
@@ -156,7 +160,7 @@ function normalizeOptionalVisualGenerationProviderValue(
     throw new ValidationError(`${fieldName} must be a string or null.`);
   }
 
-  const normalized = normalizeEnumToken(value);
+  const normalized = normalizeVisualGenerationProviderToken(value);
 
   if (!visualGenerationProviders.includes(normalized as VisualGenerationProvider)) {
     throw new ValidationError(

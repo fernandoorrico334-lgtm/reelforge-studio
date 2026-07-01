@@ -1,74 +1,89 @@
 {
+  "1": {
+    "inputs": {
+      "unet_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "lumina2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
   "3": {
     "inputs": {
-      "seed": "{{SEED}}",
-      "steps": 24,
-      "cfg": 7,
-      "sampler_name": "euler",
-      "scheduler": "normal",
-      "denoise": 1,
-      "model": [
-        "4",
-        0
-      ],
-      "positive": [
-        "6",
-        0
-      ],
-      "negative": [
-        "7",
-        0
-      ],
-      "latent_image": [
-        "5",
-        0
-      ]
+      "vae_name": "ae.safetensors"
     },
-    "class_type": "KSampler"
+    "class_type": "VAELoader"
   },
   "4": {
     "inputs": {
-      "ckpt_name": "replace-with-local-checkpoint.safetensors"
+      "clip": [
+        "2",
+        0
+      ],
+      "text": "{{PROMPT}}"
     },
-    "class_type": "CheckpointLoaderSimple"
+    "class_type": "CLIPTextEncode"
   },
   "5": {
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "text": "{{NEGATIVE_PROMPT}}"
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "6": {
     "inputs": {
       "width": "{{WIDTH}}",
       "height": "{{HEIGHT}}",
       "batch_size": 1
     },
-    "class_type": "EmptyLatentImage"
-  },
-  "6": {
-    "inputs": {
-      "text": "{{PROMPT}}",
-      "clip": [
-        "4",
-        1
-      ]
-    },
-    "class_type": "CLIPTextEncode"
+    "class_type": "EmptySD3LatentImage"
   },
   "7": {
     "inputs": {
-      "text": "{{NEGATIVE_PROMPT}}",
-      "clip": [
+      "model": [
+        "10",
+        0
+      ],
+      "seed": "{{SEED}}",
+      "steps": 9,
+      "cfg": 1,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "positive": [
         "4",
-        1
-      ]
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "6",
+        0
+      ],
+      "denoise": 1
     },
-    "class_type": "CLIPTextEncode"
+    "class_type": "KSampler"
   },
   "8": {
     "inputs": {
       "samples": [
-        "3",
+        "7",
         0
       ],
       "vae": [
-        "4",
-        2
+        "3",
+        0
       ]
     },
     "class_type": "VAEDecode"
@@ -82,6 +97,15 @@
       ]
     },
     "class_type": "SaveImage"
+  },
+  "10": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "shift": 3
+    },
+    "class_type": "ModelSamplingAuraFlow"
   }
 }
-

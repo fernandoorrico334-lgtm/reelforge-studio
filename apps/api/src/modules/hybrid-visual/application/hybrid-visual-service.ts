@@ -1,4 +1,5 @@
 import {
+  buildComfyWorkflowFromTemplate,
   buildMissingVisualReport,
   buildVisualRecipe,
   createGeneratedAssetMetadata,
@@ -48,6 +49,12 @@ import type {
   VisualGenerationJobFilters
 } from "../domain/visual-generation.js";
 import { writeMockGeneratedVisualPng } from "../infrastructure/mock-visual-rasterizer.js";
+import {
+  buildComfyErrorMessage,
+  downloadComfyOutput,
+  queuePrompt,
+  waitForPromptCompletion
+} from "../infrastructure/comfyui-client.js";
 import {
   getComfyUiProviderStatus,
   listVisualGenerationProviders as listRegisteredVisualGenerationProviders
@@ -760,6 +767,15 @@ async function writeGeneratedSceneVisuals(
   return paths;
 }
 
+async function writeGeneratedSceneDebugSvg(jobId: string, svg: string) {
+  const paths = resolveGeneratedVisualArtifactPaths(jobId);
+  await mkdir(join(assetsStorageRoot, "generated", "visuals"), {
+    recursive: true
+  });
+  await writeFile(paths.debugSvgAbsolutePath, svg, "utf8");
+  return paths;
+}
+
 function buildJobMetadata(
   job: Pick<
     VisualGenerationJob,
@@ -1201,7 +1217,7 @@ async function generateVisualForContext(
   input: GenerateVisualRequestInput,
   appEnvInput: Partial<HybridVisualEnv> = {}
 ) {
-  void resolveHybridVisualEnv(appEnvInput);
+  const appEnv = resolveHybridVisualEnv(appEnvInput);
 
   const draft =
     context.kind === "scene"
@@ -1233,7 +1249,7 @@ async function generateVisualForContext(
     draft.mode
   );
 
-  if (input.provider !== "mock-svg") {
+  if (input.provider !== "mock-svg" && input.provider !== "comfyui-local") {
     const queuedJob = await visualGenerationJobRepository.update(job.id, {
       metadata: buildJobMetadata(
         {
@@ -1247,10 +1263,7 @@ async function generateVisualForContext(
         draft.recipe,
         draft.promptResult,
         {
-          reason:
-            input.provider === "comfyui-local"
-              ? "ComfyUI local provider is exposed for diagnostics; generation remains queued during recovery."
-              : "Provider reserved for future local integration."
+          reason: "Provider reserved for future local integration."
         }
       )
     });
@@ -1300,14 +1313,122 @@ async function generateVisualForContext(
       height: input.height,
       seed
     });
-    const visualArtifacts = await writeGeneratedSceneVisuals(
-      job.id,
-      svg,
-      draft.recipe,
-      input.width,
-      input.height,
-      seed
-    );
+    let visualArtifacts: GeneratedVisualArtifactPaths;
+    let providerMetadata: Record<string, unknown> = {
+      previewType: "png",
+      renderReady: true
+    };
+
+    if (input.provider === "comfyui-local") {
+      if (!appEnv.comfyUiEnabled) {
+        throw new ValidationError(
+          "ComfyUI provider disabled. Enable COMFYUI_ENABLED=true."
+        );
+      }
+
+      const providerStatus = await getComfyUiProviderStatus(appEnv);
+
+      if (!providerStatus.reachable) {
+        throw new ValidationError(providerStatus.message);
+      }
+
+      const workflow = await buildComfyWorkflowFromTemplate(
+        appEnv.comfyUiDefaultWorkflow,
+        {
+          prompt: draft.promptResult.prompt,
+          negativePrompt: draft.promptResult.negativePrompt,
+          width: input.width,
+          height: input.height,
+          seed
+        },
+        {
+          workflowDirectory: appEnv.comfyUiWorkflowDir
+        }
+      );
+
+      const queuedAt = await visualGenerationJobRepository.update(job.id, {
+        status: "generating",
+        metadata: buildJobMetadata(
+          {
+            ...job,
+            seed,
+            status: "generating",
+            outputPath: null,
+            generatedAssetId: null,
+            errorMessage: null
+          },
+          draft.recipe,
+          draft.promptResult,
+          {
+            workflowTemplate: appEnv.comfyUiDefaultWorkflow
+          }
+        )
+      });
+
+      job = queuedAt ?? job;
+
+      const queueResult = await queuePrompt(
+        appEnv.comfyUiBaseUrl,
+        workflow,
+        job.id,
+        appEnv.comfyUiTimeoutMs
+      );
+
+      if (
+        queueResult.nodeErrors &&
+        typeof queueResult.nodeErrors === "object" &&
+        Object.keys(queueResult.nodeErrors as Record<string, unknown>).length > 0
+      ) {
+        throw new Error(
+          `ComfyUI queue rejected the workflow: ${JSON.stringify(
+            queueResult.nodeErrors
+          )}`
+        );
+      }
+
+      const completion = await waitForPromptCompletion(
+        appEnv.comfyUiBaseUrl,
+        queueResult.promptId,
+        {
+          timeoutMs: appEnv.comfyUiTimeoutMs
+        }
+      );
+
+      visualArtifacts = await writeGeneratedSceneDebugSvg(job.id, svg);
+      const download = await downloadComfyOutput(
+        appEnv.comfyUiBaseUrl,
+        completion.image,
+        visualArtifacts.outputAbsolutePath,
+        appEnv.comfyUiTimeoutMs
+      );
+
+      providerMetadata = {
+        ...providerMetadata,
+        promptId: queueResult.promptId,
+        queueNumber: queueResult.number,
+        history: completion.history,
+        outputImage: completion.image,
+        outputFilename: download.filename,
+        outputFileSize: download.size,
+        debugSvgPath: visualArtifacts.debugSvgPath,
+        workflowTemplate: appEnv.comfyUiDefaultWorkflow
+      };
+    } else {
+      visualArtifacts = await writeGeneratedSceneVisuals(
+        job.id,
+        svg,
+        draft.recipe,
+        input.width,
+        input.height,
+        seed
+      );
+
+      providerMetadata = {
+        ...providerMetadata,
+        debugSvgPath: visualArtifacts.debugSvgPath
+      };
+    }
+
     const asset = await createGeneratedAssetRecord(
       assetRepository,
       visualArtifacts,
@@ -1332,11 +1453,7 @@ async function generateVisualForContext(
         },
         draft.recipe,
         draft.promptResult,
-        {
-          debugSvgPath: visualArtifacts.debugSvgPath,
-          previewType: "png",
-          renderReady: true
-        }
+        providerMetadata
       ),
       completedAt
     });
@@ -1374,9 +1491,11 @@ async function generateVisualForContext(
     };
   } catch (error) {
     const message =
-      error instanceof Error && error.message.trim()
-        ? error.message.trim()
-        : "Mock visual generation failed.";
+      input.provider === "comfyui-local"
+        ? buildComfyErrorMessage(error, appEnv.comfyUiBaseUrl)
+        : error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : "Mock visual generation failed.";
 
     const failedJob = await visualGenerationJobRepository.update(job.id, {
       status: "failed",
