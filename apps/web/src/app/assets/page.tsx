@@ -1,12 +1,18 @@
 import { AssetsManager } from "../../components/assets-manager";
-import { getAssetsSnapshot } from "../../lib/studio-api";
+import {
+  getAssetsSnapshot,
+  getGeneratedImagesGallerySnapshot
+} from "../../lib/studio-api";
 
 function formatSourceLabel(value: string) {
   return value === "api" ? "API local ativa" : "Mock local";
 }
 
 export default async function AssetsPage() {
-  const snapshot = await getAssetsSnapshot();
+  const [snapshot, generatedImagesSnapshot] = await Promise.all([
+    getAssetsSnapshot(),
+    getGeneratedImagesGallerySnapshot()
+  ]);
   const assetTypes = new Set(snapshot.items.map((asset) => asset.type));
   const localOrigins = new Set(
     snapshot.items.map((asset) => asset.path.split("/")[1] ?? asset.path)
@@ -73,6 +79,7 @@ export default async function AssetsPage() {
       <AssetsManager
         initialAssets={snapshot.items}
         initialSource={snapshot.source}
+        generatedImages={generatedImagesSnapshot.items}
       />
     </div>
   );

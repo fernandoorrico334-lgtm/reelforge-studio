@@ -22,7 +22,11 @@ import {
   generateSceneVisualRequest,
   getProjectCaptionAnalysisSnapshot,
   getProjectRenderBlueprintSnapshot,
+  getSceneGeneratedImagesRequest,
+  markVisualGenerationJobReviewedRequest,
+  regenerateVisualGenerationJobRequest,
   reorderScenesRequest,
+  useGeneratedImageForSceneRequest,
   updateProjectRequest,
   updateSceneRequest
 } from "../lib/studio-api";
@@ -37,6 +41,7 @@ import type {
   ComfyWorkflowPack,
   DataSource,
   EmotionTag,
+  GeneratedImageGalleryItem,
   ImageQualityPreset,
   ProjectCaptionAnalysisResponse,
   ProjectPayload,
@@ -62,6 +67,8 @@ interface ProjectStudioProps {
   workflowPacksSource: DataSource;
   qualityPresets: ImageQualityPreset[];
   qualityPresetsSource: DataSource;
+  initialGeneratedImages: GeneratedImageGalleryItem[];
+  initialGeneratedImagesSource: DataSource;
 }
 
 interface ProjectFormState {
@@ -437,6 +444,110 @@ function removeScene(scenes: ProjectScene[], sceneId: string) {
   );
 }
 
+function sortGeneratedImageItems(items: GeneratedImageGalleryItem[]) {
+  return [...items].sort((left, right) =>
+    right.job.createdAt.localeCompare(left.job.createdAt)
+  );
+}
+
+function mergeSceneGeneratedImages(
+  items: GeneratedImageGalleryItem[],
+  sceneId: string,
+  nextItems: GeneratedImageGalleryItem[]
+) {
+  return sortGeneratedImageItems([
+    ...items.filter((item) => item.scene?.id !== sceneId),
+    ...nextItems
+  ]);
+}
+
+function readGeneratedMetadataString(
+  item: GeneratedImageGalleryItem | null | undefined,
+  key: string
+) {
+  const value = item?.metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readReviewNotesFromMetadata(metadata: Record<string, unknown> | null | undefined) {
+  const direct = metadata?.reviewNotes;
+
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim();
+  }
+
+  const review = metadata?.review;
+
+  if (!review || typeof review !== "object" || Array.isArray(review)) {
+    return null;
+  }
+
+  const notes = (review as { notes?: unknown }).notes;
+  return typeof notes === "string" && notes.trim() ? notes.trim() : null;
+}
+
+function buildGeneratedImageGalleryItem(
+  project: StudioProject,
+  scene: ProjectScene,
+  job: VisualGenerationJob,
+  asset: StudioAsset | null
+): GeneratedImageGalleryItem {
+  const reviewStatus =
+    typeof job.metadata?.reviewStatus === "string" &&
+    (job.metadata.reviewStatus === "approved" ||
+      job.metadata.reviewStatus === "rejected" ||
+      job.metadata.reviewStatus === "favorite")
+      ? job.metadata.reviewStatus
+      : null;
+
+  return {
+    job: {
+      ...job,
+      generatedAsset: asset ?? job.generatedAsset ?? null
+    },
+    asset: asset ?? job.generatedAsset ?? null,
+    scene: {
+      id: scene.id,
+      order: scene.order,
+      title: scene.title,
+      videoProjectId: project.id,
+      captionText: scene.captionText,
+      duration: scene.duration,
+      emotion: scene.emotion,
+      assetId: scene.assetId,
+      generatedAssetId: job.generatedAssetId ?? scene.generatedAssetId ?? null,
+      visualSourceMode: scene.visualSourceMode ?? null,
+      generationStatus: job.status,
+      generationProvider: job.provider
+    },
+    project: {
+      id: project.id,
+      title: project.title,
+      status: project.status,
+      channelId: project.channelId,
+      channelName: project.channel.name,
+      format: project.format,
+      templateId: project.templateId ?? null
+    },
+    metadata: job.metadata ?? null,
+    previewUrl:
+      asset?.id || job.generatedAssetId
+        ? `/media/assets/${encodeURIComponent(asset?.id ?? job.generatedAssetId ?? "")}`
+        : null,
+    thumbnailUrl:
+      asset?.id || job.generatedAssetId
+        ? `/media/assets/${encodeURIComponent(asset?.id ?? job.generatedAssetId ?? "")}`
+        : null,
+    isCurrentSceneGeneratedAsset:
+      Boolean((job.generatedAssetId ?? scene.generatedAssetId ?? null) && (job.generatedAssetId ?? scene.generatedAssetId) === (asset?.id ?? job.generatedAssetId)),
+    isSceneEffectiveAsset:
+      Boolean((job.generatedAssetId ?? scene.generatedAssetId ?? null) && (job.generatedAssetId ?? scene.generatedAssetId) === (asset?.id ?? job.generatedAssetId)),
+    reviewStatus,
+    reviewNotes: readReviewNotesFromMetadata(job.metadata ?? null),
+    isFavorite: reviewStatus === "favorite"
+  };
+}
+
 export function ProjectStudio({
   assets,
   assetsSource,
@@ -447,7 +558,9 @@ export function ProjectStudio({
   workflowPacks,
   workflowPacksSource,
   qualityPresets,
-  qualityPresetsSource
+  qualityPresetsSource,
+  initialGeneratedImages,
+  initialGeneratedImagesSource
 }: ProjectStudioProps) {
   const [project, setProject] = useState<StudioProject>({
     ...initialProject,
@@ -488,10 +601,19 @@ export function ProjectStudio({
   const [lastVisualJob, setLastVisualJob] = useState<VisualGenerationJob | null>(
     null
   );
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImageGalleryItem[]>(
+    sortGeneratedImageItems(initialGeneratedImages)
+  );
+  const [generatedImagesSource, setGeneratedImagesSource] = useState<DataSource>(
+    initialGeneratedImagesSource
+  );
 
   const orderedScenes = sortScenes(project.scenes);
   const selectedVisualScene =
     orderedScenes.find((scene) => scene.id === visualSceneId) ?? orderedScenes[0] ?? null;
+  const sceneGeneratedImages = selectedVisualScene
+    ? generatedImages.filter((item) => item.scene?.id === selectedVisualScene.id)
+    : [];
   const selectedWorkflowPack =
     workflowPacks.find((pack) => pack.id === visualWorkflowPackId) ??
     workflowPacks.find((pack) => pack.id === "cinematic_story") ??
@@ -679,13 +801,24 @@ export function ProjectStudio({
     }
   }
 
-  async function handleLoadBlueprint() {
+  async function loadBlueprintFor(nextProject: StudioProject) {
     setBlueprintLoading(true);
 
-    const snapshot = await getProjectRenderBlueprintSnapshot(project.id, project);
+    const snapshot = await getProjectRenderBlueprintSnapshot(nextProject.id, nextProject);
     setBlueprint(snapshot.item);
     setBlueprintSource(snapshot.source);
     setBlueprintLoading(false);
+  }
+
+  async function handleLoadBlueprint() {
+    await loadBlueprintFor(project);
+  }
+
+  async function refreshGeneratedImagesForScene(sceneId: string) {
+    const nextItems = await getSceneGeneratedImagesRequest(sceneId);
+    setGeneratedImages((current) => mergeSceneGeneratedImages(current, sceneId, nextItems));
+    setGeneratedImagesSource("api");
+    return nextItems;
   }
 
   async function handleGenerateVisual(provider: "mock-svg" | "comfyui-local") {
@@ -715,25 +848,167 @@ export function ProjectStudio({
       });
 
       setLastVisualJob(result.job);
-      setProject((current) => ({
-        ...current,
-        scenes: replaceScene(current.scenes, {
-          ...selectedVisualScene,
-          generatedAssetId: result.job.generatedAssetId,
-          generatedAsset: result.asset,
-          visualPrompt: result.job.prompt,
-          negativePrompt: result.job.negativePrompt,
-          generationStatus: result.job.status,
-          generationProvider: provider,
-          generationSeed: result.job.seed,
-          updatedAt: new Date().toISOString()
-        })
-      }));
+      const nextScene: ProjectScene = {
+        ...selectedVisualScene,
+        generatedAssetId: result.job.generatedAssetId,
+        generatedAsset: result.asset,
+        visualPrompt: result.job.prompt,
+        negativePrompt: result.job.negativePrompt,
+        generationStatus: result.job.status,
+        generationProvider: provider,
+        generationSeed: result.job.seed,
+        updatedAt: new Date().toISOString()
+      };
+      const nextProject: StudioProject = {
+        ...project,
+        scenes: replaceScene(project.scenes, nextScene)
+      };
+
+      setProject(nextProject);
       setSource("api");
-      setBlueprint(null);
+
+      try {
+        await refreshGeneratedImagesForScene(selectedVisualScene.id);
+      } catch {
+        setGeneratedImages((current) =>
+          sortGeneratedImageItems([
+            buildGeneratedImageGalleryItem(
+              nextProject,
+              nextScene,
+              result.job,
+              result.asset
+            ),
+            ...current.filter((item) => item.job.id !== result.job.id)
+          ])
+        );
+      }
+
+      await loadBlueprintFor(nextProject);
       setStatusMessage(
         `Hybrid Visual ${provider} concluiu. Pack ${selectedWorkflowPack?.id ?? "auto"} / quality ${selectedQualityPreset?.id ?? "standard"}.`
       );
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
+  }
+
+  async function handleReviewGeneratedImage(
+    item: GeneratedImageGalleryItem,
+    reviewStatus: "approved" | "rejected" | "favorite"
+  ) {
+    try {
+      await markVisualGenerationJobReviewedRequest(item.job.id, reviewStatus, null);
+      setGeneratedImages((current) =>
+        current.map((entry) =>
+          entry.job.id === item.job.id
+            ? {
+                ...entry,
+                reviewStatus,
+                reviewNotes: null,
+                isFavorite: reviewStatus === "favorite",
+                metadata: {
+                  ...(entry.metadata ?? {}),
+                  reviewStatus,
+                  reviewNotes: null
+                },
+                job: {
+                  ...entry.job,
+                  metadata: {
+                    ...(entry.job.metadata ?? {}),
+                    reviewStatus,
+                    reviewNotes: null
+                  }
+                }
+              }
+            : entry
+        )
+      );
+      setGeneratedImagesSource("api");
+      setStatusMessage(`Job ${item.job.id} marcado como ${reviewStatus}.`);
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
+  }
+
+  async function handleUseGeneratedImage(item: GeneratedImageGalleryItem) {
+    if (!item.scene?.id || !item.asset?.id) {
+      setStatusMessage("Apenas imagens com cena associada podem ser promovidas.");
+      return;
+    }
+
+    try {
+      const result = await useGeneratedImageForSceneRequest(item.scene.id, item.asset.id);
+      const nextProject: StudioProject = {
+        ...project,
+        scenes: replaceScene(project.scenes, result.scene)
+      };
+
+      setProject(nextProject);
+      setSource("api");
+      await refreshGeneratedImagesForScene(item.scene.id);
+      await loadBlueprintFor(nextProject);
+      setStatusMessage(`Cena ${result.scene.order} agora usa o asset ${item.asset.id}.`);
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
+  }
+
+  async function handleRegenerateGeneratedImage(
+    item: GeneratedImageGalleryItem,
+    seedMode: "reuse" | "random"
+  ) {
+    if (!item.scene?.id) {
+      setStatusMessage("Regeneracao rapida exige uma cena associada.");
+      return;
+    }
+
+    try {
+      const result = await regenerateVisualGenerationJobRequest(item.job.id, {
+        seedMode,
+        workflowPackId: readGeneratedMetadataString(item, "workflowPackId"),
+        qualityPresetId: readGeneratedMetadataString(item, "qualityPresetId")
+      });
+      const currentScene =
+        project.scenes.find((scene) => scene.id === item.scene?.id) ?? null;
+
+      if (!currentScene) {
+        setStatusMessage("Cena nao encontrada para atualizar a timeline local.");
+        return;
+      }
+
+      const nextScene: ProjectScene = {
+        ...currentScene,
+        generatedAssetId: result.job.generatedAssetId ?? currentScene.generatedAssetId ?? null,
+        generatedAsset: result.asset ?? currentScene.generatedAsset ?? null,
+        visualPrompt: result.job.prompt,
+        negativePrompt: result.job.negativePrompt,
+        generationStatus: result.job.status,
+        generationProvider: result.job.provider,
+        generationSeed: result.job.seed,
+        updatedAt: new Date().toISOString()
+      };
+      const nextProject: StudioProject = {
+        ...project,
+        scenes: replaceScene(project.scenes, nextScene)
+      };
+
+      setLastVisualJob(result.job);
+      setProject(nextProject);
+      setSource("api");
+      const refreshedItems = await refreshGeneratedImagesForScene(item.scene.id);
+      const regeneratedItem = refreshedItems.find((entry) => entry.job.id === result.job.id);
+
+      if (regeneratedItem) {
+        setGeneratedImages((current) =>
+          sortGeneratedImageItems([
+            regeneratedItem,
+            ...current.filter((entry) => entry.job.id !== regeneratedItem.job.id)
+          ])
+        );
+      }
+
+      await loadBlueprintFor(nextProject);
+      setStatusMessage(`Regeneracao concluida com seed mode ${seedMode}.`);
     } catch (error) {
       setStatusMessage(extractErrorMessage(error));
     }
@@ -1862,6 +2137,127 @@ export function ProjectStudio({
               </p>
             </div>
           ) : null}
+
+          <div className="mt-6 rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Scene Gallery
+                </p>
+                <h3 className="mt-2 text-lg font-semibold text-white">
+                  {selectedVisualScene
+                    ? `${selectedVisualScene.order}. ${selectedVisualScene.title}`
+                    : "Selecione uma cena"}
+                </h3>
+                <p className="mt-2 text-sm leading-7 text-mist/68">
+                  Imagem atual {selectedVisualScene?.generatedAssetId ?? "n/d"} / feed{" "}
+                  {generatedImagesSource}
+                </p>
+              </div>
+              <a
+                href="/generated-images"
+                className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-mist/75"
+              >
+                Abrir galeria completa
+              </a>
+            </div>
+
+            {selectedVisualScene?.generatedAsset ? (
+              <div className="mt-5 rounded-[1.2rem] border border-emerald-400/20 bg-emerald-400/10 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100/70">
+                  Imagem em uso
+                </p>
+                <p className="mt-2 text-sm text-white">
+                  generatedAssetId {selectedVisualScene.generatedAssetId ?? "n/a"}
+                </p>
+                <p className="mt-2 text-xs leading-6 text-mist/70">
+                  source {selectedVisualScene.generationProvider ?? "n/a"} / mode{" "}
+                  {selectedVisualScene.visualSourceMode ?? "n/a"}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {sceneGeneratedImages.length > 0 ? (
+                sceneGeneratedImages.map((item) => (
+                  <div
+                    key={item.job.id}
+                    className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.03]"
+                  >
+                    {item.asset ? (
+                      <AssetMediaPreview asset={item.asset} source={source} />
+                    ) : (
+                      <div className="flex aspect-[9/16] items-center justify-center bg-black/30 px-5 text-sm text-mist/55">
+                        Job sem preview disponivel
+                      </div>
+                    )}
+
+                    <div className="p-4">
+                      <div className="flex flex-wrap gap-2">
+                        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                          {item.job.status}
+                        </span>
+                        {item.isCurrentSceneGeneratedAsset ? (
+                          <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
+                            current
+                          </span>
+                        ) : null}
+                        {item.isFavorite ? (
+                          <span className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-1 text-[11px] text-[#fff0cb]">
+                            favorite
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <p className="mt-4 text-sm font-medium text-white">
+                        asset {item.asset?.id ?? "n/a"}
+                      </p>
+                      <p className="mt-2 text-xs leading-6 text-mist/65">
+                        pack {readGeneratedMetadataString(item, "workflowPackId") ?? "n/a"} /
+                        quality {readGeneratedMetadataString(item, "qualityPresetId") ?? "n/a"}
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleUseGeneratedImage(item);
+                          }}
+                          disabled={!item.asset?.id}
+                          className="rounded-full border border-signal/30 bg-signal/12 px-3 py-2 text-xs text-signal disabled:opacity-45"
+                        >
+                          Usar esta imagem
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleRegenerateGeneratedImage(item, "random");
+                          }}
+                          className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-3 py-2 text-xs text-[#e2e8ff]"
+                        >
+                          Regenerar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleReviewGeneratedImage(item, "favorite");
+                          }}
+                          className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-2 text-xs text-[#fff0cb]"
+                        >
+                          Favoritar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-6 text-sm text-mist/55 md:col-span-2">
+                  Nenhuma imagem gerada ainda para esta cena. Gere um mock ou use ComfyUI
+                  para abrir o historico revisavel.
+                </div>
+              )}
+            </div>
+          </div>
         </article>
 
         <RenderBlueprintPanel

@@ -46,6 +46,8 @@ import type {
   DataSource,
   GenerateMissingVisualsPayload,
   GenerateMissingVisualsResponse,
+  GeneratedImageGalleryFilters,
+  GeneratedImageGalleryItem,
   GenerateSceneVisualResponse,
   GenerateVisualPayload,
   ImageQualityPreset,
@@ -100,7 +102,9 @@ import type {
   StudioChannel,
   StudioProject,
   StudioRenderJob,
+  UseGeneratedImageForSceneResponse,
   VisualGenerationJob,
+  VisualReviewStatus,
   VisualGenerationProviderDescriptor,
   VisualPromptPack,
   VisualSourceModeDescriptor,
@@ -972,6 +976,59 @@ export async function validateComfyWorkflowRequest(templateId: string) {
   });
 }
 
+export async function getGeneratedImagesGalleryRequest(
+  filters: GeneratedImageGalleryFilters = {}
+) {
+  const query = buildQueryString({
+    projectId: filters.projectId,
+    sceneId: filters.sceneId,
+    characterProfileId: filters.characterProfileId,
+    workflowPackId: filters.workflowPackId,
+    qualityPresetId: filters.qualityPresetId,
+    status: filters.status,
+    provider: filters.provider,
+    sourceProvider: filters.sourceProvider
+  });
+
+  return requestJson<GeneratedImageGalleryItem[]>(
+    `/visual-generation/gallery${query}`
+  );
+}
+
+export async function getGeneratedImagesGallerySnapshot(
+  filters: GeneratedImageGalleryFilters = {}
+): Promise<{
+  items: GeneratedImageGalleryItem[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getGeneratedImagesGalleryRequest(filters);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("visual-generation/gallery", error);
+    return { items: [], source: "mock" };
+  }
+}
+
+export async function getSceneGeneratedImagesRequest(sceneId: string) {
+  return requestJson<GeneratedImageGalleryItem[]>(
+    `/scenes/${encodeURIComponent(sceneId)}/generated-images`
+  );
+}
+
+export async function getSceneGeneratedImagesSnapshot(sceneId: string): Promise<{
+  items: GeneratedImageGalleryItem[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getSceneGeneratedImagesRequest(sceneId);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback(`scenes/${sceneId}/generated-images`, error);
+    return { items: [], source: "mock" };
+  }
+}
+
 export async function getProjectStoryAnalysisRequest(projectId: string) {
   return requestJson<ProjectStoryAnalysisResponse>(
     `/video-projects/${encodeURIComponent(projectId)}/story-analysis`
@@ -1839,6 +1896,53 @@ export async function generateMissingVisualsRequest(
 export async function cancelVisualGenerationJobRequest(jobId: string) {
   return requestJson<VisualGenerationJob>(
     `/visual-generation/jobs/${encodeURIComponent(jobId)}/cancel`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
+export async function markVisualGenerationJobReviewedRequest(
+  jobId: string,
+  reviewStatus: VisualReviewStatus,
+  notes: string | null = null
+) {
+  return requestJson<VisualGenerationJob>(
+    `/visual-generation/jobs/${encodeURIComponent(jobId)}/mark-reviewed`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        reviewStatus,
+        notes
+      })
+    }
+  );
+}
+
+export async function regenerateVisualGenerationJobRequest(
+  jobId: string,
+  payload: {
+    seedMode?: "random" | "fixed" | "reuse" | "increment" | null;
+    qualityPresetId?: string | null;
+    workflowPackId?: string | null;
+  } = {}
+) {
+  return requestJson<GenerateSceneVisualResponse>(
+    `/visual-generation/jobs/${encodeURIComponent(jobId)}/regenerate`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function useGeneratedImageForSceneRequest(
+  sceneId: string,
+  assetId: string
+) {
+  return requestJson<UseGeneratedImageForSceneResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/use-generated-image/${encodeURIComponent(assetId)}`,
     {
       method: "POST",
       body: JSON.stringify({})

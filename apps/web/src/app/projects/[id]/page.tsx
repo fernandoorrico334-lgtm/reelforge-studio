@@ -4,6 +4,7 @@ import {
   getAssetsSnapshot,
   getChannelsSnapshot,
   getComfyWorkflowPacksSnapshot,
+  getGeneratedImagesGallerySnapshot,
   getImageQualityPresetsSnapshot,
   getProjectDetailSnapshot
 } from "../../../lib/studio-api";
@@ -27,13 +28,15 @@ export default async function ProjectDetailPage({
     assetsSnapshot,
     channelsSnapshot,
     workflowPacksSnapshot,
-    qualityPresetsSnapshot
+    qualityPresetsSnapshot,
+    generatedImagesSnapshot
   ] = await Promise.all([
     getProjectDetailSnapshot(id),
     getAssetsSnapshot(),
     getChannelsSnapshot(),
     getComfyWorkflowPacksSnapshot(),
-    getImageQualityPresetsSnapshot()
+    getImageQualityPresetsSnapshot(),
+    getGeneratedImagesGallerySnapshot({ projectId: id })
   ]);
 
   if (!projectSnapshot.item) {
@@ -97,6 +100,8 @@ export default async function ProjectDetailPage({
         workflowPacksSource={workflowPacksSnapshot.source}
         qualityPresets={qualityPresetsSnapshot.items}
         qualityPresetsSource={qualityPresetsSnapshot.source}
+        initialGeneratedImages={generatedImagesSnapshot.items}
+        initialGeneratedImagesSource={generatedImagesSnapshot.source}
       />
     </div>
   );

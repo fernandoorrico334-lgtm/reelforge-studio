@@ -3,6 +3,7 @@ import {
   getChannelsSnapshot,
   getCharactersSnapshot,
   getComfyWorkflowPacksSnapshot,
+  getGeneratedImagesGallerySnapshot,
   getImageQualityPresetsSnapshot,
   getNegativePromptPacksSnapshot,
   getProjectsSnapshot,
@@ -26,7 +27,8 @@ export default async function PromptLabPage() {
     workflowPacksSnapshot,
     qualityPresetsSnapshot,
     researchSnapshot,
-    visualProvidersSnapshot
+    visualProvidersSnapshot,
+    generatedImagesSnapshot
   ] = await Promise.all([
     getProjectsSnapshot(),
     getChannelsSnapshot(),
@@ -36,7 +38,8 @@ export default async function PromptLabPage() {
     getComfyWorkflowPacksSnapshot(),
     getImageQualityPresetsSnapshot(),
     getResearchDossiersSnapshot(),
-    getVisualGenerationProvidersSnapshot()
+    getVisualGenerationProvidersSnapshot(),
+    getGeneratedImagesGallerySnapshot()
   ]);
 
   const researchDetails = await Promise.all(
@@ -129,6 +132,8 @@ export default async function PromptLabPage() {
         researchRequirementsSource={researchRequirementsSource}
         visualGenerationProviders={visualProvidersSnapshot.items}
         visualGenerationProvidersSource={visualProvidersSnapshot.source}
+        recentGeneratedImages={generatedImagesSnapshot.items.slice(0, 6)}
+        recentGeneratedImagesSource={generatedImagesSnapshot.source}
       />
     </div>
   );

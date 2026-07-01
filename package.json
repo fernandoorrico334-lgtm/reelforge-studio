@@ -27,6 +27,7 @@
     "smoke:media-collector": "node scripts/smoke-media-collector.mjs",
     "smoke:hybrid-visual": "node scripts/smoke-hybrid-visual.mjs",
     "smoke:hybrid-visual:render-ready": "node scripts/smoke-hybrid-visual-render-ready.mjs",
+    "smoke:generated-gallery": "node scripts/smoke-generated-gallery.mjs",
     "smoke:workflow-packs": "node scripts/smoke-workflow-packs.mjs",
     "smoke:comfy-provider:contract": "node scripts/smoke-comfy-provider-contract.mjs",
     "smoke:comfy-provider:mock-status": "node scripts/smoke-comfy-provider-mock-status.mjs",

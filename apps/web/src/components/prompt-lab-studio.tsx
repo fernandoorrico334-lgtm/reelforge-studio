@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   buildVisualPrompt,
   type NegativePromptPackId,
@@ -17,6 +18,7 @@ import type {
   CharacterProfile,
   ComfyWorkflowPack,
   DataSource,
+  GeneratedImageGalleryItem,
   ImageQualityPreset,
   NegativePromptPack,
   ProjectScene,
@@ -57,6 +59,8 @@ interface PromptLabStudioProps {
   researchRequirementsSource: DataSource;
   visualGenerationProviders: VisualGenerationProviderDescriptor[];
   visualGenerationProvidersSource: DataSource;
+  recentGeneratedImages: GeneratedImageGalleryItem[];
+  recentGeneratedImagesSource: DataSource;
 }
 
 function formatSourceLabel(value: DataSource) {
@@ -93,7 +97,9 @@ export function PromptLabStudio({
   researchRequirements,
   researchRequirementsSource,
   visualGenerationProviders,
-  visualGenerationProvidersSource
+  visualGenerationProvidersSource,
+  recentGeneratedImages,
+  recentGeneratedImagesSource
 }: PromptLabStudioProps) {
   const templates = getTemplates();
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "");
@@ -368,7 +374,7 @@ export function PromptLabStudio({
         autoAttach: true
       });
       setStatusMessage(
-        `Cena recebeu visual via ${provider}. Asset ${result.asset?.filename ?? "sem arquivo"} pronto.`
+        `Cena recebeu visual via ${provider}. Asset ${result.asset?.filename ?? "sem arquivo"} pronto. Revise em /generated-images.`
       );
     } catch (error) {
       setStatusMessage(
@@ -408,7 +414,7 @@ export function PromptLabStudio({
         autoAttach: true
       });
       setStatusMessage(
-        `Requirement recebeu visual via ${provider}. Asset ${result.asset?.filename ?? "sem arquivo"} pronto.`
+        `Requirement recebeu visual via ${provider}. Asset ${result.asset?.filename ?? "sem arquivo"} pronto. Revise em /generated-images.`
       );
     } catch (error) {
       setStatusMessage(
@@ -466,6 +472,53 @@ export function PromptLabStudio({
         <p className="mt-5 rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
           {statusMessage}
         </p>
+      </section>
+
+      <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+              Generated Feed
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-white">
+              Ultimas geracoes saem daqui direto para a galeria
+            </h2>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-mist/68">
+              Depois de gerar um visual, revise variacoes, favorite a melhor e
+              promova a imagem escolhida em{" "}
+              <Link href="/generated-images" className="text-signal underline-offset-4 hover:underline">
+                /generated-images
+              </Link>.
+            </p>
+          </div>
+          <div className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs text-mist/65">
+            feed {formatSourceLabel(recentGeneratedImagesSource)}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {recentGeneratedImages.slice(0, 3).map((item) => (
+            <Link
+              key={item.job.id}
+              href={item.project?.id ? `/projects/${item.project.id}` : "/generated-images"}
+              className="rounded-[1.4rem] border border-white/10 bg-black/20 p-4 transition hover:border-white/20"
+            >
+              <p className="text-xs uppercase tracking-[0.22em] text-mist/45">
+                {item.job.provider}
+              </p>
+              <h3 className="mt-3 text-lg font-semibold text-white">
+                {item.scene?.title ?? item.project?.title ?? item.job.id}
+              </h3>
+              <p className="mt-2 text-sm leading-7 text-mist/68">
+                pack {String(item.metadata?.workflowPackId ?? "n/a")} / quality{" "}
+                {String(item.metadata?.qualityPresetId ?? "n/a")}
+              </p>
+              <p className="mt-3 text-xs text-mist/45">
+                generatedAssetId {item.job.generatedAssetId ?? "pendente"}
+              </p>
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">

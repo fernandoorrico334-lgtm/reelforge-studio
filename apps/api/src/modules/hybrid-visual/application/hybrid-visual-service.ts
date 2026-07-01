@@ -56,10 +56,16 @@ import type {
 } from "../../research/domain/research.js";
 import type { VisualGenerationJobRepository } from "./visual-generation-job-repository.js";
 import type {
+  GeneratedImageGalleryFilters,
+  GeneratedImageGalleryItem,
   GenerateMissingVisualsInput,
   GenerateVisualRequestInput,
+  MarkVisualGenerationJobReviewedInput,
+  RegenerateVisualGenerationJobInput,
+  UseGeneratedImageForSceneResponse,
   VisualGenerationJob,
-  VisualGenerationJobFilters
+  VisualGenerationJobFilters,
+  VisualReviewStatus
 } from "../domain/visual-generation.js";
 import { writeMockGeneratedVisualPng } from "../infrastructure/mock-visual-rasterizer.js";
 import {
@@ -895,10 +901,124 @@ function buildJobMetadata(
     recipe,
     width: job.width,
     height: job.height,
+    seed: job.seed,
     provider: job.provider,
     mode: job.visualSourceMode,
     ...extras
   };
+}
+
+function readMetadataString(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string
+) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readMetadataNumber(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string
+) {
+  const value = metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readMetadataReviewStatus(
+  metadata: Record<string, unknown> | null | undefined
+): VisualReviewStatus | null {
+  const direct = readMetadataString(metadata, "reviewStatus");
+
+  if (direct === "approved" || direct === "rejected" || direct === "favorite") {
+    return direct;
+  }
+
+  const nestedReview = metadata?.review;
+
+  if (!nestedReview || typeof nestedReview !== "object" || Array.isArray(nestedReview)) {
+    return null;
+  }
+
+  const nestedStatus = (nestedReview as { status?: unknown }).status;
+
+  if (
+    nestedStatus === "approved" ||
+    nestedStatus === "rejected" ||
+    nestedStatus === "favorite"
+  ) {
+    return nestedStatus;
+  }
+
+  return null;
+}
+
+function readMetadataReviewNotes(
+  metadata: Record<string, unknown> | null | undefined
+) {
+  const direct = readMetadataString(metadata, "reviewNotes");
+
+  if (direct) {
+    return direct;
+  }
+
+  const nestedReview = metadata?.review;
+
+  if (!nestedReview || typeof nestedReview !== "object" || Array.isArray(nestedReview)) {
+    return null;
+  }
+
+  const notes = (nestedReview as { notes?: unknown }).notes;
+  return typeof notes === "string" && notes.trim() ? notes.trim() : null;
+}
+
+function buildGeneratedImagePreviewUrl(assetId: string) {
+  return `/media/assets/${encodeURIComponent(assetId)}`;
+}
+
+function buildGallerySceneSummary(projectId: string, scene: ProjectScene) {
+  return {
+    id: scene.id,
+    order: scene.order,
+    title: scene.title,
+    videoProjectId: projectId,
+    captionText: scene.captionText,
+    duration: scene.duration,
+    emotion: scene.emotion,
+    assetId: scene.assetId,
+    generatedAssetId: scene.generatedAssetId ?? null,
+    visualSourceMode: scene.visualSourceMode ?? null,
+    generationStatus: scene.generationStatus ?? null,
+    generationProvider: scene.generationProvider ?? null
+  };
+}
+
+function buildGalleryProjectSummary(project: StudioProject) {
+  return {
+    id: project.id,
+    title: project.title,
+    status: project.status,
+    channelId: project.channelId,
+    channelName: project.channel.name,
+    format: project.format,
+    templateId: project.templateId ?? null
+  };
+}
+
+function createRegenerationSeed(
+  currentSeed: number | null,
+  seedMode: RegenerateVisualGenerationJobInput["seedMode"]
+) {
+  const baseSeed = currentSeed ?? 1001;
+
+  if (seedMode === "increment") {
+    return baseSeed + 1;
+  }
+
+  if (seedMode === "random") {
+    return Math.floor(Math.random() * 9_999_991) + 1;
+  }
+
+  return baseSeed;
 }
 
 async function createGeneratedAssetRecord(
@@ -1328,6 +1448,313 @@ export async function cancelVisualGenerationJob(
   return cancelled ?? job;
 }
 
+export async function listGeneratedImageGallery(
+  repository: VisualGenerationJobRepository,
+  projectRepository: ProjectRepository,
+  filters: GeneratedImageGalleryFilters = {}
+): Promise<GeneratedImageGalleryItem[]> {
+  const repositoryFilters: VisualGenerationJobFilters = {};
+
+  if (filters.projectId) {
+    repositoryFilters.videoProjectId = filters.projectId;
+  }
+
+  if (filters.sceneId) {
+    repositoryFilters.sceneId = filters.sceneId;
+  }
+
+  if (filters.characterProfileId) {
+    repositoryFilters.characterProfileId = filters.characterProfileId;
+  }
+
+  if (filters.status) {
+    repositoryFilters.status = filters.status;
+  }
+
+  const jobs = await repository.list(repositoryFilters);
+  const projects = await projectRepository.list();
+  const projectById = new Map(projects.map((project) => [project.id, project]));
+  const sceneMatchById = new Map<
+    string,
+    {
+      project: StudioProject;
+      scene: ProjectScene;
+    }
+  >();
+
+  for (const project of projects) {
+    for (const scene of project.scenes) {
+      sceneMatchById.set(scene.id, {
+        project,
+        scene
+      });
+    }
+  }
+
+  return jobs
+    .map((job) => {
+      const sceneMatch = job.sceneId ? sceneMatchById.get(job.sceneId) ?? null : null;
+      const project =
+        sceneMatch?.project ??
+        (job.videoProjectId ? projectById.get(job.videoProjectId) ?? null : null);
+      const scene = sceneMatch?.scene ?? null;
+      const asset = job.generatedAsset ?? null;
+      const metadata = job.metadata ?? null;
+      const reviewStatus = readMetadataReviewStatus(metadata);
+      const reviewNotes = readMetadataReviewNotes(metadata);
+      const isCurrentSceneGeneratedAsset = Boolean(
+        scene && asset && scene.generatedAssetId === asset.id
+      );
+
+      return {
+        job,
+        asset,
+        scene: scene && project ? buildGallerySceneSummary(project.id, scene) : null,
+        project: project ? buildGalleryProjectSummary(project) : null,
+        metadata,
+        previewUrl: asset ? buildGeneratedImagePreviewUrl(asset.id) : null,
+        thumbnailUrl: asset ? buildGeneratedImagePreviewUrl(asset.id) : null,
+        isCurrentSceneGeneratedAsset,
+        isSceneEffectiveAsset: isCurrentSceneGeneratedAsset,
+        reviewStatus,
+        reviewNotes,
+        isFavorite: reviewStatus === "favorite"
+      } satisfies GeneratedImageGalleryItem;
+    })
+    .filter((item) => {
+      if (filters.provider && item.job.provider !== filters.provider) {
+        return false;
+      }
+
+      if (
+        filters.workflowPackId &&
+        readMetadataString(item.metadata, "workflowPackId") !== filters.workflowPackId
+      ) {
+        return false;
+      }
+
+      if (
+        filters.qualityPresetId &&
+        readMetadataString(item.metadata, "qualityPresetId") !== filters.qualityPresetId
+      ) {
+        return false;
+      }
+
+      if (filters.sourceProvider && item.asset?.sourceProvider !== filters.sourceProvider) {
+        return false;
+      }
+
+      return true;
+    });
+}
+
+export async function listSceneGeneratedImages(
+  repository: VisualGenerationJobRepository,
+  projectRepository: ProjectRepository,
+  sceneId: string
+) {
+  const match = await findProjectBySceneId(projectRepository, sceneId);
+
+  if (!match) {
+    throw buildSceneNotFoundError(sceneId);
+  }
+
+  return listGeneratedImageGallery(repository, projectRepository, { sceneId });
+}
+
+export async function useGeneratedImageForScene(
+  projectRepository: ProjectRepository,
+  assetRepository: AssetRepository,
+  repository: VisualGenerationJobRepository,
+  sceneId: string,
+  assetId: string
+): Promise<UseGeneratedImageForSceneResponse> {
+  const match = await findProjectBySceneId(projectRepository, sceneId);
+
+  if (!match) {
+    throw buildSceneNotFoundError(sceneId);
+  }
+
+  const asset = await assetRepository.getById(assetId);
+
+  if (!asset) {
+    throw new NotFoundError(`Asset '${assetId}' was not found.`);
+  }
+
+  const jobs = await repository.list({ sceneId });
+  const selectedJob = jobs.find((job) => job.generatedAssetId === assetId) ?? null;
+
+  if (!selectedJob) {
+    throw new ValidationError(
+      `Asset '${assetId}' is not linked to a generated image job for scene '${sceneId}'.`
+    );
+  }
+
+  const nextVisualSourceMode =
+    match.scene.visualSourceMode === "generated_only" ||
+    match.scene.visualSourceMode === "fallback_generated"
+      ? match.scene.visualSourceMode
+      : match.scene.assetId
+        ? "fallback_generated"
+        : "generated_only";
+  const sceneUpdate = {
+    generatedAssetId: asset.id,
+    visualSourceMode: nextVisualSourceMode,
+    visualPrompt: selectedJob.prompt,
+    negativePrompt: selectedJob.negativePrompt,
+    generationStatus: selectedJob.status,
+    generationProvider: selectedJob.provider,
+    generationSeed:
+      selectedJob.seed ?? readMetadataNumber(selectedJob.metadata, "seed") ?? null
+  } satisfies Parameters<ProjectRepository["updateScene"]>[2];
+  const updatedScene = await projectRepository.updateScene(
+    match.project.id,
+    match.scene.id,
+    sceneUpdate
+  );
+
+  return {
+    scene:
+      updatedScene ??
+      {
+        ...match.scene,
+        ...sceneUpdate,
+        generatedAsset: asset,
+        updatedAt: new Date().toISOString()
+      },
+    projectId: match.project.id,
+    assetId: asset.id,
+    selectedJobId: selectedJob.id
+  };
+}
+
+export async function markVisualGenerationJobReviewed(
+  repository: VisualGenerationJobRepository,
+  jobId: string,
+  input: MarkVisualGenerationJobReviewedInput
+) {
+  const job = await repository.getById(jobId);
+
+  if (!job) {
+    throw buildJobNotFoundError(jobId);
+  }
+
+  const reviewedAt = new Date().toISOString();
+  const metadata = {
+    ...(job.metadata ?? {}),
+    reviewStatus: input.reviewStatus,
+    reviewNotes: input.notes,
+    reviewedAt,
+    review: {
+      status: input.reviewStatus,
+      notes: input.notes,
+      updatedAt: reviewedAt
+    }
+  };
+  const updatedJob = await repository.update(jobId, {
+    metadata
+  });
+
+  return updatedJob ?? { ...job, metadata };
+}
+
+export async function regenerateVisualGenerationJob(
+  projectRepository: ProjectRepository,
+  researchRepository: ResearchRepository,
+  assetRepository: AssetRepository,
+  characterRepository: CharacterRepository,
+  repository: VisualGenerationJobRepository,
+  jobId: string,
+  input: RegenerateVisualGenerationJobInput,
+  appEnvInput: Partial<HybridVisualEnv> = {}
+) {
+  const job = await repository.getById(jobId);
+
+  if (!job) {
+    throw buildJobNotFoundError(jobId);
+  }
+
+  const metadata = job.metadata ?? {};
+  const seedMode = input.seedMode ?? "reuse";
+  const currentSeed = job.seed ?? readMetadataNumber(metadata, "seed");
+  const seed = createRegenerationSeed(currentSeed, seedMode);
+  const payload: GenerateVisualRequestInput = {
+    provider: job.provider,
+    visualSourceMode: job.visualSourceMode ?? null,
+    characterProfileId: job.characterProfileId ?? null,
+    workflowPackId: input.workflowPackId ?? readMetadataString(metadata, "workflowPackId"),
+    qualityPresetId:
+      input.qualityPresetId ?? readMetadataString(metadata, "qualityPresetId"),
+    workflowId:
+      readMetadataString(metadata, "workflowId") ??
+      readMetadataString(metadata, "workflowTemplate"),
+    seedMode,
+    steps: readMetadataNumber(metadata, "steps"),
+    cfg: readMetadataNumber(metadata, "cfg"),
+    sampler: readMetadataString(metadata, "sampler"),
+    scheduler: readMetadataString(metadata, "scheduler"),
+    denoise: readMetadataNumber(metadata, "denoise"),
+    width: job.width,
+    height: job.height,
+    seed,
+    autoAttach: true
+  };
+
+  if (job.sceneId) {
+    const result = await generateVisualForScene(
+      projectRepository,
+      assetRepository,
+      characterRepository,
+      repository,
+      job.sceneId,
+      payload,
+      appEnvInput
+    );
+    const nextMetadata = {
+      ...(result.job.metadata ?? {}),
+      regeneratedFromJobId: job.id,
+      regenerationSeedMode: seedMode
+    };
+    const updatedJob = await repository.update(result.job.id, {
+      metadata: nextMetadata
+    });
+
+    return {
+      job: updatedJob ?? { ...result.job, metadata: nextMetadata },
+      asset: result.asset
+    };
+  }
+
+  if (job.researchAssetRequirementId) {
+    const result = await generateVisualForResearchRequirement(
+      researchRepository,
+      assetRepository,
+      characterRepository,
+      repository,
+      job.researchAssetRequirementId,
+      payload,
+      appEnvInput
+    );
+    const nextMetadata = {
+      ...(result.job.metadata ?? {}),
+      regeneratedFromJobId: job.id,
+      regenerationSeedMode: seedMode
+    };
+    const updatedJob = await repository.update(result.job.id, {
+      metadata: nextMetadata
+    });
+
+    return {
+      job: updatedJob ?? { ...result.job, metadata: nextMetadata },
+      asset: result.asset
+    };
+  }
+
+  throw new ValidationError(
+    `Visual generation job '${jobId}' is not linked to a scene or research requirement.`
+  );
+}
+
 export async function getProjectMissingVisualReport(
   projectRepository: ProjectRepository,
   characterRepository: CharacterRepository,
@@ -1451,6 +1878,7 @@ async function generateVisualForContext(
 
   if (input.provider !== "mock-svg" && input.provider !== "comfyui-local") {
     const queuedJob = await visualGenerationJobRepository.update(job.id, {
+      seed,
       metadata: buildJobMetadata(
         {
           ...job,
@@ -1553,6 +1981,7 @@ async function generateVisualForContext(
 
       const queuedAt = await visualGenerationJobRepository.update(job.id, {
         status: "generating",
+        seed,
         metadata: buildJobMetadata(
           {
             ...job,
@@ -1690,6 +2119,7 @@ async function generateVisualForContext(
     const completedAt = new Date().toISOString();
     const nextJob = await visualGenerationJobRepository.update(job.id, {
       status: "completed",
+      seed,
       outputPath: visualArtifacts.outputPath,
       generatedAssetId: asset.id,
       metadata: buildJobMetadata(
@@ -1749,6 +2179,7 @@ async function generateVisualForContext(
 
     const failedJob = await visualGenerationJobRepository.update(job.id, {
       status: "failed",
+      seed,
       errorMessage: message,
       completedAt: new Date().toISOString(),
       metadata: buildJobMetadata(

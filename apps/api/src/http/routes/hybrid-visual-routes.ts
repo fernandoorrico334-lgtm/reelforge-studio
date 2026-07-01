@@ -12,20 +12,29 @@ import {
   getImageQualityPresetSnapshot,
   getProjectMissingVisualReport,
   getVisualGenerationJobById,
+  listGeneratedImageGallery,
   listComfyWorkflowPacks,
   listImageQualityPresets,
+  listSceneGeneratedImages,
   listVisualGenerationJobs,
   listVisualGenerationProviders,
   listVisualSourceModes,
+  markVisualGenerationJobReviewed,
+  regenerateVisualGenerationJob,
   suggestComfyWorkflowPack,
   testComfyUiProvider,
+  useGeneratedImageForScene,
   validateComfyUiWorkflowTemplateSnapshot
 } from "../../modules/hybrid-visual/application/hybrid-visual-service.js";
 import type { VisualGenerationJobRepository } from "../../modules/hybrid-visual/application/visual-generation-job-repository.js";
 import {
+  normalizeOptionalIdentifierValue,
+  normalizeOptionalVisualGenerationProviderValue,
   normalizeOptionalVisualGenerationStatusValue,
   validateGenerateMissingVisualsInput,
-  validateGenerateVisualRequestInput
+  validateGenerateVisualRequestInput,
+  validateMarkVisualGenerationJobReviewedInput,
+  validateRegenerateVisualGenerationJobInput
 } from "../../modules/hybrid-visual/domain/visual-generation.js";
 import type { ProjectRepository } from "../../modules/projects/application/project-repository.js";
 import type { ResearchRepository } from "../../modules/research/application/research-repository.js";
@@ -74,6 +83,10 @@ function parseHybridVisualPath(pathname: string) {
   }
 
   if (segments[0] === "visual-generation") {
+    if (segments.length === 2 && segments[1] === "gallery") {
+      return { kind: "gallery" as const };
+    }
+
     if (segments.length === 2 && segments[1] === "providers") {
       return { kind: "providers" as const };
     }
@@ -122,6 +135,28 @@ function parseHybridVisualPath(pathname: string) {
         jobId: decodeURIComponent(segments[2] ?? "")
       };
     }
+
+    if (
+      segments.length === 4 &&
+      segments[1] === "jobs" &&
+      segments[3] === "mark-reviewed"
+    ) {
+      return {
+        kind: "mark-reviewed" as const,
+        jobId: decodeURIComponent(segments[2] ?? "")
+      };
+    }
+
+    if (
+      segments.length === 4 &&
+      segments[1] === "jobs" &&
+      segments[3] === "regenerate"
+    ) {
+      return {
+        kind: "regenerate-job" as const,
+        jobId: decodeURIComponent(segments[2] ?? "")
+      };
+    }
   }
 
   if (segments[0] === "video-projects" && segments.length === 3) {
@@ -138,6 +173,29 @@ function parseHybridVisualPath(pathname: string) {
     if (segments[2] === "generate-missing-visuals") {
       return { kind: "generate-missing-visuals" as const, projectId };
     }
+  }
+
+  if (
+    segments[0] === "scenes" &&
+    segments.length === 3 &&
+    segments[2] === "generated-images"
+  ) {
+    return {
+      kind: "scene-generated-images" as const,
+      sceneId: decodeURIComponent(segments[1] ?? "")
+    };
+  }
+
+  if (
+    segments[0] === "scenes" &&
+    segments.length === 4 &&
+    segments[2] === "use-generated-image"
+  ) {
+    return {
+      kind: "use-generated-image" as const,
+      sceneId: decodeURIComponent(segments[1] ?? ""),
+      assetId: decodeURIComponent(segments[3] ?? "")
+    };
   }
 
   if (
@@ -332,6 +390,59 @@ export async function handleHybridVisualRoute(
       return true;
     }
 
+    if (match.kind === "gallery") {
+      if (request.method === "GET") {
+        const filters: Parameters<typeof listGeneratedImageGallery>[2] = {};
+        const projectId = url.searchParams.get("projectId");
+        const sceneId = url.searchParams.get("sceneId");
+        const characterProfileId = url.searchParams.get("characterProfileId");
+        const workflowPackId =
+          normalizeOptionalIdentifierValue(
+            url.searchParams.get("workflowPackId"),
+            "workflowPackId"
+          ) ?? undefined;
+        const qualityPresetId =
+          normalizeOptionalIdentifierValue(
+            url.searchParams.get("qualityPresetId"),
+            "qualityPresetId"
+          ) ?? undefined;
+        const status =
+          normalizeOptionalVisualGenerationStatusValue(
+            url.searchParams.get("status"),
+            "status"
+          ) ?? undefined;
+        const provider =
+          normalizeOptionalVisualGenerationProviderValue(
+            url.searchParams.get("provider"),
+            "provider"
+          ) ?? undefined;
+        const sourceProvider = url.searchParams.get("sourceProvider")?.trim() || undefined;
+
+        if (projectId) filters.projectId = projectId;
+        if (sceneId) filters.sceneId = sceneId;
+        if (characterProfileId) filters.characterProfileId = characterProfileId;
+        if (workflowPackId) filters.workflowPackId = workflowPackId;
+        if (qualityPresetId) filters.qualityPresetId = qualityPresetId;
+        if (status) filters.status = status;
+        if (provider) filters.provider = provider;
+        if (sourceProvider) filters.sourceProvider = sourceProvider;
+
+        sendJson(
+          response,
+          200,
+          await listGeneratedImageGallery(
+            visualGenerationJobRepository,
+            projectRepository,
+            filters
+          )
+        );
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["GET"]);
+      return true;
+    }
+
     if (match.kind === "jobs") {
       if (request.method === "GET") {
         const filters: Parameters<typeof listVisualGenerationJobs>[1] = {};
@@ -400,6 +511,49 @@ export async function handleHybridVisualRoute(
       return true;
     }
 
+    if (match.kind === "mark-reviewed") {
+      if (request.method === "POST") {
+        const payload = await readJsonBody<unknown>(request);
+        sendJson(
+          response,
+          200,
+          await markVisualGenerationJobReviewed(
+            visualGenerationJobRepository,
+            match.jobId,
+            validateMarkVisualGenerationJobReviewedInput(payload)
+          )
+        );
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["POST"]);
+      return true;
+    }
+
+    if (match.kind === "regenerate-job") {
+      if (request.method === "POST") {
+        const payload = await readJsonBody<unknown>(request);
+        sendJson(
+          response,
+          201,
+          await regenerateVisualGenerationJob(
+            projectRepository,
+            researchRepository,
+            assetRepository,
+            characterRepository,
+            visualGenerationJobRepository,
+            match.jobId,
+            validateRegenerateVisualGenerationJobInput(payload),
+            appEnv
+          )
+        );
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["POST"]);
+      return true;
+    }
+
     if (match.kind === "missing-visual-report") {
       if (request.method === "GET") {
         sendJson(
@@ -432,6 +586,44 @@ export async function handleHybridVisualRoute(
             match.projectId,
             validateGenerateMissingVisualsInput(payload),
             appEnv
+          )
+        );
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["POST"]);
+      return true;
+    }
+
+    if (match.kind === "scene-generated-images") {
+      if (request.method === "GET") {
+        sendJson(
+          response,
+          200,
+          await listSceneGeneratedImages(
+            visualGenerationJobRepository,
+            projectRepository,
+            match.sceneId
+          )
+        );
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["GET"]);
+      return true;
+    }
+
+    if (match.kind === "use-generated-image") {
+      if (request.method === "POST") {
+        sendJson(
+          response,
+          200,
+          await useGeneratedImageForScene(
+            projectRepository,
+            assetRepository,
+            visualGenerationJobRepository,
+            match.sceneId,
+            match.assetId
           )
         );
         return true;

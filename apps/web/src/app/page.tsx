@@ -3,6 +3,7 @@ import { DashboardCard } from "../components/dashboard-card";
 import {
   getCharactersSnapshot,
   getDashboardSnapshot,
+  getGeneratedImagesGallerySnapshot,
   getMediaCollectionsSnapshot,
   getResearchDossiersSnapshot
 } from "../lib/studio-api";
@@ -20,12 +21,14 @@ export default async function HomePage() {
     snapshot,
     researchSnapshot,
     mediaCollectionsSnapshot,
-    charactersSnapshot
+    charactersSnapshot,
+    generatedImagesSnapshot
   ] = await Promise.all([
     getDashboardSnapshot(),
     getResearchDossiersSnapshot(),
     getMediaCollectionsSnapshot(),
-    getCharactersSnapshot()
+    getCharactersSnapshot(),
+    getGeneratedImagesGallerySnapshot()
   ]);
   const totalScenes = snapshot.projects.reduce(
     (total, project) => total + project.scenes.length,
@@ -123,7 +126,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-10">
         <DashboardCard
           href="/produce"
           title="Nova Producao"
@@ -172,6 +175,13 @@ export default async function HomePage() {
           value={String(snapshot.assets.length)}
           description="Catalogo local de imagens, videos, quadrinhos e referencias ja indexadas."
           accent="#ff9e66"
+        />
+        <DashboardCard
+          href="/generated-images"
+          title="Imagens Geradas"
+          value={String(generatedImagesSnapshot.items.length)}
+          description="Galeria de revisao para escolher, aprovar e reaproveitar visuais gerados."
+          accent="#7ef7d8"
         />
         <DashboardCard
           href="/projects"

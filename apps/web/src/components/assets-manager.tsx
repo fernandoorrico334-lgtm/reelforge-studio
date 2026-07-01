@@ -15,6 +15,7 @@ import type {
   CopyrightRisk,
   DataSource,
   EmotionTag,
+  GeneratedImageGalleryItem,
   StudioAsset
 } from "../lib/studio-types";
 import {
@@ -27,6 +28,7 @@ import {
 interface AssetsManagerProps {
   initialAssets: StudioAsset[];
   initialSource: DataSource;
+  generatedImages?: GeneratedImageGalleryItem[];
 }
 
 type UploadTypeOption = AssetType | "AUTO";
@@ -211,6 +213,27 @@ function extractErrorMessage(error: unknown) {
   return "Operacao falhou na API local.";
 }
 
+function readGeneratedMetadataString(
+  item: GeneratedImageGalleryItem | undefined,
+  key: string
+) {
+  const value = item?.metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isGeneratedAsset(
+  asset: StudioAsset,
+  item: GeneratedImageGalleryItem | undefined
+) {
+  return (
+    Boolean(item) ||
+    asset.tags.includes("generated") ||
+    asset.sourceProvider === "mock-svg" ||
+    asset.sourceProvider === "comfyui-local" ||
+    asset.sourceProvider === "hybrid-visual-engine"
+  );
+}
+
 function assetMatchesQuery(
   asset: StudioAsset,
   search: string,
@@ -366,7 +389,8 @@ function SelectedFilePreview({
 
 export function AssetsManager({
   initialAssets,
-  initialSource
+  initialSource,
+  generatedImages = []
 }: AssetsManagerProps) {
   const [assets, setAssets] = useState(initialAssets);
   const [source, setSource] = useState<DataSource>(initialSource);
@@ -387,6 +411,11 @@ export function AssetsManager({
     initialSource === "api"
       ? "Biblioteca conectada a API local."
       : "Biblioteca em modo mock ate a API ficar disponivel."
+  );
+  const generatedImageMap = new Map(
+    generatedImages
+      .filter((item) => item.asset?.id)
+      .map((item) => [item.asset!.id, item])
   );
 
   const editingAsset =
@@ -639,9 +668,22 @@ export function AssetsManager({
         </div>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-2">
-          {visibleAssets.map((asset) => (
+          {visibleAssets.map((asset) => {
+            const generatedImage = generatedImageMap.get(asset.id);
+            const generated = isGeneratedAsset(asset, generatedImage);
+            const workflowPackId = readGeneratedMetadataString(
+              generatedImage,
+              "workflowPackId"
+            );
+            const qualityPresetId = readGeneratedMetadataString(
+              generatedImage,
+              "qualityPresetId"
+            );
+
+            return (
             <article
               key={asset.id}
+              id={`asset-${asset.id}`}
               className="overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/20"
             >
               <AssetMediaPreview asset={asset} source={source} />
@@ -659,6 +701,21 @@ export function AssetsManager({
                       <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/70">
                         risco {asset.copyrightRisk}
                       </span>
+                      {generated ? (
+                        <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
+                          generated
+                        </span>
+                      ) : null}
+                      {workflowPackId ? (
+                        <span className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-3 py-1 text-xs text-[#e2e8ff]">
+                          pack {workflowPackId}
+                        </span>
+                      ) : null}
+                      {qualityPresetId ? (
+                        <span className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-3 py-1 text-xs text-[#d8f8ff]">
+                          quality {qualityPresetId}
+                        </span>
+                      ) : null}
                     </div>
                     <h3 className="mt-4 text-xl font-semibold text-white">
                       {asset.filename}
@@ -736,7 +793,8 @@ export function AssetsManager({
                 </p>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       </section>
 

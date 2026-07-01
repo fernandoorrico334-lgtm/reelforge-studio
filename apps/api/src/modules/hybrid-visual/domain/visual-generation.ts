@@ -1,13 +1,17 @@
 import type { StudioAsset } from "../../assets/domain/asset.js";
 import { normalizeOptionalNumber, normalizeOptionalString } from "../../assets/domain/asset.js";
 import type { CharacterProfile } from "../../characters/domain/character.js";
+import type {
+  ProjectScene,
+  ProjectStatus,
+  VisualGenerationProvider,
+  VisualGenerationStatus,
+  VisualSourceMode
+} from "../../projects/domain/project.js";
 import {
   visualGenerationProviders,
   visualGenerationStatuses,
   visualSourceModes,
-  type VisualGenerationProvider,
-  type VisualGenerationStatus,
-  type VisualSourceMode
 } from "../../projects/domain/project.js";
 import { ValidationError } from "../../../shared/errors.js";
 
@@ -45,6 +49,79 @@ export interface VisualGenerationJobFilters {
   researchAssetRequirementId?: string;
   characterProfileId?: string;
   status?: VisualGenerationStatus;
+}
+
+export const visualReviewStatuses = ["approved", "rejected", "favorite"] as const;
+
+export type VisualReviewStatus = (typeof visualReviewStatuses)[number];
+
+export interface GeneratedImageGalleryFilters {
+  projectId?: string;
+  sceneId?: string;
+  characterProfileId?: string;
+  workflowPackId?: string;
+  qualityPresetId?: string;
+  status?: VisualGenerationStatus;
+  provider?: VisualGenerationProvider;
+  sourceProvider?: string;
+}
+
+export interface GeneratedImageGalleryProjectSummary {
+  id: string;
+  title: string;
+  status: ProjectStatus;
+  channelId: string;
+  channelName: string;
+  format: string;
+  templateId: string | null;
+}
+
+export interface GeneratedImageGallerySceneSummary {
+  id: string;
+  order: number;
+  title: string;
+  videoProjectId: string;
+  captionText: string | null;
+  duration: number | null;
+  emotion: ProjectScene["emotion"];
+  assetId: string | null;
+  generatedAssetId: string | null;
+  visualSourceMode: VisualSourceMode | null;
+  generationStatus: VisualGenerationStatus | null;
+  generationProvider: VisualGenerationProvider | null;
+}
+
+export interface GeneratedImageGalleryItem {
+  job: VisualGenerationJob;
+  asset: StudioAsset | null;
+  scene: GeneratedImageGallerySceneSummary | null;
+  project: GeneratedImageGalleryProjectSummary | null;
+  metadata: Record<string, unknown> | null;
+  previewUrl: string | null;
+  thumbnailUrl: string | null;
+  isCurrentSceneGeneratedAsset: boolean;
+  isSceneEffectiveAsset: boolean;
+  reviewStatus: VisualReviewStatus | null;
+  reviewNotes: string | null;
+  isFavorite: boolean;
+}
+
+export interface MarkVisualGenerationJobReviewedInput {
+  reviewStatus: VisualReviewStatus;
+  notes: string | null;
+}
+
+export interface RegenerateVisualGenerationJobInput {
+  seedMode: "random" | "fixed" | "reuse" | "increment" | null;
+  qualityPresetId: string | null;
+  workflowPackId: string | null;
+}
+
+export interface UseGeneratedImageForSceneResponse {
+  scene: ProjectScene;
+  projectId: string;
+  assetId: string;
+  selectedJobId: string | null;
 }
 
 export interface CreateVisualGenerationJobInput {
@@ -153,7 +230,7 @@ function normalizeOptionalVisualSourceModeValue(
   return normalized as VisualSourceMode;
 }
 
-function normalizeOptionalVisualGenerationProviderValue(
+export function normalizeOptionalVisualGenerationProviderValue(
   value: unknown,
   fieldName = "provider"
 ): VisualGenerationProvider | null | undefined {
@@ -235,7 +312,10 @@ function normalizeSeed(value: unknown, fieldName = "seed") {
   return parsed;
 }
 
-function normalizeOptionalIdentifier(value: unknown, fieldName: string) {
+export function normalizeOptionalIdentifierValue(
+  value: unknown,
+  fieldName: string
+) {
   const parsed = normalizeOptionalString(value, fieldName);
 
   if (parsed === undefined || parsed === null) {
@@ -251,20 +331,42 @@ function normalizeOptionalIdentifier(value: unknown, fieldName: string) {
   return parsed;
 }
 
-function normalizeOptionalSeedMode(value: unknown, fieldName = "seedMode") {
-  const parsed = normalizeOptionalIdentifier(value, fieldName);
+function normalizeOptionalSeedMode(
+  value: unknown,
+  fieldName = "seedMode"
+): "random" | "fixed" | "reuse" | "increment" | null {
+  const parsed = normalizeOptionalIdentifierValue(value, fieldName);
 
   if (!parsed) {
     return null;
   }
 
-  const modes = ["random", "fixed", "reuse", "increment"];
+  const modes = ["random", "fixed", "reuse", "increment"] as const;
 
-  if (!modes.includes(parsed)) {
+  if (!(modes as readonly string[]).includes(parsed)) {
     throw new ValidationError(`${fieldName} must be one of: ${modes.join(", ")}.`);
   }
 
-  return parsed;
+  return parsed as (typeof modes)[number];
+}
+
+function normalizeVisualReviewStatusValue(
+  value: unknown,
+  fieldName = "reviewStatus"
+): VisualReviewStatus {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new ValidationError(`${fieldName} must be a non-empty string.`);
+  }
+
+  const normalized = normalizeEnumToken(value);
+
+  if (!visualReviewStatuses.includes(normalized as VisualReviewStatus)) {
+    throw new ValidationError(
+      `${fieldName} must be one of: ${visualReviewStatuses.join(", ")}.`
+    );
+  }
+
+  return normalized as VisualReviewStatus;
 }
 
 function normalizeOptionalGenerationNumber(
@@ -311,9 +413,9 @@ export function validateGenerateVisualRequestInput(payload: unknown): GenerateVi
       normalizeOptionalVisualSourceModeValue(record.visualSourceMode) ?? null,
     characterProfileId:
       normalizeOptionalString(record.characterProfileId, "characterProfileId") ?? null,
-    workflowPackId: normalizeOptionalIdentifier(record.workflowPackId, "workflowPackId"),
-    qualityPresetId: normalizeOptionalIdentifier(record.qualityPresetId, "qualityPresetId"),
-    workflowId: normalizeOptionalIdentifier(record.workflowId, "workflowId"),
+    workflowPackId: normalizeOptionalIdentifierValue(record.workflowPackId, "workflowPackId"),
+    qualityPresetId: normalizeOptionalIdentifierValue(record.qualityPresetId, "qualityPresetId"),
+    workflowId: normalizeOptionalIdentifierValue(record.workflowId, "workflowId"),
     seedMode: normalizeOptionalSeedMode(record.seedMode, "seedMode"),
     steps: normalizeOptionalGenerationNumber(record.steps, "steps", 1, 80),
     cfg: normalizeOptionalGenerationNumber(record.cfg, "cfg", 0, 30),
@@ -336,6 +438,31 @@ export function validateGenerateMissingVisualsInput(
   return {
     ...base,
     maxScenes: normalizeMaxScenes(record.maxScenes)
+  };
+}
+
+export function validateMarkVisualGenerationJobReviewedInput(
+  payload: unknown
+): MarkVisualGenerationJobReviewedInput {
+  const record = asRecord(payload);
+
+  return {
+    reviewStatus: normalizeVisualReviewStatusValue(record.reviewStatus),
+    notes: normalizeOptionalString(record.notes, "notes") ?? null
+  };
+}
+
+export function validateRegenerateVisualGenerationJobInput(
+  payload: unknown
+): RegenerateVisualGenerationJobInput {
+  const record = asRecord(payload);
+
+  return {
+    seedMode: normalizeOptionalSeedMode(record.seedMode, "seedMode"),
+    qualityPresetId:
+      normalizeOptionalIdentifierValue(record.qualityPresetId, "qualityPresetId"),
+    workflowPackId:
+      normalizeOptionalIdentifierValue(record.workflowPackId, "workflowPackId")
   };
 }
 

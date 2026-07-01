@@ -665,6 +665,79 @@ export interface VisualGenerationJob {
   completedAt: string | null;
 }
 
+export const visualReviewStatuses = ["approved", "rejected", "favorite"] as const;
+
+export type VisualReviewStatus = (typeof visualReviewStatuses)[number];
+
+export interface GeneratedImageGalleryProjectSummary {
+  id: string;
+  title: string;
+  status: ProjectStatus;
+  channelId: string;
+  channelName: string;
+  format: string;
+  templateId: string | null;
+}
+
+export interface GeneratedImageGallerySceneSummary {
+  id: string;
+  order: number;
+  title: string;
+  videoProjectId: string;
+  captionText: string | null;
+  duration: number | null;
+  emotion: EmotionTag | null;
+  assetId: string | null;
+  generatedAssetId: string | null;
+  visualSourceMode: VisualSourceMode | null;
+  generationStatus: VisualGenerationStatus | null;
+  generationProvider: VisualGenerationProvider | null;
+}
+
+export interface GeneratedImageGalleryItem {
+  job: VisualGenerationJob;
+  asset: StudioAsset | null;
+  scene: GeneratedImageGallerySceneSummary | null;
+  project: GeneratedImageGalleryProjectSummary | null;
+  metadata: Record<string, unknown> | null;
+  previewUrl: string | null;
+  thumbnailUrl: string | null;
+  isCurrentSceneGeneratedAsset: boolean;
+  isSceneEffectiveAsset: boolean;
+  reviewStatus: VisualReviewStatus | null;
+  reviewNotes: string | null;
+  isFavorite: boolean;
+}
+
+export interface GeneratedImageGalleryFilters {
+  projectId?: string;
+  sceneId?: string;
+  characterProfileId?: string;
+  workflowPackId?: string;
+  qualityPresetId?: string;
+  status?: VisualGenerationStatus;
+  provider?: VisualGenerationProvider;
+  sourceProvider?: string;
+}
+
+export interface MarkVisualGenerationJobReviewedPayload {
+  reviewStatus: VisualReviewStatus;
+  notes: string | null;
+}
+
+export interface RegenerateVisualGenerationJobPayload {
+  seedMode?: "random" | "fixed" | "reuse" | "increment" | null;
+  qualityPresetId?: string | null;
+  workflowPackId?: string | null;
+}
+
+export interface UseGeneratedImageForSceneResponse {
+  scene: ProjectScene;
+  projectId: string;
+  assetId: string;
+  selectedJobId: string | null;
+}
+
 export interface GenerateVisualPayload {
   provider: VisualGenerationProvider;
   visualSourceMode: VisualSourceMode | null;
