@@ -1,18 +1,31 @@
 import {
-  buildComfyWorkflowFromTemplate,
+  buildComfyWorkflowWithMetadata,
+  buildGenerationParameters,
   buildMissingVisualReport,
   buildVisualRecipe,
   createGeneratedAssetMetadata,
   createMockGeneratedVisualSvg,
+  getComfyWorkflowPackById,
+  getComfyWorkflowPacks,
+  getImageQualityPresetById,
+  getImageQualityPresets,
   getVisualSourceModes,
+  resolveQualityPreset,
+  suggestWorkflowPackByChannel,
+  suggestWorkflowPackByNiche,
+  suggestWorkflowPackByResearchRequirement,
+  suggestWorkflowPackByScene,
+  suggestWorkflowPackByTemplate,
   suggestVisualSourceMode,
   summarizeVisualGenerationJob,
   validateComfyWorkflowTemplate,
+  type ComfyWorkflowPack,
   type HybridAssetInput,
   type HybridChannelInput,
   type HybridCharacterProfile,
   type HybridProjectInput,
   type HybridSceneInput,
+  type SeedStrategy,
   type VisualRecipe
 } from "@reelforge/hybrid-visual-engine";
 import {
@@ -181,6 +194,66 @@ function createDeterministicSeed(seed: number | null, key: string) {
   }
 
   return acc;
+}
+
+function resolveWorkflowPackForContext(
+  context:
+    | {
+        kind: "scene";
+        project: StudioProject;
+        scene: ProjectScene;
+      }
+    | {
+        kind: "requirement";
+        requirement: ResearchAssetRequirement;
+      },
+  input: GenerateVisualRequestInput
+) {
+  if (input.workflowPackId) {
+    const requestedPack = getComfyWorkflowPackById(input.workflowPackId);
+
+    if (!requestedPack) {
+      throw new ValidationError(
+        `ComfyUI workflow pack '${input.workflowPackId}' was not found.`
+      );
+    }
+
+    return {
+      pack: requestedPack,
+      reason: "Workflow pack requested explicitly."
+    };
+  }
+
+  if (context.kind === "scene") {
+    const sceneSuggestion = suggestWorkflowPackByScene(mapScene(context.scene));
+
+    if (sceneSuggestion.pack.id !== "cinematic_story") {
+      return sceneSuggestion;
+    }
+
+    return suggestWorkflowPackByChannel(mapChannel(context.project.channel));
+  }
+
+  return suggestWorkflowPackByResearchRequirement(context.requirement);
+}
+
+function resolveValidatedQualityPreset(
+  qualityPresetId: string | null,
+  pack: ComfyWorkflowPack
+) {
+  if (!qualityPresetId) {
+    return resolveQualityPreset(pack.defaultQualityPreset);
+  }
+
+  const preset = getImageQualityPresetById(qualityPresetId);
+
+  if (!preset) {
+    throw new ValidationError(
+      `Image quality preset '${qualityPresetId}' was not found.`
+    );
+  }
+
+  return preset;
 }
 
 function tryParseJsonRecord(value: string | null | undefined) {
@@ -1078,6 +1151,94 @@ export async function listVisualSourceModes() {
   return getVisualSourceModes();
 }
 
+export async function listComfyWorkflowPacks() {
+  return getComfyWorkflowPacks();
+}
+
+export async function getComfyWorkflowPackSnapshot(packId: string) {
+  const pack = getComfyWorkflowPackById(packId);
+
+  if (!pack) {
+    throw new NotFoundError(`ComfyUI workflow pack '${packId}' was not found.`);
+  }
+
+  return pack;
+}
+
+export async function listImageQualityPresets() {
+  return getImageQualityPresets();
+}
+
+export async function getImageQualityPresetSnapshot(presetId: string) {
+  const preset = getImageQualityPresetById(presetId);
+
+  if (!preset) {
+    throw new NotFoundError(`Image quality preset '${presetId}' was not found.`);
+  }
+
+  return preset;
+}
+
+export async function suggestComfyWorkflowPack(
+  projectRepository: ProjectRepository,
+  researchRepository: ResearchRepository,
+  input: {
+    channelId?: string | null;
+    projectId?: string | null;
+    sceneId?: string | null;
+    templateId?: string | null;
+    niche?: string | null;
+    researchAssetRequirementId?: string | null;
+  } = {}
+) {
+  if (input.sceneId) {
+    const match = await findProjectBySceneId(projectRepository, input.sceneId);
+
+    if (match) {
+      return {
+        ...suggestWorkflowPackByScene(mapScene(match.scene)),
+        context: "scene"
+      };
+    }
+  }
+
+  if (input.researchAssetRequirementId) {
+    const requirement = await researchRepository.getAssetRequirementById(
+      input.researchAssetRequirementId
+    );
+
+    if (requirement) {
+      return {
+        ...suggestWorkflowPackByResearchRequirement(requirement),
+        context: "research-requirement"
+      };
+    }
+  }
+
+  if (input.projectId) {
+    const project = await projectRepository.getById(input.projectId);
+
+    if (project) {
+      return {
+        ...suggestWorkflowPackByChannel(mapChannel(project.channel)),
+        context: "project-channel"
+      };
+    }
+  }
+
+  if (input.templateId) {
+    return {
+      ...suggestWorkflowPackByTemplate(input.templateId),
+      context: "template"
+    };
+  }
+
+  return {
+    ...suggestWorkflowPackByNiche(input.niche ?? null),
+    context: "niche"
+  };
+}
+
 export async function listVisualGenerationProviders(
   appEnvInput: Partial<HybridVisualEnv> = {}
 ) {
@@ -1218,6 +1379,12 @@ async function generateVisualForContext(
   appEnvInput: Partial<HybridVisualEnv> = {}
 ) {
   const appEnv = resolveHybridVisualEnv(appEnvInput);
+  const workflowPackSuggestion = resolveWorkflowPackForContext(context, input);
+  const workflowPack = workflowPackSuggestion.pack;
+  const qualityPreset = resolveValidatedQualityPreset(
+    input.qualityPresetId,
+    workflowPack
+  );
 
   const draft =
     context.kind === "scene"
@@ -1225,26 +1392,59 @@ async function generateVisualForContext(
           context.projectRepository,
           characterRepository,
           context.scene.id,
-          { characterProfileId: input.characterProfileId }
+          {
+            characterProfileId: input.characterProfileId,
+            promptPackId: workflowPack.recommendedPromptPackId,
+            negativePackId: workflowPack.recommendedNegativePromptPackId
+          }
         )
       : await buildRequirementPromptDraft(
           context.researchRepository,
           characterRepository,
           context.requirement.id,
-          { characterProfileId: input.characterProfileId }
+          {
+            characterProfileId: input.characterProfileId,
+            promptPackId: workflowPack.recommendedPromptPackId,
+            negativePackId: workflowPack.recommendedNegativePromptPackId
+          }
         );
 
   const seed = createDeterministicSeed(
     input.seed,
     `${draft.mappedProject.id}:${draft.sceneLike.id}:${draft.promptResult.promptPlanSummary}`
   );
+  const generationParameters = buildGenerationParameters(
+    workflowPack,
+    qualityPreset,
+    {
+      workflowId: input.workflowId ?? appEnv.comfyUiDefaultWorkflow,
+      qualityPresetId: qualityPreset.id,
+      prompt: draft.promptResult.prompt,
+      negativePrompt: draft.promptResult.negativePrompt,
+      width: input.width,
+      height: input.height,
+      seed,
+      seedMode: input.seedMode as SeedStrategy | null,
+      steps: input.steps,
+      cfg: input.cfg,
+      sampler: input.sampler,
+      scheduler: input.scheduler,
+      denoise: input.denoise
+    }
+  );
+  const effectiveInput = {
+    ...input,
+    width: generationParameters.width,
+    height: generationParameters.height,
+    seed
+  };
   let job = await createQueuedJob(
     visualGenerationJobRepository,
     context.kind === "scene" ? context.project.id : null,
     context.kind === "scene" ? context.scene.id : null,
     context.kind === "requirement" ? context.requirement.id : null,
     draft.characterProfile?.id ?? null,
-    input,
+    effectiveInput,
     draft.promptResult,
     draft.mode
   );
@@ -1309,8 +1509,8 @@ async function generateVisualForContext(
       emotion: draft.sceneLike.emotion ?? null,
       visualPreset: draft.sceneLike.visualPreset ?? null,
       characterProfile: draft.mappedCharacter,
-      width: input.width,
-      height: input.height,
+      width: generationParameters.width,
+      height: generationParameters.height,
       seed
     });
     let visualArtifacts: GeneratedVisualArtifactPaths;
@@ -1332,14 +1532,19 @@ async function generateVisualForContext(
         throw new ValidationError(providerStatus.message);
       }
 
-      const workflow = await buildComfyWorkflowFromTemplate(
-        appEnv.comfyUiDefaultWorkflow,
+      const builtWorkflow = await buildComfyWorkflowWithMetadata(
+        generationParameters.workflowId,
         {
           prompt: draft.promptResult.prompt,
           negativePrompt: draft.promptResult.negativePrompt,
-          width: input.width,
-          height: input.height,
-          seed
+          width: generationParameters.width,
+          height: generationParameters.height,
+          seed,
+          steps: generationParameters.steps,
+          cfg: generationParameters.cfg,
+          sampler: generationParameters.sampler,
+          scheduler: generationParameters.scheduler,
+          denoise: generationParameters.denoise
         },
         {
           workflowDirectory: appEnv.comfyUiWorkflowDir
@@ -1360,7 +1565,23 @@ async function generateVisualForContext(
           draft.recipe,
           draft.promptResult,
           {
-            workflowTemplate: appEnv.comfyUiDefaultWorkflow
+            workflowTemplate: generationParameters.workflowId,
+            workflowPackId: generationParameters.workflowPackId,
+            qualityPresetId: generationParameters.qualityPresetId,
+            workflowPackReason: workflowPackSuggestion.reason,
+            promptPackId: generationParameters.promptPackId,
+            negativePromptPackId: generationParameters.negativePromptPackId,
+            seedStrategy: generationParameters.seedStrategy,
+            steps: generationParameters.steps,
+            cfg: generationParameters.cfg,
+            sampler: generationParameters.sampler,
+            scheduler: generationParameters.scheduler,
+            denoise: generationParameters.denoise,
+            workflowId: builtWorkflow.metadata.workflowId,
+            workflowOrigin: builtWorkflow.metadata.workflowOrigin,
+            workflowTemplatePath: builtWorkflow.metadata.workflowTemplatePath,
+            appliedParameters: builtWorkflow.metadata.appliedParameters,
+            ignoredParameters: builtWorkflow.metadata.ignoredParameters
           }
         )
       });
@@ -1369,7 +1590,7 @@ async function generateVisualForContext(
 
       const queueResult = await queuePrompt(
         appEnv.comfyUiBaseUrl,
-        workflow,
+        builtWorkflow.workflow,
         job.id,
         appEnv.comfyUiTimeoutMs
       );
@@ -1411,21 +1632,50 @@ async function generateVisualForContext(
         outputFilename: download.filename,
         outputFileSize: download.size,
         debugSvgPath: visualArtifacts.debugSvgPath,
-        workflowTemplate: appEnv.comfyUiDefaultWorkflow
+        workflowTemplate: generationParameters.workflowId,
+        workflowPackId: generationParameters.workflowPackId,
+        qualityPresetId: generationParameters.qualityPresetId,
+        workflowPackReason: workflowPackSuggestion.reason,
+        promptPackId: generationParameters.promptPackId,
+        negativePromptPackId: generationParameters.negativePromptPackId,
+        seedStrategy: generationParameters.seedStrategy,
+        steps: generationParameters.steps,
+        cfg: generationParameters.cfg,
+        sampler: generationParameters.sampler,
+        scheduler: generationParameters.scheduler,
+        denoise: generationParameters.denoise,
+        workflowId: builtWorkflow.metadata.workflowId,
+        workflowOrigin: builtWorkflow.metadata.workflowOrigin,
+        workflowTemplatePath: builtWorkflow.metadata.workflowTemplatePath,
+        appliedParameters: builtWorkflow.metadata.appliedParameters,
+        ignoredParameters: builtWorkflow.metadata.ignoredParameters,
+        provider: input.provider,
+        generatedAt: new Date().toISOString()
       };
     } else {
       visualArtifacts = await writeGeneratedSceneVisuals(
         job.id,
         svg,
         draft.recipe,
-        input.width,
-        input.height,
+        generationParameters.width,
+        generationParameters.height,
         seed
       );
 
       providerMetadata = {
         ...providerMetadata,
-        debugSvgPath: visualArtifacts.debugSvgPath
+        debugSvgPath: visualArtifacts.debugSvgPath,
+        workflowTemplate: generationParameters.workflowId,
+        workflowPackId: generationParameters.workflowPackId,
+        qualityPresetId: generationParameters.qualityPresetId,
+        workflowPackReason: workflowPackSuggestion.reason,
+        promptPackId: generationParameters.promptPackId,
+        negativePromptPackId: generationParameters.negativePromptPackId,
+        seedStrategy: generationParameters.seedStrategy,
+        appliedParameters: generationParameters.appliedParameters,
+        ignoredParameters: generationParameters.ignoredParameters,
+        provider: input.provider,
+        generatedAt: new Date().toISOString()
       };
     }
 

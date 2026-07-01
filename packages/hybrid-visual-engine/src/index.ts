@@ -1,4 +1,6 @@
 export * from "./comfy-workflows.js";
+export * from "./image-quality-presets.js";
+export * from "./workflow-packs.js";
 
 export const visualSourceModes = [
   "asset_only",

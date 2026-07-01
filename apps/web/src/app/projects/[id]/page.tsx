@@ -3,6 +3,8 @@ import { ProjectStudio } from "../../../components/project-studio";
 import {
   getAssetsSnapshot,
   getChannelsSnapshot,
+  getComfyWorkflowPacksSnapshot,
+  getImageQualityPresetsSnapshot,
   getProjectDetailSnapshot
 } from "../../../lib/studio-api";
 
@@ -20,10 +22,18 @@ export default async function ProjectDetailPage({
   params
 }: ProjectDetailPageProps) {
   const { id } = await params;
-  const [projectSnapshot, assetsSnapshot, channelsSnapshot] = await Promise.all([
+  const [
+    projectSnapshot,
+    assetsSnapshot,
+    channelsSnapshot,
+    workflowPacksSnapshot,
+    qualityPresetsSnapshot
+  ] = await Promise.all([
     getProjectDetailSnapshot(id),
     getAssetsSnapshot(),
-    getChannelsSnapshot()
+    getChannelsSnapshot(),
+    getComfyWorkflowPacksSnapshot(),
+    getImageQualityPresetsSnapshot()
   ]);
 
   if (!projectSnapshot.item) {
@@ -83,6 +93,10 @@ export default async function ProjectDetailPage({
         channelsSource={channelsSnapshot.source}
         initialProject={projectSnapshot.item}
         initialSource={projectSnapshot.source}
+        workflowPacks={workflowPacksSnapshot.items}
+        workflowPacksSource={workflowPacksSnapshot.source}
+        qualityPresets={qualityPresetsSnapshot.items}
+        qualityPresetsSource={qualityPresetsSnapshot.source}
       />
     </div>
   );

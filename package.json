@@ -27,9 +27,11 @@
     "smoke:media-collector": "node scripts/smoke-media-collector.mjs",
     "smoke:hybrid-visual": "node scripts/smoke-hybrid-visual.mjs",
     "smoke:hybrid-visual:render-ready": "node scripts/smoke-hybrid-visual-render-ready.mjs",
+    "smoke:workflow-packs": "node scripts/smoke-workflow-packs.mjs",
     "smoke:comfy-provider:contract": "node scripts/smoke-comfy-provider-contract.mjs",
     "smoke:comfy-provider:mock-status": "node scripts/smoke-comfy-provider-mock-status.mjs",
     "smoke:comfy-provider:local": "node scripts/smoke-comfy-provider-local.mjs",
+    "smoke:comfy-workflow-pack:local": "node scripts/smoke-comfy-workflow-pack-local.mjs",
     "smoke:prompt-engine": "node scripts/smoke-prompt-engine.mjs"
   },
   "prisma": {

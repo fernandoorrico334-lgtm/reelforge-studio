@@ -1,5 +1,18 @@
 # Etapa 10I: ComfyUI Workflow Packs + Image Quality Presets
 
+Status: implementado na Etapa 10I.
+
+Entregue:
+
+- 10 workflow packs locais em `packages/hybrid-visual-engine`;
+- presets `draft`, `standard` e `high`;
+- endpoints `/comfy-workflow-packs`, `/image-quality-presets` e sugestao;
+- seletores em `/projects/[id]` e `/prompt-lab`;
+- sugestoes em `/characters` e `/research/[id]`;
+- metadata de workflow/preset em `VisualGenerationJob`;
+- smoke offline `npm run smoke:workflow-packs`;
+- smoke local opcional `npm run smoke:comfy-workflow-pack:local`.
+
 ## Objetivo
 
 Melhorar a qualidade das imagens geradas pelo ComfyUI local usando presets de workflow e prompt por nicho. A etapa deve manter o fluxo local e deterministico do ReelForge, permitindo escolher combinações seguras de prompt pack, negative prompt, workflow, resolução, seed strategy e notas de estilo para cada tipo de canal, cena ou personagem.

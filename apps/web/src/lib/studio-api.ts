@@ -36,6 +36,7 @@ import type {
   CharacterReference,
   CharacterReferencePayload,
   ChannelPayload,
+  ComfyWorkflowPack,
   ComfyWorkflowValidationResult,
   ComfyUiProviderStatus,
   CreateProductionFromScriptPayload,
@@ -47,6 +48,7 @@ import type {
   GenerateMissingVisualsResponse,
   GenerateSceneVisualResponse,
   GenerateVisualPayload,
+  ImageQualityPreset,
   ImportApprovedResponse,
   IntakeCandidateFilters,
   IntakeCandidatePayload,
@@ -101,7 +103,8 @@ import type {
   VisualGenerationJob,
   VisualGenerationProviderDescriptor,
   VisualPromptPack,
-  VisualSourceModeDescriptor
+  VisualSourceModeDescriptor,
+  WorkflowPackSuggestion
 } from "./studio-types";
 
 const defaultApiBaseUrl = "http://127.0.0.1:4000";
@@ -365,6 +368,88 @@ const mockComfyUiProviderStatus: ComfyUiProviderStatus = {
   missingPlaceholders: [],
   state: "disabled"
 };
+
+const mockComfyWorkflowPacks: ComfyWorkflowPack[] = [
+  ["anime_dark", "Anime Dark", "anime lore", "clean_anime"],
+  ["comic_drama", "Comic Drama", "comics", "clean_comic"],
+  ["true_crime_doc", "True Crime Doc", "true crime", "clean_photoreal"],
+  ["mystery_doc", "Mystery Doc", "mystery", "clean_dark_cinematic"],
+  ["history_dark", "History Dark", "history", "clean_history"],
+  ["sports_hype", "Sports Hype", "sports", "clean_sports"],
+  ["game_epic", "Game Epic", "gaming", "clean_dark_cinematic"],
+  ["cinematic_story", "Cinematic Story", "cinematic storytelling", "clean_dark_cinematic"],
+  ["horror_tension", "Horror Tension", "horror", "clean_dark_cinematic"],
+  ["documentary_clean", "Documentary Clean", "documentary", "clean_documentary"]
+].map(([id, name, niche, negativePack]) => ({
+  id,
+  name,
+  description: `${name} workflow pack for local ComfyUI generation.`,
+  niche,
+  recommendedWorkflowId: "txt2img-basic",
+  recommendedPromptPackId: id,
+  recommendedNegativePromptPackId: negativePack,
+  defaultWidth: 1080,
+  defaultHeight: 1920,
+  defaultSeedStrategy: id === "sports_hype" || id === "horror_tension" ? "random" : "reuse",
+  defaultQualityPreset: id === "game_epic" ? "high" : id === "sports_hype" ? "draft" : "standard",
+  styleNotes: `Fallback local notes for ${name}. API local provides the canonical pack.`,
+  cameraNotes: "Vertical cinematic framing with caption-safe composition.",
+  lightingNotes: "Controlled contrast and readable subject separation.",
+  compositionNotes: "Single strong focal point in 9:16.",
+  recommendedUse: `Use for ${niche} scenes when API catalog is unavailable.`,
+  limitations: "Fallback UI catalog only; generation rules live in the API/package.",
+  supportsReferences: true,
+  supportsImageToImage: true,
+  providerCompatibility: ["mock-svg", "mock-png", "comfyui-local"]
+})) as ComfyWorkflowPack[];
+
+const mockImageQualityPresets: ImageQualityPreset[] = [
+  {
+    id: "draft",
+    name: "Draft",
+    description: "Fast prompt validation.",
+    width: 720,
+    height: 1280,
+    steps: 12,
+    cfg: 2.2,
+    sampler: "res_multistep",
+    scheduler: "simple",
+    denoise: 0.8,
+    seedMode: "random",
+    timeoutMs: 180000,
+    recommendedUse: "Prompt and workflow iteration."
+  },
+  {
+    id: "standard",
+    name: "Standard",
+    description: "Render-ready 9:16 baseline.",
+    width: 1080,
+    height: 1920,
+    steps: 20,
+    cfg: 2.8,
+    sampler: "res_multistep",
+    scheduler: "simple",
+    denoise: 0.75,
+    seedMode: "reuse",
+    timeoutMs: 300000,
+    recommendedUse: "Default local ComfyUI generation."
+  },
+  {
+    id: "high",
+    name: "High",
+    description: "Higher patience for hero frames.",
+    width: 1080,
+    height: 1920,
+    steps: 30,
+    cfg: 3.4,
+    sampler: "res_multistep",
+    scheduler: "simple",
+    denoise: 0.68,
+    seedMode: "reuse",
+    timeoutMs: 480000,
+    recommendedUse: "Climax and hero scenes."
+  }
+];
 
 function buildApiUrl(path: string) {
   return `${resolveApiBaseUrl().replace(/\/$/, "")}${path}`;
@@ -792,6 +877,46 @@ export async function getNegativePromptPacksSnapshot(): Promise<{
     logServerFallback('negative-prompt-packs', error);
     return { items: getNegativePromptPacks(), source: 'mock' };
   }
+}
+
+export async function getComfyWorkflowPacksSnapshot(): Promise<{
+  items: ComfyWorkflowPack[];
+  source: DataSource;
+}> {
+  try {
+    const items = await requestJson<ComfyWorkflowPack[]>('/comfy-workflow-packs');
+    return { items, source: 'api' };
+  } catch (error) {
+    logServerFallback('comfy-workflow-packs', error);
+    return { items: cloneValue(mockComfyWorkflowPacks), source: 'mock' };
+  }
+}
+
+export async function getImageQualityPresetsSnapshot(): Promise<{
+  items: ImageQualityPreset[];
+  source: DataSource;
+}> {
+  try {
+    const items = await requestJson<ImageQualityPreset[]>('/image-quality-presets');
+    return { items, source: 'api' };
+  } catch (error) {
+    logServerFallback('image-quality-presets', error);
+    return { items: cloneValue(mockImageQualityPresets), source: 'mock' };
+  }
+}
+
+export async function suggestComfyWorkflowPackRequest(payload: {
+  channelId?: string | null;
+  projectId?: string | null;
+  sceneId?: string | null;
+  templateId?: string | null;
+  niche?: string | null;
+  researchAssetRequirementId?: string | null;
+}) {
+  return requestJson<WorkflowPackSuggestion>('/comfy-workflow-packs/suggest', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
 }
 
 export async function getVisualSourceModesSnapshot(): Promise<{

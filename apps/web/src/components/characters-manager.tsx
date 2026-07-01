@@ -112,6 +112,35 @@ function parseTags(value: string) {
     .filter(Boolean);
 }
 
+function suggestCharacterWorkflowPack(profile: CharacterProfile) {
+  const text = [
+    profile.category,
+    profile.defaultVisualStyle,
+    profile.styleNotes,
+    profile.tags.join(" ")
+  ]
+    .join(" ")
+    .toLowerCase();
+  const id = text.includes("anime")
+    ? "anime_dark"
+    : text.includes("comic") || text.includes("hq")
+      ? "comic_drama"
+      : text.includes("game")
+        ? "game_epic"
+        : text.includes("horror") || text.includes("dark")
+          ? "horror_tension"
+          : "cinematic_story";
+
+  return {
+    id,
+    name: id.replaceAll("_", " "),
+    styleNotes:
+      "Sugestao local para UI. A API aplica o catalogo oficial de workflow packs.",
+    recommendedWorkflowId: "txt2img-basic",
+    recommendedPromptPackId: id
+  };
+}
+
 function toCharacterPayload(form: CharacterFormState): CharacterProfilePayload {
   return {
     name: form.name.trim(),
@@ -210,6 +239,9 @@ export function CharactersManager({
   );
   const selectedCharacter =
     orderedCharacters.find((entry) => entry.id === selectedCharacterId) ?? null;
+  const selectedCharacterWorkflowPack = selectedCharacter
+    ? suggestCharacterWorkflowPack(selectedCharacter)
+    : null;
   const referenceAssets = initialAssets.filter(
     (asset) => asset.category === "CHARACTER" || asset.category === "REFERENCE"
   );
@@ -864,6 +896,24 @@ export function CharactersManager({
                 {selectedCharacter.basePrompt ?? "Base prompt ainda nao montado."}
               </p>
             </div>
+
+            {selectedCharacterWorkflowPack ? (
+              <div className="mt-4 rounded-[1.4rem] border border-[#92a7ff]/20 bg-[#92a7ff]/8 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Suggested workflow pack
+                </p>
+                <p className="mt-2 text-sm font-medium text-white">
+                  {selectedCharacterWorkflowPack.name} - {selectedCharacterWorkflowPack.id}
+                </p>
+                <p className="mt-3 text-sm leading-7 text-mist/70">
+                  {selectedCharacterWorkflowPack.styleNotes}
+                </p>
+                <p className="mt-3 text-xs text-mist/55">
+                  workflow {selectedCharacterWorkflowPack.recommendedWorkflowId} /
+                  prompt {selectedCharacterWorkflowPack.recommendedPromptPackId}
+                </p>
+              </div>
+            ) : null}
 
             <form className="mt-6 space-y-4" onSubmit={handleReferenceSubmit}>
               <div className="grid gap-4 md:grid-cols-2">

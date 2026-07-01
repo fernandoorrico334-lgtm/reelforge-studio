@@ -474,6 +474,53 @@ export interface ComfyWorkflowValidationResult {
   errorMessage: string | null;
 }
 
+export type SeedStrategy = "random" | "fixed" | "reuse" | "increment";
+
+export interface ComfyWorkflowPack {
+  id: string;
+  name: string;
+  description: string;
+  niche: string;
+  recommendedWorkflowId: string;
+  recommendedPromptPackId: string;
+  recommendedNegativePromptPackId: string;
+  defaultWidth: number;
+  defaultHeight: number;
+  defaultSeedStrategy: SeedStrategy;
+  defaultQualityPreset: "draft" | "standard" | "high";
+  styleNotes: string;
+  cameraNotes: string;
+  lightingNotes: string;
+  compositionNotes: string;
+  recommendedUse: string;
+  limitations: string;
+  supportsReferences: boolean;
+  supportsImageToImage: boolean;
+  providerCompatibility: string[];
+}
+
+export interface ImageQualityPreset {
+  id: "draft" | "standard" | "high";
+  name: string;
+  description: string;
+  width: number;
+  height: number;
+  steps: number;
+  cfg: number;
+  sampler?: string;
+  scheduler?: string;
+  denoise?: number;
+  seedMode: SeedStrategy;
+  timeoutMs: number;
+  recommendedUse: string;
+}
+
+export interface WorkflowPackSuggestion {
+  pack: ComfyWorkflowPack;
+  reason: string;
+  context?: string;
+}
+
 export const promptVariantTypes = [
   "close-up",
   "wide-shot",
@@ -622,6 +669,15 @@ export interface GenerateVisualPayload {
   provider: VisualGenerationProvider;
   visualSourceMode: VisualSourceMode | null;
   characterProfileId: string | null;
+  workflowPackId: string | null;
+  qualityPresetId: string | null;
+  workflowId: string | null;
+  seedMode: SeedStrategy | null;
+  steps: number | null;
+  cfg: number | null;
+  sampler: string | null;
+  scheduler: string | null;
+  denoise: number | null;
   width: number;
   height: number;
   seed: number | null;

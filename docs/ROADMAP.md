@@ -232,6 +232,10 @@ Entregue:
 
 ## Proxima etapa operacional sugerida
 
+- Etapa 10I concluida: Workflow Packs + Image Quality Presets para ComfyUI
+  local, com endpoints de catalogo/sugestao, UI em `/projects/[id]`,
+  `/prompt-lab`, `/characters` e `/research/[id]`, metadata em
+  `VisualGenerationJob` e smoke offline `npm run smoke:workflow-packs`.
 - concorrencia controlada para visual generation;
 - prioridades, backoff e limites por worker;
 - retries automaticos com politica configuravel;

@@ -573,6 +573,21 @@ Proximos passos:
 - enriquecer motion, overlays, soundtrack e composicao por faixa;
 - suportar trims, loops e cortes mais refinados por asset.
 
+## packages/hybrid-visual-engine - Etapa 10I
+
+Novos contratos locais:
+
+- `workflow-packs.ts`: packs `anime_dark`, `comic_drama`,
+  `true_crime_doc`, `mystery_doc`, `history_dark`, `sports_hype`,
+  `game_epic`, `cinematic_story`, `horror_tension` e
+  `documentary_clean`.
+- `image-quality-presets.ts`: presets `draft`, `standard` e `high`.
+- `comfy-workflows.ts`: builder com metadata de `workflowOrigin`,
+  `appliedParameters` e `ignoredParameters`.
+
+Esses contratos sao constantes versionadas, sem banco, e alimentam API, Web e
+smokes.
+
 Na etapa atual, `packages/video-engine` tambem passou a:
 
 - carregar o `AudioMixPlan` no render blueprint;

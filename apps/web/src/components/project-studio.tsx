@@ -19,6 +19,7 @@ import { StoryEnginePanel } from "./story-engine-panel";
 import {
   createSceneRequest,
   deleteSceneRequest,
+  generateSceneVisualRequest,
   getProjectCaptionAnalysisSnapshot,
   getProjectRenderBlueprintSnapshot,
   reorderScenesRequest,
@@ -33,8 +34,10 @@ import {
 import type {
   CaptionPosition,
   CaptionStyleId,
+  ComfyWorkflowPack,
   DataSource,
   EmotionTag,
+  ImageQualityPreset,
   ProjectCaptionAnalysisResponse,
   ProjectPayload,
   ProjectScene,
@@ -43,7 +46,8 @@ import type {
   ScenePayload,
   StudioAsset,
   StudioChannel,
-  StudioProject
+  StudioProject,
+  VisualGenerationJob
 } from "../lib/studio-types";
 import { captionPositions, emotionTags, projectStatuses } from "../lib/studio-types";
 
@@ -54,6 +58,10 @@ interface ProjectStudioProps {
   channelsSource: DataSource;
   initialProject: StudioProject;
   initialSource: DataSource;
+  workflowPacks: ComfyWorkflowPack[];
+  workflowPacksSource: DataSource;
+  qualityPresets: ImageQualityPreset[];
+  qualityPresetsSource: DataSource;
 }
 
 interface ProjectFormState {
@@ -435,7 +443,11 @@ export function ProjectStudio({
   channels,
   channelsSource,
   initialProject,
-  initialSource
+  initialSource,
+  workflowPacks,
+  workflowPacksSource,
+  qualityPresets,
+  qualityPresetsSource
 }: ProjectStudioProps) {
   const [project, setProject] = useState<StudioProject>({
     ...initialProject,
@@ -461,8 +473,35 @@ export function ProjectStudio({
   const [blueprint, setBlueprint] = useState<RenderBlueprintResponse | null>(null);
   const [blueprintSource, setBlueprintSource] = useState<DataSource | null>(null);
   const [blueprintLoading, setBlueprintLoading] = useState(false);
+  const [visualSceneId, setVisualSceneId] = useState(
+    initialProject.scenes[0]?.id ?? ""
+  );
+  const [visualWorkflowPackId, setVisualWorkflowPackId] = useState(
+    workflowPacks[0]?.id ?? "cinematic_story"
+  );
+  const [visualQualityPresetId, setVisualQualityPresetId] = useState<
+    "draft" | "standard" | "high" | string
+  >("standard");
+  const [visualWorkflowId, setVisualWorkflowId] = useState("txt2img-basic");
+  const [visualSeedMode, setVisualSeedMode] = useState("reuse");
+  const [visualSeed, setVisualSeed] = useState("");
+  const [lastVisualJob, setLastVisualJob] = useState<VisualGenerationJob | null>(
+    null
+  );
 
   const orderedScenes = sortScenes(project.scenes);
+  const selectedVisualScene =
+    orderedScenes.find((scene) => scene.id === visualSceneId) ?? orderedScenes[0] ?? null;
+  const selectedWorkflowPack =
+    workflowPacks.find((pack) => pack.id === visualWorkflowPackId) ??
+    workflowPacks.find((pack) => pack.id === "cinematic_story") ??
+    workflowPacks[0] ??
+    null;
+  const selectedQualityPreset =
+    qualityPresets.find((preset) => preset.id === visualQualityPresetId) ??
+    qualityPresets.find((preset) => preset.id === "standard") ??
+    qualityPresets[0] ??
+    null;
   const storyAnalysis = buildProjectStoryAnalysis({
     ...project,
     scenes: orderedScenes
@@ -647,6 +686,57 @@ export function ProjectStudio({
     setBlueprint(snapshot.item);
     setBlueprintSource(snapshot.source);
     setBlueprintLoading(false);
+  }
+
+  async function handleGenerateVisual(provider: "mock-svg" | "comfyui-local") {
+    if (!selectedVisualScene) {
+      setStatusMessage("Selecione uma cena antes de gerar visual.");
+      return;
+    }
+
+    try {
+      const result = await generateSceneVisualRequest(selectedVisualScene.id, {
+        provider,
+        visualSourceMode: selectedVisualScene.visualSourceMode ?? "generated_only",
+        characterProfileId: selectedVisualScene.characterProfileId ?? null,
+        workflowPackId: selectedWorkflowPack?.id ?? null,
+        qualityPresetId: selectedQualityPreset?.id ?? "standard",
+        workflowId: visualWorkflowId || "txt2img-basic",
+        seedMode: visualSeedMode as "random" | "fixed" | "reuse" | "increment",
+        steps: selectedQualityPreset?.steps ?? null,
+        cfg: selectedQualityPreset?.cfg ?? null,
+        sampler: selectedQualityPreset?.sampler ?? null,
+        scheduler: selectedQualityPreset?.scheduler ?? null,
+        denoise: selectedQualityPreset?.denoise ?? null,
+        width: selectedQualityPreset?.width ?? selectedWorkflowPack?.defaultWidth ?? 1080,
+        height: selectedQualityPreset?.height ?? selectedWorkflowPack?.defaultHeight ?? 1920,
+        seed: visualSeed.trim() ? Number(visualSeed) : null,
+        autoAttach: true
+      });
+
+      setLastVisualJob(result.job);
+      setProject((current) => ({
+        ...current,
+        scenes: replaceScene(current.scenes, {
+          ...selectedVisualScene,
+          generatedAssetId: result.job.generatedAssetId,
+          generatedAsset: result.asset,
+          visualPrompt: result.job.prompt,
+          negativePrompt: result.job.negativePrompt,
+          generationStatus: result.job.status,
+          generationProvider: provider,
+          generationSeed: result.job.seed,
+          updatedAt: new Date().toISOString()
+        })
+      }));
+      setSource("api");
+      setBlueprint(null);
+      setStatusMessage(
+        `Hybrid Visual ${provider} concluiu. Pack ${selectedWorkflowPack?.id ?? "auto"} / quality ${selectedQualityPreset?.id ?? "standard"}.`
+      );
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
   }
 
   function startSceneEditing(scene: ProjectScene) {
@@ -1591,6 +1681,187 @@ export function ProjectStudio({
               {editingSceneId ? "Salvar cena" : "Adicionar cena"}
             </button>
           </form>
+        </article>
+
+        <article className="rounded-[1.9rem] border border-[#92a7ff]/20 bg-[#92a7ff]/8 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                Hybrid Visual
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">
+                Workflow Packs + Quality Presets
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                Escolha pack, qualidade e workflow para gerar visual render-ready
+                com mock ou ComfyUI local.
+              </p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-mist/65">
+              packs {workflowPacksSource} / quality {qualityPresetsSource}
+            </span>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Cena</span>
+              <select
+                value={selectedVisualScene?.id ?? ""}
+                onChange={(event) => setVisualSceneId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {orderedScenes.map((scene) => (
+                  <option key={scene.id} value={scene.id}>
+                    {scene.order}. {scene.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Workflow pack</span>
+              <select
+                value={visualWorkflowPackId}
+                onChange={(event) => {
+                  const nextPack = workflowPacks.find(
+                    (pack) => pack.id === event.target.value
+                  );
+                  setVisualWorkflowPackId(event.target.value);
+                  if (nextPack) {
+                    setVisualWorkflowId(nextPack.recommendedWorkflowId);
+                    setVisualQualityPresetId(nextPack.defaultQualityPreset);
+                    setVisualSeedMode(nextPack.defaultSeedStrategy);
+                  }
+                }}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {workflowPacks.map((pack) => (
+                  <option key={pack.id} value={pack.id}>
+                    {pack.name} - {pack.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-4">
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Quality</span>
+              <select
+                value={visualQualityPresetId}
+                onChange={(event) => setVisualQualityPresetId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {qualityPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Workflow</span>
+              <input
+                value={visualWorkflowId}
+                onChange={(event) => setVisualWorkflowId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Seed mode</span>
+              <select
+                value={visualSeedMode}
+                onChange={(event) => setVisualSeedMode(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {["random", "fixed", "reuse", "increment"].map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Seed opcional</span>
+              <input
+                value={visualSeed}
+                onChange={(event) => setVisualSeed(event.target.value)}
+                placeholder="auto"
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Pack preview
+              </p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {selectedWorkflowPack?.name ?? "Pack indisponivel"}
+              </p>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                {selectedWorkflowPack?.styleNotes ?? "Sem notas."}
+              </p>
+              <p className="mt-3 text-xs text-mist/55">
+                prompt {selectedWorkflowPack?.recommendedPromptPackId ?? "auto"} /
+                negative {selectedWorkflowPack?.recommendedNegativePromptPackId ?? "auto"}
+              </p>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Quality preview
+              </p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {selectedQualityPreset?.name ?? "Standard"} -{" "}
+                {selectedQualityPreset?.width ?? 1080}x{selectedQualityPreset?.height ?? 1920}
+              </p>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                steps {selectedQualityPreset?.steps ?? 20}, cfg{" "}
+                {selectedQualityPreset?.cfg ?? 2.8}, sampler{" "}
+                {selectedQualityPreset?.sampler ?? "auto"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                void handleGenerateVisual("mock-svg");
+              }}
+              disabled={!selectedVisualScene}
+              className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-4 py-2 text-xs text-[#d8f8ff] disabled:opacity-45"
+            >
+              Gerar mock com pack
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleGenerateVisual("comfyui-local");
+              }}
+              disabled={!selectedVisualScene}
+              className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-4 py-2 text-xs text-[#e2e8ff] disabled:opacity-45"
+            >
+              Gerar com ComfyUI
+            </button>
+          </div>
+
+          {lastVisualJob ? (
+            <div className="mt-5 rounded-[1.2rem] border border-emerald-400/20 bg-emerald-400/10 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100/70">
+                Ultimo job
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {lastVisualJob.id} - {lastVisualJob.status} - generatedAssetId{" "}
+                {lastVisualJob.generatedAssetId ?? "pendente"}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/65">
+                workflowPack {String(lastVisualJob.metadata?.workflowPackId ?? "n/a")} /
+                quality {String(lastVisualJob.metadata?.qualityPresetId ?? "n/a")} /
+                workflowOrigin {String(lastVisualJob.metadata?.workflowOrigin ?? "n/a")}
+              </p>
+            </div>
+          ) : null}
         </article>
 
         <RenderBlueprintPanel

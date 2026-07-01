@@ -75,6 +75,15 @@ export interface GenerateVisualRequestInput {
   provider: VisualGenerationProvider;
   visualSourceMode: VisualSourceMode | null;
   characterProfileId: string | null;
+  workflowPackId: string | null;
+  qualityPresetId: string | null;
+  workflowId: string | null;
+  seedMode: string | null;
+  steps: number | null;
+  cfg: number | null;
+  sampler: string | null;
+  scheduler: string | null;
+  denoise: number | null;
   width: number;
   height: number;
   seed: number | null;
@@ -226,6 +235,57 @@ function normalizeSeed(value: unknown, fieldName = "seed") {
   return parsed;
 }
 
+function normalizeOptionalIdentifier(value: unknown, fieldName: string) {
+  const parsed = normalizeOptionalString(value, fieldName);
+
+  if (parsed === undefined || parsed === null) {
+    return null;
+  }
+
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(parsed)) {
+    throw new ValidationError(
+      `${fieldName} must use only letters, numbers, '.', '_' or '-'.`
+    );
+  }
+
+  return parsed;
+}
+
+function normalizeOptionalSeedMode(value: unknown, fieldName = "seedMode") {
+  const parsed = normalizeOptionalIdentifier(value, fieldName);
+
+  if (!parsed) {
+    return null;
+  }
+
+  const modes = ["random", "fixed", "reuse", "increment"];
+
+  if (!modes.includes(parsed)) {
+    throw new ValidationError(`${fieldName} must be one of: ${modes.join(", ")}.`);
+  }
+
+  return parsed;
+}
+
+function normalizeOptionalGenerationNumber(
+  value: unknown,
+  fieldName: string,
+  min: number,
+  max: number
+) {
+  const parsed = normalizeOptionalNumber(value, fieldName);
+
+  if (parsed === undefined || parsed === null) {
+    return null;
+  }
+
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    throw new ValidationError(`${fieldName} must be between ${min} and ${max}.`);
+  }
+
+  return parsed;
+}
+
 function normalizeMaxScenes(value: unknown, fieldName = "maxScenes") {
   const parsed = normalizeOptionalNumber(value, fieldName);
 
@@ -251,6 +311,15 @@ export function validateGenerateVisualRequestInput(payload: unknown): GenerateVi
       normalizeOptionalVisualSourceModeValue(record.visualSourceMode) ?? null,
     characterProfileId:
       normalizeOptionalString(record.characterProfileId, "characterProfileId") ?? null,
+    workflowPackId: normalizeOptionalIdentifier(record.workflowPackId, "workflowPackId"),
+    qualityPresetId: normalizeOptionalIdentifier(record.qualityPresetId, "qualityPresetId"),
+    workflowId: normalizeOptionalIdentifier(record.workflowId, "workflowId"),
+    seedMode: normalizeOptionalSeedMode(record.seedMode, "seedMode"),
+    steps: normalizeOptionalGenerationNumber(record.steps, "steps", 1, 80),
+    cfg: normalizeOptionalGenerationNumber(record.cfg, "cfg", 0, 30),
+    sampler: normalizeOptionalString(record.sampler, "sampler") ?? null,
+    scheduler: normalizeOptionalString(record.scheduler, "scheduler") ?? null,
+    denoise: normalizeOptionalGenerationNumber(record.denoise, "denoise", 0, 1),
     width: normalizeSize(record.width, "width", 1080),
     height: normalizeSize(record.height, "height", 1920),
     seed: normalizeSeed(record.seed),

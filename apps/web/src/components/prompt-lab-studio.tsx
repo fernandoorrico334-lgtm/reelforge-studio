@@ -15,7 +15,9 @@ import {
 } from "../lib/studio-api";
 import type {
   CharacterProfile,
+  ComfyWorkflowPack,
   DataSource,
+  ImageQualityPreset,
   NegativePromptPack,
   ProjectScene,
   PromptVariantType,
@@ -47,6 +49,10 @@ interface PromptLabStudioProps {
   promptPacksSource: DataSource;
   negativePromptPacks: NegativePromptPack[];
   negativePromptPacksSource: DataSource;
+  workflowPacks: ComfyWorkflowPack[];
+  workflowPacksSource: DataSource;
+  qualityPresets: ImageQualityPreset[];
+  qualityPresetsSource: DataSource;
   researchRequirements: PromptLabRequirementOption[];
   researchRequirementsSource: DataSource;
   visualGenerationProviders: VisualGenerationProviderDescriptor[];
@@ -80,6 +86,10 @@ export function PromptLabStudio({
   promptPacksSource,
   negativePromptPacks,
   negativePromptPacksSource,
+  workflowPacks,
+  workflowPacksSource,
+  qualityPresets,
+  qualityPresetsSource,
   researchRequirements,
   researchRequirementsSource,
   visualGenerationProviders,
@@ -103,6 +113,16 @@ export function PromptLabStudio({
     useState<NegativePromptPackId | "">("");
   const [selectedVariantType, setSelectedVariantType] =
     useState<PromptVariantType | "">("");
+  const [selectedWorkflowPackId, setSelectedWorkflowPackId] = useState(
+    workflowPacks[0]?.id ?? "cinematic_story"
+  );
+  const [selectedQualityPresetId, setSelectedQualityPresetId] = useState<string>(
+    qualityPresets.find((preset) => preset.id === "standard")?.id ??
+      qualityPresets[0]?.id ??
+      "standard"
+  );
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState("txt2img-basic");
+  const [selectedSeedMode, setSelectedSeedMode] = useState("reuse");
   const [statusMessage, setStatusMessage] = useState(
     "Monte um contexto e gere um prompt premium reutilizavel."
   );
@@ -142,6 +162,16 @@ export function PromptLabStudio({
   const effectiveSceneAsset = selectedScene
     ? resolveSceneEffectiveAsset(selectedScene)
     : null;
+  const selectedWorkflowPack =
+    workflowPacks.find((pack) => pack.id === selectedWorkflowPackId) ??
+    workflowPacks.find((pack) => pack.id === "cinematic_story") ??
+    workflowPacks[0] ??
+    null;
+  const selectedQualityPreset =
+    qualityPresets.find((preset) => preset.id === selectedQualityPresetId) ??
+    qualityPresets.find((preset) => preset.id === "standard") ??
+    qualityPresets[0] ??
+    null;
   const preview = buildVisualPrompt({
     scene: selectedScene
       ? {
@@ -215,10 +245,14 @@ export function PromptLabStudio({
         }
       : null,
     templateId: effectiveTemplateId || null,
-    promptPackId: selectedPromptPackId ? selectedPromptPackId : null,
+    promptPackId: selectedPromptPackId
+      ? selectedPromptPackId
+      : (selectedWorkflowPack?.recommendedPromptPackId as VisualPromptPackId | undefined) ??
+        null,
     negativePackId: selectedNegativePromptPackId
       ? selectedNegativePromptPackId
-      : null,
+      : (selectedWorkflowPack?.recommendedNegativePromptPackId as NegativePromptPackId | undefined) ??
+        null,
     variantType: selectedVariantType || null,
     supportTags: uniqueStrings([
       ...(effectiveSceneAsset?.tags ?? []),
@@ -319,8 +353,17 @@ export function PromptLabStudio({
         visualSourceMode:
           selectedScene.visualSourceMode ?? "generated_only",
         characterProfileId: effectiveCharacter?.id ?? null,
-        width: 1080,
-        height: 1920,
+        workflowPackId: selectedWorkflowPack?.id ?? null,
+        qualityPresetId: selectedQualityPreset?.id ?? "standard",
+        workflowId: selectedWorkflowId || selectedWorkflowPack?.recommendedWorkflowId || "txt2img-basic",
+        seedMode: selectedSeedMode as "random" | "fixed" | "reuse" | "increment",
+        steps: selectedQualityPreset?.steps ?? null,
+        cfg: selectedQualityPreset?.cfg ?? null,
+        sampler: selectedQualityPreset?.sampler ?? null,
+        scheduler: selectedQualityPreset?.scheduler ?? null,
+        denoise: selectedQualityPreset?.denoise ?? null,
+        width: selectedQualityPreset?.width ?? selectedWorkflowPack?.defaultWidth ?? 1080,
+        height: selectedQualityPreset?.height ?? selectedWorkflowPack?.defaultHeight ?? 1920,
         seed: null,
         autoAttach: true
       });
@@ -350,8 +393,17 @@ export function PromptLabStudio({
         visualSourceMode:
           selectedRequirement.visualSourceMode ?? "generated_only",
         characterProfileId: effectiveCharacter?.id ?? null,
-        width: 1080,
-        height: 1920,
+        workflowPackId: selectedWorkflowPack?.id ?? null,
+        qualityPresetId: selectedQualityPreset?.id ?? "standard",
+        workflowId: selectedWorkflowId || selectedWorkflowPack?.recommendedWorkflowId || "txt2img-basic",
+        seedMode: selectedSeedMode as "random" | "fixed" | "reuse" | "increment",
+        steps: selectedQualityPreset?.steps ?? null,
+        cfg: selectedQualityPreset?.cfg ?? null,
+        sampler: selectedQualityPreset?.sampler ?? null,
+        scheduler: selectedQualityPreset?.scheduler ?? null,
+        denoise: selectedQualityPreset?.denoise ?? null,
+        width: selectedQualityPreset?.width ?? selectedWorkflowPack?.defaultWidth ?? 1080,
+        height: selectedQualityPreset?.height ?? selectedWorkflowPack?.defaultHeight ?? 1920,
         seed: null,
         autoAttach: true
       });
@@ -595,6 +647,71 @@ export function PromptLabStudio({
             </label>
           </div>
 
+          <div className="grid gap-4 md:grid-cols-4">
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">
+                Workflow pack
+              </span>
+              <select
+                value={selectedWorkflowPackId}
+                onChange={(event) => {
+                  const pack = workflowPacks.find(
+                    (entry) => entry.id === event.target.value
+                  );
+                  setSelectedWorkflowPackId(event.target.value);
+                  if (pack) {
+                    setSelectedWorkflowId(pack.recommendedWorkflowId);
+                    setSelectedQualityPresetId(pack.defaultQualityPreset);
+                    setSelectedSeedMode(pack.defaultSeedStrategy);
+                  }
+                }}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {workflowPacks.map((pack) => (
+                  <option key={pack.id} value={pack.id}>
+                    {pack.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Quality</span>
+              <select
+                value={selectedQualityPresetId}
+                onChange={(event) => setSelectedQualityPresetId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {qualityPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Workflow</span>
+              <input
+                value={selectedWorkflowId}
+                onChange={(event) => setSelectedWorkflowId(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Seed mode</span>
+              <select
+                value={selectedSeedMode}
+                onChange={(event) => setSelectedSeedMode(event.target.value)}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {["random", "fixed", "reuse", "increment"].map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
@@ -618,6 +735,10 @@ export function PromptLabStudio({
                 workflow {preview.promptPack.recommendedWorkflow} | provider{" "}
                 {preview.promptPack.recommendedProvider}
               </p>
+              <p className="mt-2 text-xs text-mist/60">
+                workflow pack {selectedWorkflowPack?.id ?? "auto"} / quality{" "}
+                {selectedQualityPreset?.id ?? "standard"}
+              </p>
             </div>
             <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
@@ -629,6 +750,10 @@ export function PromptLabStudio({
               <p className="mt-2 text-xs text-mist/60">
                 prompt packs {formatSourceLabel(promptPacksSource)} | negative packs{" "}
                 {formatSourceLabel(negativePromptPacksSource)}
+              </p>
+              <p className="mt-2 text-xs text-mist/60">
+                workflow packs {formatSourceLabel(workflowPacksSource)} | quality{" "}
+                {formatSourceLabel(qualityPresetsSource)}
               </p>
             </div>
           </div>

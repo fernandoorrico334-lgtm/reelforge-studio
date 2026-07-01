@@ -22,6 +22,15 @@ export const requiredComfyWorkflowPlaceholders = [
   "{{SEED}}"
 ] as const;
 
+export const supportedComfyWorkflowPlaceholders = [
+  ...requiredComfyWorkflowPlaceholders,
+  "{{STEPS}}",
+  "{{CFG}}",
+  "{{SAMPLER}}",
+  "{{SCHEDULER}}",
+  "{{DENOISE}}"
+] as const;
+
 export interface BuildComfyWorkflowInput {
   prompt: string;
   negativePrompt?: string | null;
@@ -31,6 +40,10 @@ export interface BuildComfyWorkflowInput {
   referenceImage?: string | null;
   stylePreset?: string | null;
   denoise?: number | null;
+  steps?: number | null;
+  cfg?: number | null;
+  sampler?: string | null;
+  scheduler?: string | null;
 }
 
 export interface ComfyWorkflowTemplateOptions {
@@ -54,6 +67,18 @@ export interface ComfyWorkflowTemplateValidationResult {
   origin: ComfyWorkflowTemplateOrigin | null;
   templateId: string;
   errorMessage: string | null;
+}
+
+export interface BuiltComfyWorkflow {
+  workflow: Record<string, JsonValue>;
+  metadata: {
+    workflowId: string;
+    workflowOrigin: ComfyWorkflowTemplateOrigin;
+    workflowTemplatePath: string;
+    placeholdersFound: string[];
+    appliedParameters: Record<string, string | number | boolean | null>;
+    ignoredParameters: Record<string, string | number | boolean | null>;
+  };
 }
 
 type JsonValue =
@@ -302,8 +327,37 @@ function buildTemplateReplacements(input: BuildComfyWorkflowInput) {
     "{{DENOISE}}":
       typeof input.denoise === "number" && Number.isFinite(input.denoise)
         ? input.denoise
-        : 0.55
+        : 0.55,
+    "{{STEPS}}":
+      typeof input.steps === "number" && Number.isFinite(input.steps)
+        ? Math.trunc(input.steps)
+        : 20,
+    "{{CFG}}":
+      typeof input.cfg === "number" && Number.isFinite(input.cfg)
+        ? input.cfg
+        : 2.8,
+    "{{SAMPLER}}": input.sampler ?? "res_multistep",
+    "{{SCHEDULER}}": input.scheduler ?? "simple"
   } satisfies Record<string, string | number | boolean | null>;
+}
+
+function splitAppliedAndIgnoredParameters(
+  replacements: Record<string, string | number | boolean | null>,
+  placeholdersFound: string[]
+) {
+  const supported = new Set(placeholdersFound);
+  const appliedParameters: Record<string, string | number | boolean | null> = {};
+  const ignoredParameters: Record<string, string | number | boolean | null> = {};
+
+  Object.entries(replacements).forEach(([key, value]) => {
+    if (supported.has(key)) {
+      appliedParameters[key] = value;
+    } else {
+      ignoredParameters[key] = value;
+    }
+  });
+
+  return { appliedParameters, ignoredParameters };
 }
 
 export async function resolveComfyWorkflowTemplate(
@@ -434,5 +488,32 @@ export async function buildComfyWorkflowFromTemplate(
     template,
     buildTemplateReplacements(input)
   ) as Record<string, JsonValue>;
+}
+
+export async function buildComfyWorkflowWithMetadata(
+  templateId: string,
+  input: BuildComfyWorkflowInput,
+  options: ComfyWorkflowTemplateOptions = {}
+) {
+  const resolvedTemplate = await resolveComfyWorkflowTemplate(templateId, options);
+  const replacements = buildTemplateReplacements(input);
+  const placeholdersFound = findPlaceholders(resolvedTemplate.rawTemplate);
+  const { appliedParameters, ignoredParameters } =
+    splitAppliedAndIgnoredParameters(replacements, placeholdersFound);
+
+  return {
+    workflow: replaceTemplateTokens(
+      resolvedTemplate.template,
+      replacements
+    ) as Record<string, JsonValue>,
+    metadata: {
+      workflowId: resolvedTemplate.templateId,
+      workflowOrigin: resolvedTemplate.origin,
+      workflowTemplatePath: resolvedTemplate.templatePath,
+      placeholdersFound,
+      appliedParameters,
+      ignoredParameters
+    }
+  } satisfies BuiltComfyWorkflow;
 }
 

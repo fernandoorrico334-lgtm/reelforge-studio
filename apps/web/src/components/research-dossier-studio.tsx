@@ -111,6 +111,41 @@ function formatConfidenceLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function suggestRequirementWorkflowPack(requirement: {
+  description: string;
+  emotion: string | null;
+  mediaType: string;
+  sceneRole: string | null;
+  suggestedTags: string[];
+}) {
+  const text = [
+    requirement.description,
+    requirement.emotion,
+    requirement.mediaType,
+    requirement.sceneRole,
+    requirement.suggestedTags.join(" ")
+  ]
+    .join(" ")
+    .toLowerCase();
+  const id = text.includes("crime")
+    ? "true_crime_doc"
+    : text.includes("history") || text.includes("arquivo")
+      ? "history_dark"
+      : text.includes("horror") || text.includes("dark")
+        ? "horror_tension"
+        : text.includes("mystery") || text.includes("secret")
+          ? "mystery_doc"
+          : "documentary_clean";
+
+  return {
+    pack: {
+      id,
+      name: id.replaceAll("_", " ")
+    },
+    reason: "Sugestao local para UI; a API aplica o catalogo oficial."
+  };
+}
+
 function extractErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
@@ -1416,27 +1451,43 @@ export function ResearchDossierStudio({
                   Os requirements surgem junto com o outline.
                 </p>
               ) : (
-                detail.assetRequirements.map((requirement) => (
-                  <div
-                    key={requirement.id}
-                    className="rounded-[1.15rem] border border-white/10 bg-black/20 p-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-white">
-                        {requirement.description}
+                detail.assetRequirements.map((requirement) => {
+                  const workflowPackSuggestion =
+                    suggestRequirementWorkflowPack(requirement);
+
+                  return (
+                    <div
+                      key={requirement.id}
+                      className="rounded-[1.15rem] border border-white/10 bg-black/20 p-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-white">
+                          {requirement.description}
+                        </p>
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-mist/60">
+                          {requirement.mediaType}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-mist/68">
+                        Tags sugeridas: {requirement.suggestedTags.join(", ") || "n/d"}
                       </p>
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-mist/60">
-                        {requirement.mediaType}
-                      </span>
+                      <p className="mt-2 text-xs text-mist/55">
+                        Prioridade {requirement.priority ?? "n/d"} {requirement.sceneRole ? `- ${requirement.sceneRole}` : ""}
+                      </p>
+                      <div className="mt-3 rounded-[1rem] border border-[#92a7ff]/20 bg-[#92a7ff]/8 p-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                          Workflow pack sugerido
+                        </p>
+                        <p className="mt-2 text-sm text-white">
+                          {workflowPackSuggestion.pack.name} - {workflowPackSuggestion.pack.id}
+                        </p>
+                        <p className="mt-2 text-xs text-mist/60">
+                          {workflowPackSuggestion.reason}
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-mist/68">
-                      Tags sugeridas: {requirement.suggestedTags.join(", ") || "n/d"}
-                    </p>
-                    <p className="mt-2 text-xs text-mist/55">
-                      Prioridade {requirement.priority ?? "n/d"} {requirement.sceneRole ? `- ${requirement.sceneRole}` : ""}
-                    </p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </article>

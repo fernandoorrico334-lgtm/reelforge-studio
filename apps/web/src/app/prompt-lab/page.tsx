@@ -2,6 +2,8 @@ import { PromptLabStudio } from "../../components/prompt-lab-studio";
 import {
   getChannelsSnapshot,
   getCharactersSnapshot,
+  getComfyWorkflowPacksSnapshot,
+  getImageQualityPresetsSnapshot,
   getNegativePromptPacksSnapshot,
   getProjectsSnapshot,
   getPromptPacksSnapshot,
@@ -21,6 +23,8 @@ export default async function PromptLabPage() {
     charactersSnapshot,
     promptPacksSnapshot,
     negativePromptPacksSnapshot,
+    workflowPacksSnapshot,
+    qualityPresetsSnapshot,
     researchSnapshot,
     visualProvidersSnapshot
   ] = await Promise.all([
@@ -29,6 +33,8 @@ export default async function PromptLabPage() {
     getCharactersSnapshot(),
     getPromptPacksSnapshot(),
     getNegativePromptPacksSnapshot(),
+    getComfyWorkflowPacksSnapshot(),
+    getImageQualityPresetsSnapshot(),
     getResearchDossiersSnapshot(),
     getVisualGenerationProvidersSnapshot()
   ]);
@@ -115,6 +121,10 @@ export default async function PromptLabPage() {
         promptPacksSource={promptPacksSnapshot.source}
         negativePromptPacks={negativePromptPacksSnapshot.items}
         negativePromptPacksSource={negativePromptPacksSnapshot.source}
+        workflowPacks={workflowPacksSnapshot.items}
+        workflowPacksSource={workflowPacksSnapshot.source}
+        qualityPresets={qualityPresetsSnapshot.items}
+        qualityPresetsSource={qualityPresetsSnapshot.source}
         researchRequirements={researchRequirements}
         researchRequirementsSource={researchRequirementsSource}
         visualGenerationProviders={visualProvidersSnapshot.items}

@@ -960,6 +960,14 @@ upload para manter os registros apos reiniciar a API.
 
 ## Proximos passos recomendados
 
+- Etapa 10I entregue: ComfyUI Workflow Packs + Image Quality Presets.
+  - Catálogos locais em `packages/hybrid-visual-engine`.
+  - Endpoints `GET /comfy-workflow-packs`, `GET /image-quality-presets` e
+    `POST /comfy-workflow-packs/suggest`.
+  - Geração visual aceita `workflowPackId`, `qualityPresetId`, `workflowId`,
+    seed strategy e parâmetros de qualidade sem alterar o schema.
+  - Smokes: `npm run smoke:workflow-packs` e
+    `npm run smoke:comfy-workflow-pack:local`.
 - Etapa 10F: operacao de fila para visual generation e render com prioridade,
   retries automaticos e cleanup controlado.
 - Etapa 11: refinamento de overlays, transicoes reais e composicao multi-faixa.

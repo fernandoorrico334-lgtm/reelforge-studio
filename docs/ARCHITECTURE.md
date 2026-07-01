@@ -810,3 +810,20 @@ Persistencia real com Prisma:
 9. `npm run smoke:production`
 10. `npm run smoke:research`
 
+## Etapa 10I - Workflow Packs e Quality Presets
+
+- `packages/hybrid-visual-engine/src/workflow-packs.ts` define os 10 packs
+  locais para ComfyUI por nicho.
+- `packages/hybrid-visual-engine/src/image-quality-presets.ts` define
+  `draft`, `standard` e `high`.
+- `packages/hybrid-visual-engine/src/comfy-workflows.ts` carrega primeiro
+  overrides em `storage/comfyui/workflows` e depois workflows versionados do
+  pacote.
+- A API expoe `/comfy-workflow-packs`, `/image-quality-presets` e
+  `/comfy-workflow-packs/suggest`.
+- `VisualGenerationJob.metadata` armazena `workflowPackId`,
+  `qualityPresetId`, origem do workflow e parametros aplicados/ignorados sem
+  exigir nova migration.
+- O render blueprint continua lendo `generatedAssetId`/`effectiveAssetId`; a
+  etapa nao muda o contrato de render.
+

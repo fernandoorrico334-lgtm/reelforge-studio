@@ -370,6 +370,15 @@ async function main() {
         provider: "comfyui-local",
         visualSourceMode: "generated_only",
         characterProfileId: fixtures.characterProfileId,
+        workflowPackId: "cinematic_story",
+        qualityPresetId: "standard",
+        workflowId: appEnv.comfyUiDefaultWorkflow,
+        seedMode: "reuse",
+        steps: 20,
+        cfg: 2.8,
+        sampler: "res_multistep",
+        scheduler: "simple",
+        denoise: 0.75,
         width: 1080,
         height: 1920,
         seed: 707,
@@ -399,6 +408,14 @@ async function main() {
       blueprint.scenes[0]?.effectiveAssetId,
       "Render blueprint did not expose an effective generated asset."
     );
+    assert(
+      result.job.metadata?.workflowPackId === "cinematic_story",
+      "VisualGenerationJob metadata did not persist workflowPackId."
+    );
+    assert(
+      result.job.metadata?.qualityPresetId === "standard",
+      "VisualGenerationJob metadata did not persist qualityPresetId."
+    );
 
     printSmokeSummary({
       projectId: fixtures.projectId,
@@ -407,6 +424,8 @@ async function main() {
       outputPath: result.asset.path,
       promptId: result.job.metadata?.promptId ?? null,
       effectiveAssetId: blueprint.scenes[0]?.effectiveAssetId ?? null,
+      workflowPackId: result.job.metadata?.workflowPackId ?? null,
+      qualityPresetId: result.job.metadata?.qualityPresetId ?? null,
       workflowTemplate: appEnv.comfyUiDefaultWorkflow,
       finalStatus: "completed"
     });

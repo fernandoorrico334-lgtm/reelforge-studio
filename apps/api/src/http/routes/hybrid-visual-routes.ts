@@ -7,12 +7,17 @@ import {
   generateMissingVisualsForProject,
   generateVisualForResearchRequirement,
   generateVisualForScene,
+  getComfyWorkflowPackSnapshot,
   getComfyUiProviderStatusSnapshot,
+  getImageQualityPresetSnapshot,
   getProjectMissingVisualReport,
   getVisualGenerationJobById,
+  listComfyWorkflowPacks,
+  listImageQualityPresets,
   listVisualGenerationJobs,
   listVisualGenerationProviders,
   listVisualSourceModes,
+  suggestComfyWorkflowPack,
   testComfyUiProvider,
   validateComfyUiWorkflowTemplateSnapshot
 } from "../../modules/hybrid-visual/application/hybrid-visual-service.js";
@@ -36,6 +41,36 @@ function parseHybridVisualPath(pathname: string) {
 
   if (segments[0] === "visual-source-modes" && segments.length === 1) {
     return { kind: "visual-source-modes" as const };
+  }
+
+  if (segments[0] === "comfy-workflow-packs") {
+    if (segments.length === 1) {
+      return { kind: "workflow-packs" as const };
+    }
+
+    if (segments.length === 2 && segments[1] === "suggest") {
+      return { kind: "workflow-pack-suggest" as const };
+    }
+
+    if (segments.length === 2) {
+      return {
+        kind: "workflow-pack-item" as const,
+        packId: decodeURIComponent(segments[1] ?? "")
+      };
+    }
+  }
+
+  if (segments[0] === "image-quality-presets") {
+    if (segments.length === 1) {
+      return { kind: "image-quality-presets" as const };
+    }
+
+    if (segments.length === 2) {
+      return {
+        kind: "image-quality-preset-item" as const,
+        presetId: decodeURIComponent(segments[1] ?? "")
+      };
+    }
   }
 
   if (segments[0] === "visual-generation") {
@@ -172,6 +207,76 @@ export async function handleHybridVisualRoute(
     if (match.kind === "visual-source-modes") {
       if (request.method === "GET") {
         sendJson(response, 200, await listVisualSourceModes());
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["GET"]);
+      return true;
+    }
+
+    if (match.kind === "workflow-packs") {
+      if (request.method === "GET") {
+        sendJson(response, 200, await listComfyWorkflowPacks());
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["GET"]);
+      return true;
+    }
+
+    if (match.kind === "workflow-pack-item") {
+      if (request.method === "GET") {
+        sendJson(response, 200, await getComfyWorkflowPackSnapshot(match.packId));
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["GET"]);
+      return true;
+    }
+
+    if (match.kind === "workflow-pack-suggest") {
+      if (request.method === "POST") {
+        const payload = await readJsonBody<{
+          channelId?: string | null;
+          projectId?: string | null;
+          sceneId?: string | null;
+          templateId?: string | null;
+          niche?: string | null;
+          researchAssetRequirementId?: string | null;
+        }>(request);
+        sendJson(
+          response,
+          200,
+          await suggestComfyWorkflowPack(
+            projectRepository,
+            researchRepository,
+            payload ?? {}
+          )
+        );
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["POST"]);
+      return true;
+    }
+
+    if (match.kind === "image-quality-presets") {
+      if (request.method === "GET") {
+        sendJson(response, 200, await listImageQualityPresets());
+        return true;
+      }
+
+      sendMethodNotAllowed(response, ["GET"]);
+      return true;
+    }
+
+    if (match.kind === "image-quality-preset-item") {
+      if (request.method === "GET") {
+        sendJson(
+          response,
+          200,
+          await getImageQualityPresetSnapshot(match.presetId)
+        );
         return true;
       }
 

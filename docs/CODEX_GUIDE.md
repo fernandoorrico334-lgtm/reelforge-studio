@@ -245,3 +245,21 @@ Quando a tarefa tocar em inbox, revisao ou importacao manual, validar sempre:
 5. `POST /intake/import-approved` criando `Asset` com
    `sourceProvider=manual-intake`.
 
+## Checklist operacional de workflow packs
+
+Quando a tarefa tocar em ComfyUI packs, qualidade de imagem ou Prompt Lab:
+
+1. `GET /comfy-workflow-packs` deve retornar 10 packs.
+2. `GET /image-quality-presets` deve retornar `draft`, `standard` e `high`.
+3. `POST /comfy-workflow-packs/suggest` deve sugerir pack por cena, canal,
+   template, nicho ou requirement.
+4. `POST /scenes/:id/generate-visual` deve aceitar `workflowPackId`,
+   `qualityPresetId`, `workflowId`, `seedMode`, `steps`, `cfg`, `sampler`,
+   `scheduler` e `denoise`.
+5. `VisualGenerationJob.metadata` deve registrar `workflowPackId`,
+   `qualityPresetId`, `workflowOrigin`, `appliedParameters` e
+   `ignoredParameters`.
+6. Rodar `npm run smoke:workflow-packs` antes de depender de ComfyUI real.
+7. Rodar `npm run smoke:comfy-workflow-pack:local` apenas quando
+   `COMFYUI_ENABLED=true` e o servidor local estiver pronto.
+

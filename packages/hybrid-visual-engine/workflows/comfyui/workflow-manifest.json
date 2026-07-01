@@ -9,6 +9,38 @@
       "supportsReferences": false,
       "supportsSeed": true,
       "supportsResolution": true,
+      "supportsQualityPresets": true,
+      "supportedPlaceholders": [
+        "{{PROMPT}}",
+        "{{NEGATIVE_PROMPT}}",
+        "{{WIDTH}}",
+        "{{HEIGHT}}",
+        "{{SEED}}",
+        "{{STEPS}}",
+        "{{CFG}}",
+        "{{SAMPLER}}",
+        "{{SCHEDULER}}",
+        "{{DENOISE}}"
+      ],
+      "compatibleWorkflowPacks": [
+        "anime_dark",
+        "comic_drama",
+        "true_crime_doc",
+        "mystery_doc",
+        "history_dark",
+        "sports_hype",
+        "game_epic",
+        "cinematic_story",
+        "horror_tension",
+        "documentary_clean"
+      ],
+      "defaultQualityPreset": "standard",
+      "requiredLocalModels": [
+        "qwen_3_4b.safetensors",
+        "z_image_turbo_bf16.safetensors",
+        "ae.safetensors"
+      ],
+      "optionalLocalModels": [],
       "recommendedPromptPacks": [
         "cinematic_story",
         "documentary_clean",
@@ -29,6 +61,34 @@
       "supportsReferences": true,
       "supportsSeed": true,
       "supportsResolution": true,
+      "supportsQualityPresets": true,
+      "supportedPlaceholders": [
+        "{{PROMPT}}",
+        "{{NEGATIVE_PROMPT}}",
+        "{{WIDTH}}",
+        "{{HEIGHT}}",
+        "{{SEED}}",
+        "{{REFERENCE_IMAGE}}",
+        "{{DENOISE}}",
+        "{{STEPS}}",
+        "{{CFG}}"
+      ],
+      "compatibleWorkflowPacks": [
+        "anime_dark",
+        "comic_drama",
+        "history_dark",
+        "sports_hype",
+        "game_epic",
+        "cinematic_story",
+        "documentary_clean"
+      ],
+      "defaultQualityPreset": "standard",
+      "requiredLocalModels": [
+        "qwen_3_4b.safetensors",
+        "z_image_turbo_bf16.safetensors",
+        "ae.safetensors"
+      ],
+      "optionalLocalModels": [],
       "recommendedPromptPacks": [
         "anime_dark",
         "comic_drama",

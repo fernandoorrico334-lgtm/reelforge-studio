@@ -39,6 +39,10 @@ function assert(condition, message) {
   }
 }
 
+function findWorkflowNode(workflow, predicate) {
+  return Object.values(workflow).find((node) => node && predicate(node));
+}
+
 async function main() {
   const { apiBuildRoot } = await ensureBuildArtifacts();
   const [{ loadEnv }, hybridVisualModule, registryModule] = await Promise.all([
@@ -105,15 +109,21 @@ async function main() {
         }
       );
 
-    assert(
-      txt2imgWorkflow["6"]?.inputs?.text === "cinematic archive control room",
-      "txt2img prompt token was not substituted."
+    const txt2imgPromptNode = findWorkflowNode(
+      txt2imgWorkflow,
+      (node) =>
+        node.class_type === "CLIPTextEncode" &&
+        node.inputs?.text === "cinematic archive control room"
     );
-    assert(
-      txt2imgWorkflow["5"]?.inputs?.width === 720 &&
-        txt2imgWorkflow["5"]?.inputs?.height === 1280,
-      "txt2img dimensions were not substituted."
+    const txt2imgLatentNode = findWorkflowNode(
+      txt2imgWorkflow,
+      (node) =>
+        node.inputs?.width === 720 &&
+        node.inputs?.height === 1280
     );
+
+    assert(txt2imgPromptNode, "txt2img prompt token was not substituted.");
+    assert(txt2imgLatentNode, "txt2img dimensions were not substituted.");
     assert(
       img2imgWorkflow["8"]?.inputs?.image === "reference-upload.png",
       "img2img reference image token was not substituted."
