@@ -771,6 +771,9 @@ export function ProjectStudio({
     sceneNarrations.find((item) => item.isCurrentSceneNarration) ??
     sceneNarrations[0] ??
     null;
+  const blueprintSceneMap = new Map(
+    (blueprint?.scenes ?? []).map((scene) => [scene.sceneId, scene] as const)
+  );
   const selectedWorkflowPack =
     workflowPacks.find((pack) => pack.id === visualWorkflowPackId) ??
     workflowPacks.find((pack) => pack.id === "cinematic_story") ??
@@ -841,9 +844,28 @@ export function ProjectStudio({
   const generatedVisualCount =
     liveProductionChecklist?.generatedVisualScenes ??
     orderedScenes.filter((scene) => isGeneratedAssetActive(scene)).length;
-  const narrationReadyCount = orderedScenes.filter(
-    (scene) => Boolean(scene.generatedNarrationAssetId)
-  ).length;
+  const narrationReadyCount =
+    blueprint?.scenes.filter((scene) => scene.narrationReady).length ??
+    orderedScenes.filter(
+      (scene) => Boolean(scene.generatedNarrationAssetId || project.voiceoverAssetId)
+    ).length;
+  const generatedNarrationCount =
+    blueprint?.scenes.filter(
+      (scene) =>
+        (scene.effectiveNarrationSource ?? scene.narrationSource) === "generated"
+    ).length ?? orderedScenes.filter((scene) => Boolean(scene.generatedNarrationAssetId)).length;
+  const manualNarrationCount =
+    blueprint?.scenes.filter(
+      (scene) =>
+        (scene.effectiveNarrationSource ?? scene.narrationSource) === "manual"
+    ).length ??
+    (project.voiceoverAssetId
+      ? Math.max(orderedScenes.length - generatedNarrationCount, 0)
+      : 0);
+  const missingNarrationCount = Math.max(
+    orderedScenes.length - narrationReadyCount,
+    0
+  );
   const qualityAlerts = [
     ...new Set(
       [
@@ -1473,10 +1495,27 @@ export function ProjectStudio({
               const sceneEffectiveLabel = getSceneEffectiveAssetLabel(scene);
               const sceneEffectiveSource = getSceneEffectiveAssetSource(scene);
               const sceneReadyVisual = sceneHasEffectiveAsset(scene);
+              const blueprintScene = blueprintSceneMap.get(scene.id);
+              const sceneNarrationReady =
+                blueprintScene?.narrationReady ??
+                Boolean(scene.generatedNarrationAssetId || project.voiceoverAssetId);
+              const sceneNarrationSource =
+                blueprintScene?.effectiveNarrationSource ??
+                blueprintScene?.narrationSource ??
+                (scene.generatedNarrationAssetId
+                  ? "generated"
+                  : project.voiceoverAssetId
+                    ? "manual"
+                    : "missing");
+              const sceneNarrationDuration =
+                blueprintScene?.narrationDurationSeconds ??
+                scene.generatedNarrationAsset?.duration ??
+                null;
 
               return (
                 <article
                   key={scene.id}
+                  id={`scene-${scene.id}`}
                   className="rounded-[1.6rem] border border-white/10 bg-black/20 p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1573,22 +1612,26 @@ export function ProjectStudio({
                         Narracao
                       </p>
                       <p className="mt-2 text-sm text-white">
-                        {scene.generatedNarrationAssetId ? "Narracao pronta" : "Sem narracao"}
+                        {sceneNarrationReady ? "Narracao pronta" : "Sem narracao"}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <span
                           className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
-                            scene.generatedNarrationAssetId
+                            sceneNarrationReady
                               ? "border-[#7be0ff]/25 bg-[#7be0ff]/10 text-[#d8f8ff]"
                               : "border-white/10 bg-black/20 text-mist/68"
                           }`}
                         >
-                          {scene.generatedNarrationAssetId ? "Narracao pronta" : "Sem narracao"}
+                          {sceneNarrationReady ? "Narracao pronta" : "Sem narracao"}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-mist/68">
+                          {sceneNarrationSource}
                         </span>
                       </div>
                       <p className="mt-2 text-xs text-mist/55">
-                        {scene.narrationProvider ?? "provider n/a"} /{" "}
-                        {scene.narrationVoicePackId ?? "voice pack n/a"}
+                        {blueprintScene?.narrationProvider ?? scene.narrationProvider ?? "provider n/a"} /{" "}
+                        {blueprintScene?.narrationVoicePackId ?? scene.narrationVoicePackId ?? "voice pack n/a"} / duration{" "}
+                        {formatDuration(sceneNarrationDuration)}
                       </p>
                     </div>
                     <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
@@ -1712,7 +1755,8 @@ export function ProjectStudio({
               <p className="mt-2 text-xs leading-6 text-mist/60">
                 legenda pendente {storyAnalysis.analysis.missingCaptions} / generated
                 ativos {generatedVisualCount} / narracoes prontas {narrationReadyCount} /
-                fonte {productionChecklistSource}
+                generated {generatedNarrationCount} / manual {manualNarrationCount} /
+                sem narracao {missingNarrationCount} / fonte {productionChecklistSource}
               </p>
             </div>
           </div>
@@ -2800,7 +2844,7 @@ export function ProjectStudio({
                     </span>
                     {item.isCurrentSceneNarration ? (
                       <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
-                        current
+                        em uso
                       </span>
                     ) : null}
                   </div>

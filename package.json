@@ -37,6 +37,8 @@
     "smoke:workflow-pack-quality": "node scripts/smoke-workflow-pack-quality.mjs",
     "smoke:prompt-engine": "node scripts/smoke-prompt-engine.mjs",
     "smoke:narration-engine": "node scripts/smoke-narration-engine.mjs",
+    "smoke:narration-render-plan": "node scripts/smoke-narration-render-plan.mjs",
+    "smoke:render-with-narration": "node scripts/smoke-render-with-narration.mjs",
     "smoke:narration-windows-sapi:local": "node scripts/smoke-narration-windows-sapi-local.mjs"
   },
   "prisma": {

@@ -243,7 +243,7 @@ export function GeneratedAudioManager({
               <div className="flex flex-wrap gap-2">
                 {selectedItem.isCurrentSceneNarration ? (
                   <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
-                    current
+                    em uso
                   </span>
                 ) : null}
                 <span className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-3 py-1 text-xs text-[#e2e8ff]">
@@ -329,6 +329,14 @@ export function GeneratedAudioManager({
                     className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-mist/75 transition hover:border-signal/35 hover:text-white"
                   >
                     Abrir projeto
+                  </Link>
+                ) : null}
+                {selectedItem.project?.id && selectedItem.scene?.id ? (
+                  <Link
+                    href={`/projects/${selectedItem.project.id}#scene-${selectedItem.scene.id}`}
+                    className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-mist/75 transition hover:border-signal/35 hover:text-white"
+                  >
+                    Abrir cena
                   </Link>
                 ) : null}
                 {selectedItem.asset?.id ? (
@@ -444,7 +452,7 @@ export function GeneratedAudioManager({
                     <div className="flex flex-wrap gap-2">
                       {item.isCurrentSceneNarration ? (
                         <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-emerald-100">
-                          current
+                          em uso
                         </span>
                       ) : null}
                       <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-mist/68">

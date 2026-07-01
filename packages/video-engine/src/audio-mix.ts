@@ -36,6 +36,11 @@ export interface FinalizeRenderAudioOptions {
   logger: AudioMixLogger;
 }
 
+interface TimeWindow {
+  start: number;
+  end: number;
+}
+
 function roundToThreeDecimals(value: number) {
   return Math.round(value * 1000) / 1000;
 }
@@ -58,6 +63,88 @@ function withLabel(context: AudioMixLogContext, label: string): AudioMixLogConte
     ...context,
     label
   };
+}
+
+function mergeTimeWindows(windows: TimeWindow[]) {
+  if (windows.length === 0) {
+    return [];
+  }
+
+  const normalized = windows
+    .map((window) => ({
+      start: clampPositive(window.start),
+      end: clampPositive(window.end)
+    }))
+    .filter((window) => window.end > window.start)
+    .sort((left, right) => left.start - right.start);
+
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const merged: TimeWindow[] = [normalized[0] as TimeWindow];
+
+  for (const window of normalized.slice(1)) {
+    const current = merged[merged.length - 1];
+
+    if (!current) {
+      merged.push(window);
+      continue;
+    }
+
+    if (window.start <= current.end + 0.02) {
+      current.end = Math.max(current.end, window.end);
+      continue;
+    }
+
+    merged.push(window);
+  }
+
+  return merged.map((window) => ({
+    start: roundToThreeDecimals(window.start),
+    end: roundToThreeDecimals(window.end)
+  }));
+}
+
+function buildWindowConditionExpression(windows: TimeWindow[]) {
+  const merged = mergeTimeWindows(windows);
+
+  if (merged.length === 0) {
+    return "0";
+  }
+
+  return merged
+    .map(
+      (window) =>
+        `between(t,${window.start.toFixed(3)},${window.end.toFixed(3)})`
+    )
+    .join("+");
+}
+
+function buildMutedVolumeExpression(baseVolume: number, windows: TimeWindow[]) {
+  const condition = buildWindowConditionExpression(windows);
+
+  if (condition === "0") {
+    return roundToThreeDecimals(baseVolume).toFixed(3);
+  }
+
+  return `'if(${condition},0,1)*${roundToThreeDecimals(baseVolume).toFixed(3)}'`;
+}
+
+function buildDuckedVolumeExpression(
+  baseVolume: number,
+  duckingLevel: number,
+  windows: TimeWindow[]
+) {
+  const condition = buildWindowConditionExpression(windows);
+
+  if (condition === "0") {
+    return roundToThreeDecimals(baseVolume).toFixed(3);
+  }
+
+  return `'${roundToThreeDecimals(baseVolume).toFixed(3)}*if(${condition},${roundToThreeDecimals(
+    duckingLevel
+  ).toFixed(3)},1)'`;
 }
 
 export async function muxSilentAudioTrack(
@@ -152,6 +239,26 @@ export async function finalizeRenderAudio(
   const filterChains: string[] = [];
   const mixLabels: string[] = [];
   const warnings = [...plan.warnings];
+  const sceneNarrationWindows = plan.sceneNarrations.map((sceneNarration) => ({
+    start: sceneNarration.startTime,
+    end:
+      sceneNarration.startTime +
+      Math.min(
+        sceneNarration.duration,
+        sceneNarration.asset.duration ?? sceneNarration.duration
+      )
+  }));
+  const duckingNarrationWindows = plan.sceneNarrations
+    .filter((sceneNarration) => sceneNarration.duckMusicDuringNarration)
+    .map((sceneNarration) => ({
+      start: sceneNarration.startTime,
+      end:
+        sceneNarration.startTime +
+        Math.min(
+          sceneNarration.duration,
+          sceneNarration.asset.duration ?? sceneNarration.duration
+        )
+    }));
   let inputIndex = 1;
 
   if (plan.backgroundMusic) {
@@ -164,12 +271,23 @@ export async function finalizeRenderAudio(
     }
 
     const effectiveMusicVolume =
-      plan.backgroundMusic.volume *
-      (plan.enableAudioDucking && plan.voiceover ? plan.duckingLevel : 1);
+      plan.enableAudioDucking && plan.voiceover
+        ? roundToThreeDecimals(plan.backgroundMusic.volume * plan.duckingLevel)
+        : plan.backgroundMusic.volume;
+    const musicVolumeFilter =
+      plan.enableAudioDucking &&
+      !plan.voiceover &&
+      duckingNarrationWindows.length > 0
+        ? `volume=${buildDuckedVolumeExpression(
+            effectiveMusicVolume,
+            plan.duckingLevel,
+            duckingNarrationWindows
+          )}`
+        : `volume=${roundToThreeDecimals(effectiveMusicVolume).toFixed(3)}`;
     const musicFilters = [
       `atrim=0:${totalDuration.toFixed(3)}`,
       "asetpts=N/SR/TB",
-      `volume=${roundToThreeDecimals(effectiveMusicVolume).toFixed(3)}`,
+      musicVolumeFilter,
       ...buildFadeFilters(
         totalDuration,
         plan.backgroundMusic.fadeInDuration,
@@ -193,12 +311,53 @@ export async function finalizeRenderAudio(
     }
 
     trackInputs.push("-i", voicePath);
+    const voiceFilters = [
+      `atrim=0:${totalDuration.toFixed(3)}`,
+      "asetpts=N/SR/TB",
+      `volume=${buildMutedVolumeExpression(plan.voiceover.volume, sceneNarrationWindows)}`
+    ];
     filterChains.push(
-      `[${inputIndex}:a]atrim=0:${totalDuration.toFixed(3)},asetpts=N/SR/TB,volume=${roundToThreeDecimals(
-        plan.voiceover.volume
-      ).toFixed(3)}[avoice]`
+      `[${inputIndex}:a]${voiceFilters.join(",")}[avoice]`
     );
     mixLabels.push("[avoice]");
+    inputIndex += 1;
+  }
+
+  for (const [index, sceneNarration] of plan.sceneNarrations.entries()) {
+    const narrationPath = resolveStoragePath(projectRoot, sceneNarration.asset.path);
+
+    if (!(await fileExists(narrationPath))) {
+      throw new Error(
+        `Scene narration asset '${sceneNarration.asset.path}' is missing on disk for scene '${sceneNarration.sceneTitle}'.`
+      );
+    }
+
+    const remainingDuration = Math.max(totalDuration - sceneNarration.startTime, 0.05);
+    const clipDuration = Math.max(
+      Math.min(
+        remainingDuration,
+        sceneNarration.duration,
+        sceneNarration.asset.duration ?? sceneNarration.duration
+      ),
+      0.05
+    );
+    const delayMs = Math.max(Math.round(sceneNarration.startTime * 1000), 0);
+    const outputLabel = `anarr${index}`;
+    const narrationFilters = [
+      `atrim=0:${clipDuration.toFixed(3)}`,
+      "asetpts=N/SR/TB",
+      `volume=${roundToThreeDecimals(sceneNarration.volume).toFixed(3)}`,
+      ...buildFadeFilters(
+        clipDuration,
+        sceneNarration.fadeInDuration,
+        sceneNarration.fadeOutDuration
+      ),
+      `adelay=${delayMs}|${delayMs}`
+    ];
+
+    trackInputs.push("-i", narrationPath);
+    filterChains.push(`[${inputIndex}:a]${narrationFilters.join(",")}[${outputLabel}]`);
+    mixLabels.push(`[${outputLabel}]`);
     inputIndex += 1;
   }
 
@@ -254,7 +413,7 @@ export async function finalizeRenderAudio(
   await logger.appendLog(
     logPath,
     labelContext,
-    `Background music asset: ${plan.backgroundMusic?.asset.path ?? "none"} | voiceover asset: ${plan.voiceover?.asset.path ?? "none"} | scene SFX count: ${plan.sceneSfx.length} | ducking=${plan.enableAudioDucking ? `static-${plan.duckingLevel}` : "off"}`
+    `Background music asset: ${plan.backgroundMusic?.asset.path ?? "none"} | voiceover asset: ${plan.voiceover?.asset.path ?? "none"} | scene narrations: ${plan.sceneNarrations.length} | scene SFX count: ${plan.sceneSfx.length} | ducking=${plan.enableAudioDucking ? `${plan.duckingLevel}` : "off"}`
   );
 
   await logger.runCommand(

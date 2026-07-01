@@ -258,6 +258,8 @@ export function buildLocalAudioPlan(
       order: scene.order,
       title: scene.title,
       duration: scene.duration,
+      narrationAssetId: scene.generatedNarrationAssetId ?? null,
+      narrationSource: scene.generatedNarrationAssetId ? "generated" : null,
       sfxAssetId: scene.sfxAssetId ?? null,
       sfxStartTime: scene.sfxStartTime ?? null,
       sfxVolume: scene.sfxVolume ?? null

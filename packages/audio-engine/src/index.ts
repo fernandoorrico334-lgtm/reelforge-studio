@@ -56,6 +56,12 @@ export interface AudioSceneInput {
   order: number;
   title: string;
   duration?: number | null;
+  narrationAssetId?: string | null;
+  narrationSource?: "generated" | "manual" | null;
+  narrationVolume?: number | null;
+  duckMusicDuringNarration?: boolean | null;
+  narrationFadeInMs?: number | null;
+  narrationFadeOutMs?: number | null;
   sfxAssetId?: string | null;
   sfxStartTime?: number | null;
   sfxVolume?: number | null;
@@ -80,6 +86,21 @@ export interface AudioMixPlanTrack {
   loopToDuration: boolean;
   cutToDuration: boolean;
   duckedByVoiceover: boolean;
+  duckedBySceneNarration: boolean;
+}
+
+export interface AudioMixPlanSceneNarration {
+  sceneId: string;
+  sceneOrder: number;
+  sceneTitle: string;
+  startTime: number;
+  duration: number;
+  volume: number;
+  duckMusicDuringNarration: boolean;
+  fadeInDuration: number;
+  fadeOutDuration: number;
+  source: "generated" | "manual";
+  asset: AudioMixPlanAsset;
 }
 
 export interface AudioMixPlanSceneSfx {
@@ -104,6 +125,7 @@ export interface AudioMixPlan {
   mood: AudioMoodPreset | null;
   backgroundMusic: AudioMixPlanTrack | null;
   voiceover: AudioMixPlanTrack | null;
+  sceneNarrations: AudioMixPlanSceneNarration[];
   sceneSfx: AudioMixPlanSceneSfx[];
   musicVolume: number;
   voiceVolume: number;
@@ -229,6 +251,7 @@ const audioMoodPresets: AudioMoodPreset[] = [
 
 const validMusicTypes = new Set(["MUSIC", "AUDIO"]);
 const validVoiceTypes = new Set(["AUDIO"]);
+const validNarrationTypes = new Set(["AUDIO"]);
 const validSfxTypes = new Set(["SFX", "AUDIO"]);
 
 function roundToThreeDecimals(value: number) {
@@ -261,6 +284,17 @@ function normalizeDuration(value: number | null | undefined, fallback: number) {
   }
 
   return roundToThreeDecimals(value);
+}
+
+function normalizeFadeDurationMs(
+  value: number | null | undefined,
+  fallbackMs: number
+) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return roundToThreeDecimals(Math.max(fallbackMs, 0) / 1000);
+  }
+
+  return roundToThreeDecimals(Math.max(value, 0) / 1000);
 }
 
 function buildAssetMap(assets: AudioAssetInput[]) {
@@ -331,6 +365,35 @@ export function validateAudioMixPlan(plan: AudioMixPlan): AudioMixPlanValidation
     }
   }
 
+  for (const sceneNarration of plan.sceneNarrations) {
+    if (!validNarrationTypes.has(sceneNarration.asset.type)) {
+      errors.push(
+        `Scene narration '${sceneNarration.asset.filename}' must be AUDIO.`
+      );
+    }
+
+    if (!sceneNarration.asset.exists) {
+      errors.push(
+        `Scene narration asset '${sceneNarration.asset.path}' is missing on disk.`
+      );
+    }
+
+    if (sceneNarration.startTime > plan.totalDuration) {
+      warnings.push(
+        `Scene '${sceneNarration.sceneTitle}' has narration start ${sceneNarration.startTime}s beyond total duration ${plan.totalDuration}s.`
+      );
+    }
+
+    if (
+      sceneNarration.asset.duration &&
+      sceneNarration.asset.duration > sceneNarration.duration
+    ) {
+      warnings.push(
+        `Scene narration '${sceneNarration.asset.filename}' exceeds scene window ${sceneNarration.duration}s and will be trimmed.`
+      );
+    }
+  }
+
   for (const sceneSfx of plan.sceneSfx) {
     if (!validSfxTypes.has(sceneSfx.asset.type)) {
       errors.push(
@@ -391,9 +454,10 @@ export function summarizeAudioPlan(plan: AudioMixPlan) {
           plan.voiceVolume * 100
         )}%`
       : "no voiceover",
+    `${plan.sceneNarrations.length} scene narrations`,
     `${plan.sceneSfx.length} scene SFX`,
-    plan.enableAudioDucking && plan.voiceover
-      ? `static ducking ${Math.round(plan.duckingLevel * 100)}%`
+    plan.enableAudioDucking && (plan.voiceover || plan.sceneNarrations.length > 0)
+      ? `ducking ${Math.round(plan.duckingLevel * 100)}%`
       : "ducking off"
   ];
 
@@ -452,6 +516,65 @@ export function buildAudioMixPlan(
     warnings.push(`Voiceover asset '${project.voiceoverAssetId}' was not found.`);
   }
 
+  let accumulatedSceneStart = 0;
+  const sceneNarrations: AudioMixPlanSceneNarration[] = [];
+  const sceneSfx: AudioMixPlanSceneSfx[] = [];
+
+  for (const scene of orderedScenes) {
+    const resolvedSceneDuration = normalizeDuration(scene.duration, defaultSceneDuration);
+    const sceneStartTime = roundToThreeDecimals(accumulatedSceneStart);
+    const sceneAsset = toPlanAsset(
+      assetMap.get(scene.sfxAssetId ?? "") ?? null,
+      options.resolveAssetExists
+    );
+    const narrationAsset = toPlanAsset(
+      assetMap.get(scene.narrationAssetId ?? "") ?? null,
+      options.resolveAssetExists
+    );
+    const sfxStartTime =
+      roundToThreeDecimals(sceneStartTime + normalizeTime(scene.sfxStartTime));
+
+    if (scene.sfxAssetId && !sceneAsset) {
+      warnings.push(`Scene '${scene.title}' references missing SFX asset '${scene.sfxAssetId}'.`);
+    }
+
+    if (scene.narrationAssetId && !narrationAsset) {
+      warnings.push(
+        `Scene '${scene.title}' references missing narration asset '${scene.narrationAssetId}'.`
+      );
+    }
+
+    if (narrationAsset) {
+      sceneNarrations.push({
+        sceneId: scene.id,
+        sceneOrder: scene.order,
+        sceneTitle: scene.title,
+        startTime: sceneStartTime,
+        duration: resolvedSceneDuration,
+        volume: normalizeVolume(scene.narrationVolume, voiceVolume),
+        duckMusicDuringNarration:
+          scene.duckMusicDuringNarration ?? enableAudioDucking,
+        fadeInDuration: normalizeFadeDurationMs(scene.narrationFadeInMs, 80),
+        fadeOutDuration: normalizeFadeDurationMs(scene.narrationFadeOutMs, 120),
+        source: scene.narrationSource ?? "generated",
+        asset: narrationAsset
+      });
+    }
+
+    if (sceneAsset) {
+      sceneSfx.push({
+        sceneId: scene.id,
+        sceneOrder: scene.order,
+        sceneTitle: scene.title,
+        startTime: sfxStartTime,
+        volume: normalizeVolume(scene.sfxVolume, sfxVolume),
+        asset: sceneAsset
+      });
+    }
+
+    accumulatedSceneStart += resolvedSceneDuration;
+  }
+
   const backgroundMusic =
     backgroundMusicAsset
       ? {
@@ -463,7 +586,10 @@ export function buildAudioMixPlan(
             typeof backgroundMusicAsset.duration === "number" &&
             backgroundMusicAsset.duration < totalDuration,
           cutToDuration: true,
-          duckedByVoiceover: enableAudioDucking && Boolean(voiceoverAsset)
+          duckedByVoiceover: enableAudioDucking && Boolean(voiceoverAsset),
+          duckedBySceneNarration:
+            enableAudioDucking &&
+            sceneNarrations.some((entry) => entry.duckMusicDuringNarration)
         }
       : null;
 
@@ -476,49 +602,23 @@ export function buildAudioMixPlan(
           fadeOutDuration: 0,
           loopToDuration: false,
           cutToDuration: true,
-          duckedByVoiceover: false
+          duckedByVoiceover: false,
+          duckedBySceneNarration: false
         }
       : null;
-
-  let accumulatedSceneStart = 0;
-
-  const sceneSfx: AudioMixPlanSceneSfx[] = orderedScenes.flatMap((scene) => {
-    const resolvedSceneDuration = normalizeDuration(scene.duration, defaultSceneDuration);
-    const sceneAsset = toPlanAsset(
-      assetMap.get(scene.sfxAssetId ?? "") ?? null,
-      options.resolveAssetExists
-    );
-    const startTime =
-      roundToThreeDecimals(accumulatedSceneStart + normalizeTime(scene.sfxStartTime));
-    accumulatedSceneStart += resolvedSceneDuration;
-
-    if (scene.sfxAssetId && !sceneAsset) {
-      warnings.push(`Scene '${scene.title}' references missing SFX asset '${scene.sfxAssetId}'.`);
-    }
-
-    if (!sceneAsset) {
-      return [];
-    }
-
-    return [
-      {
-        sceneId: scene.id,
-        sceneOrder: scene.order,
-        sceneTitle: scene.title,
-        startTime,
-        volume: normalizeVolume(scene.sfxVolume, sfxVolume),
-        asset: sceneAsset
-      }
-    ];
-  });
 
   const hasConfiguredAudio = Boolean(
     project.backgroundMusicAssetId ||
       project.voiceoverAssetId ||
+      sceneNarrations.length > 0 ||
       sceneSfx.length > 0 ||
-      orderedScenes.some((scene) => Boolean(scene.sfxAssetId))
+      orderedScenes.some(
+        (scene) => Boolean(scene.sfxAssetId || scene.narrationAssetId)
+      )
   );
-  const enabled = Boolean(backgroundMusic || voiceover || sceneSfx.length > 0);
+  const enabled = Boolean(
+    backgroundMusic || voiceover || sceneNarrations.length > 0 || sceneSfx.length > 0
+  );
 
   const preliminaryPlan: AudioMixPlan = {
     enabled,
@@ -527,6 +627,7 @@ export function buildAudioMixPlan(
     mood,
     backgroundMusic,
     voiceover,
+    sceneNarrations,
     sceneSfx,
     musicVolume,
     voiceVolume,

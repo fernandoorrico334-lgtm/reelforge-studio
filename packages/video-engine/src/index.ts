@@ -211,6 +211,9 @@ export interface RenderBlueprintScene {
   effectiveNarrationAssetId: string | null;
   effectiveNarrationAssetPath: string | null;
   narrationSource: "generated" | "manual" | "missing";
+  effectiveNarrationSource: "generated" | "manual" | "missing";
+  narrationReady: boolean;
+  narrationDurationSeconds: number | null;
   narrationStatus: string | null;
   narrationProvider: string | null;
   narrationVoicePackId: string | null;
@@ -405,6 +408,9 @@ function resolveEffectiveNarration(
   | "effectiveNarrationAssetId"
   | "effectiveNarrationAssetPath"
   | "narrationSource"
+  | "effectiveNarrationSource"
+  | "narrationReady"
+  | "narrationDurationSeconds"
   | "narrationStatus"
   | "narrationProvider"
   | "narrationVoicePackId"
@@ -434,6 +440,11 @@ function resolveEffectiveNarration(
       effectiveNarrationAssetId: generatedNarrationAssetId,
       effectiveNarrationAssetPath: generatedNarrationAsset?.path ?? null,
       narrationSource: "generated",
+      effectiveNarrationSource: "generated",
+      narrationReady: Boolean(
+        generatedNarrationAssetId ?? generatedNarrationAsset?.path ?? null
+      ),
+      narrationDurationSeconds: generatedNarrationAsset?.duration ?? null,
       narrationStatus:
         "narrationStatus" in scene
           ? (scene as BlueprintSceneInput & { narrationStatus?: string | null })
@@ -461,7 +472,14 @@ function resolveEffectiveNarration(
     effectiveNarrationAsset: project.voiceoverAsset,
     effectiveNarrationAssetId: project.voiceoverAssetId,
     effectiveNarrationAssetPath: project.voiceoverAsset?.path ?? null,
-    narrationSource: project.voiceoverAssetId ? "manual" : "missing",
+    narrationSource:
+      project.voiceoverAssetId || project.voiceoverAsset ? "manual" : "missing",
+    effectiveNarrationSource:
+      project.voiceoverAssetId || project.voiceoverAsset ? "manual" : "missing",
+    narrationReady: Boolean(
+      project.voiceoverAssetId ?? project.voiceoverAsset?.path ?? null
+    ),
+    narrationDurationSeconds: project.voiceoverAsset?.duration ?? null,
     narrationStatus:
       "narrationStatus" in scene
         ? (scene as BlueprintSceneInput & { narrationStatus?: string | null })
@@ -561,7 +579,8 @@ function buildBlueprintAudioPlan(
   const audioAssets = [
     project.backgroundMusicAsset,
     project.voiceoverAsset,
-    ...project.scenes.map((scene) => scene.sfxAsset)
+    ...project.scenes.map((scene) => scene.sfxAsset),
+    ...project.scenes.map((scene) => scene.generatedNarrationAsset ?? null)
   ]
     .filter((asset): asset is BlueprintAssetInput => asset !== null)
     .map((asset) => ({
@@ -593,6 +612,8 @@ function buildBlueprintAudioPlan(
       order: scene.order,
       title: scene.title,
       duration: scene.duration,
+      narrationAssetId: scene.generatedNarrationAssetId ?? null,
+      narrationSource: scene.generatedNarrationAssetId ? "generated" : null,
       sfxAssetId: scene.sfxAssetId,
       sfxStartTime: scene.sfxStartTime,
       sfxVolume: scene.sfxVolume

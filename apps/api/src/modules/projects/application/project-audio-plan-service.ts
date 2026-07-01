@@ -140,6 +140,8 @@ export async function getVideoProjectAudioPlan(
       order: scene.order,
       title: scene.title,
       duration: scene.duration,
+      narrationAssetId: scene.generatedNarrationAssetId,
+      narrationSource: scene.generatedNarrationAssetId ? "generated" : null,
       sfxAssetId: scene.sfxAssetId,
       sfxStartTime: scene.sfxStartTime,
       sfxVolume: scene.sfxVolume
@@ -187,6 +189,8 @@ export async function getVideoProjectAudioPlanWithDiskCheck(
       order: scene.order,
       title: scene.title,
       duration: scene.duration,
+      narrationAssetId: scene.generatedNarrationAssetId,
+      narrationSource: scene.generatedNarrationAssetId ? "generated" : null,
       sfxAssetId: scene.sfxAssetId,
       sfxStartTime: scene.sfxStartTime,
       sfxVolume: scene.sfxVolume

@@ -56,12 +56,36 @@ function renderNarrationSourceLabel(source: "generated" | "manual" | "missing") 
   }
 }
 
+function formatDuration(value: number | null | undefined) {
+  if (typeof value !== "number" || Number.isNaN(value) || value <= 0) {
+    return "n/a";
+  }
+
+  return `${value.toFixed(value >= 10 ? 0 : 1)}s`;
+}
+
 export function RenderBlueprintPanel({
   blueprint,
   source,
   loading,
   onLoad
 }: RenderBlueprintPanelProps) {
+  const narrationReadyCount =
+    blueprint?.scenes.filter((scene) => scene.narrationReady).length ?? 0;
+  const generatedNarrationCount =
+    blueprint?.scenes.filter(
+      (scene) =>
+        (scene.effectiveNarrationSource ?? scene.narrationSource) === "generated"
+    ).length ?? 0;
+  const manualNarrationCount =
+    blueprint?.scenes.filter(
+      (scene) =>
+        (scene.effectiveNarrationSource ?? scene.narrationSource) === "manual"
+    ).length ?? 0;
+  const missingNarrationCount = blueprint
+    ? Math.max(blueprint.sceneCount - narrationReadyCount, 0)
+    : 0;
+
   return (
     <article className="rounded-[1.9rem] border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(255,158,102,0.12),transparent_32%),rgba(255,255,255,0.04)] p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -94,7 +118,7 @@ export function RenderBlueprintPanel({
 
       {blueprint ? (
         <>
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
               <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
                 Duracao total
@@ -119,9 +143,17 @@ export function RenderBlueprintPanel({
                 {blueprint.summary.scenesWithProblems}
               </p>
             </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Narracao pronta
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {narrationReadyCount}
+              </p>
+            </div>
           </div>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-2">
+          <div className="mt-6 grid gap-4 xl:grid-cols-3">
             <div className="rounded-[1.3rem] border border-white/10 bg-black/20 p-4">
               <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
                 Template
@@ -150,6 +182,26 @@ export function RenderBlueprintPanel({
               </p>
               <p className="mt-3 text-sm text-mist/68">
                 subtitle preview pronto em SRT e ASS para a etapa de render.
+              </p>
+            </div>
+
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Audio plan
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {blueprint.audio.summary}
+              </p>
+              <p className="mt-3 text-sm text-mist/68">
+                Este render usara narracao gerada em {generatedNarrationCount} cena(s),
+                fallback manual em {manualNarrationCount} e {missingNarrationCount} sem
+                narracao.
+              </p>
+              <p className="mt-3 text-xs text-mist/55">
+                scene narrations {blueprint.audio.sceneNarrations.length} / scene sfx{" "}
+                {blueprint.audio.sceneSfx.length} / music{" "}
+                {blueprint.audio.backgroundMusic ? "on" : "off"} / voiceover{" "}
+                {blueprint.audio.voiceover ? "on" : "off"}
               </p>
             </div>
           </div>
@@ -188,15 +240,31 @@ export function RenderBlueprintPanel({
                   {scene.effectiveNarrationAsset?.filename ?? "sem narracao"}
                 </p>
                 <p className="mt-2 text-xs text-mist/60">
-                  narration {renderNarrationSourceLabel(scene.narrationSource)} /{" "}
+                  narration{" "}
+                  {renderNarrationSourceLabel(
+                    scene.effectiveNarrationSource ?? scene.narrationSource
+                  )}{" "}
+                  /{" "}
                   {scene.narrationProvider ?? "provider n/a"} /{" "}
                   {scene.narrationVoicePackId ?? "voice pack n/a"}
+                </p>
+                <p className="mt-2 text-xs text-mist/55">
+                  {scene.narrationReady ? "narration-ready" : "narration-missing"} /{" "}
+                  duration {formatDuration(scene.narrationDurationSeconds)}
                 </p>
                 <p className="mt-2 text-xs text-mist/55">
                   effectiveNarrationAssetId {scene.effectiveNarrationAssetId ?? "n/a"}
                 </p>
                 <p className="mt-2 text-xs text-mist/55">
                   effectiveNarrationAssetPath {scene.effectiveNarrationAssetPath ?? "n/a"}
+                </p>
+                <p className="mt-2 text-xs text-mist/55">
+                  scene narration track{" "}
+                  {blueprint.audio.sceneNarrations.some(
+                    (entry) => entry.sceneId === scene.sceneId
+                  )
+                    ? "yes"
+                    : "no"}
                 </p>
                 <p className="mt-2 text-xs text-mist/55">
                   {scene.effectiveAssetReason ??

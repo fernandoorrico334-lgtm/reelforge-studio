@@ -974,6 +974,21 @@ export interface AudioMixPlanTrack {
   loopToDuration: boolean;
   cutToDuration: boolean;
   duckedByVoiceover: boolean;
+  duckedBySceneNarration: boolean;
+}
+
+export interface AudioMixPlanSceneNarration {
+  sceneId: string;
+  sceneOrder: number;
+  sceneTitle: string;
+  startTime: number;
+  duration: number;
+  volume: number;
+  duckMusicDuringNarration: boolean;
+  fadeInDuration: number;
+  fadeOutDuration: number;
+  source: "generated" | "manual";
+  asset: AudioMixPlanAsset;
 }
 
 export interface AudioMixPlanSceneSfx {
@@ -998,6 +1013,7 @@ export interface ProjectAudioPlanResponse {
   mood: AudioMoodPresetSummary | null;
   backgroundMusic: AudioMixPlanTrack | null;
   voiceover: AudioMixPlanTrack | null;
+  sceneNarrations: AudioMixPlanSceneNarration[];
   sceneSfx: AudioMixPlanSceneSfx[];
   musicVolume: number;
   voiceVolume: number;
@@ -2027,6 +2043,9 @@ export interface RenderBlueprintScene {
   effectiveNarrationAssetPath: string | null;
   effectiveNarrationAsset: RenderBlueprintAsset | null;
   narrationSource: "generated" | "manual" | "missing";
+  effectiveNarrationSource: "generated" | "manual" | "missing";
+  narrationReady: boolean;
+  narrationDurationSeconds: number | null;
   narrationStatus?: NarrationJobStatus | null;
   narrationProvider?: NarrationProvider | null;
   narrationVoicePackId?: string | null;
