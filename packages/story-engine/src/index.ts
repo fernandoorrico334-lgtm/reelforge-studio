@@ -210,6 +210,7 @@ export interface ProductionChecklistInputScene {
   order: number;
   title: string;
   duration: number | null;
+  narrationText?: string | null;
   captionText: string | null;
   assetId: string | null;
   generatedAssetId?: string | null;
@@ -1277,7 +1278,7 @@ export function buildProductionChecklist(
       id: scene.id,
       order: scene.order,
       title: scene.title,
-      narrationText: null,
+      narrationText: scene.narrationText ?? null,
       captionText: scene.captionText,
       duration: scene.duration,
       emotion: scene.emotion,

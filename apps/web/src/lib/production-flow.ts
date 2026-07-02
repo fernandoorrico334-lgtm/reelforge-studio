@@ -62,6 +62,7 @@ function buildChecklist(project: StudioProject) {
         order: scene.order,
         title: scene.title,
         duration: scene.duration,
+        narrationText: scene.narrationText,
         captionText: scene.captionText,
         assetId: scene.assetId,
         generatedAssetId: scene.generatedAssetId ?? null,

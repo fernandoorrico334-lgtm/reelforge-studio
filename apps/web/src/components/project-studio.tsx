@@ -9,6 +9,10 @@ import {
   getCaptionStyles
 } from "@reelforge/caption-engine";
 import {
+  getReelsFactoryTemplateById,
+  isReelsFactoryTemplateId
+} from "@reelforge/story-engine/reels-factory";
+import {
   getTemplateById,
   getTemplates,
   suggestTemplateByProject
@@ -74,6 +78,7 @@ import type {
   ProjectProductionChecklistResponse,
   ProjectScene,
   ProjectStatus,
+  ReelsFactoryNextAction,
   RenderBlueprintResponse,
   ScenePayload,
   StudioAsset,
@@ -204,6 +209,10 @@ function formatRoleLabel(value: string) {
   return value.toUpperCase();
 }
 
+function formatFactoryActionLabel(value: ReelsFactoryNextAction) {
+  return value.replaceAll("_", " ");
+}
+
 function formatEffectiveVisualSourceLabel(value: "base" | "generated" | "fallback" | "missing") {
   switch (value) {
     case "base":
@@ -271,6 +280,107 @@ function parseCommaList(value: string) {
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function normalizeNoticeToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}+/gu, "")
+    .toLowerCase();
+}
+
+function filterContradictoryNarrativeNotice(
+  notice: string,
+  options: {
+    climaxDetected: boolean;
+    ctaDetected: boolean;
+  }
+) {
+  const normalized = normalizeNoticeToken(notice);
+
+  if (options.climaxDetected && normalized.includes("nenhum cl")) {
+    return false;
+  }
+
+  if (options.ctaDetected && normalized.includes("nenhum cta")) {
+    return false;
+  }
+
+  return true;
+}
+
+interface ReelsFactorySceneRecipe {
+  source?: string;
+  templateId?: string;
+  tone?: string;
+  durationSeconds?: number;
+  suggestedWorkflowPackId?: string;
+  suggestedVoicePackId?: string;
+  suggestedAudioMasteringPresetId?: string;
+  suggestedVisualPresetId?: string;
+  microclipSlot?: {
+    label?: string;
+    usageMode?: string;
+    textOverlay?: string | null;
+  } | null;
+  hashtags?: string[];
+  shortDescription?: string;
+  caption?: string;
+  recommendedNextActions?: string[];
+}
+
+function parseReelsFactorySceneRecipe(
+  value: string | null | undefined
+): ReelsFactorySceneRecipe | null {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+
+    return parsed as ReelsFactorySceneRecipe;
+  } catch {
+    return null;
+  }
+}
+
+function readFactoryRecommendedActions(
+  recipes: Array<ReelsFactorySceneRecipe | null>,
+  templateAllowsMicroclip: boolean
+): ReelsFactoryNextAction[] {
+  const supportedActions = new Set<ReelsFactoryNextAction>([
+    "generate_narration",
+    "generate_visuals",
+    "attach_microclip",
+    "render"
+  ]);
+  const fromRecipes = recipes
+    .flatMap((recipe) =>
+      Array.isArray(recipe?.recommendedNextActions)
+        ? recipe.recommendedNextActions
+        : []
+    )
+    .map((action) => action.trim())
+    .filter(
+      (action): action is ReelsFactoryNextAction =>
+        supportedActions.has(action as ReelsFactoryNextAction)
+    );
+
+  if (fromRecipes.length > 0) {
+    return [...new Set(fromRecipes)];
+  }
+
+  return [
+    "generate_narration",
+    "generate_visuals",
+    ...(templateAllowsMicroclip ? (["attach_microclip"] as const) : []),
+    "render"
+  ];
 }
 
 function toAudioMasteringPreviewSummary(
@@ -1001,6 +1111,10 @@ export function ProjectStudio({
       templateId: projectForm.templateId || null,
       channel: selectedChannel
     });
+  const activeTemplateId =
+    projectForm.templateId || project.templateId || effectiveTemplate.id;
+  const reelsFactoryTemplate = getReelsFactoryTemplateById(activeTemplateId);
+  const isReelsFactoryProject = isReelsFactoryTemplateId(activeTemplateId);
   const effectiveProjectCaptionStyle =
     getCaptionStyleById(projectForm.defaultCaptionStyle) ??
     getCaptionStyleById(effectiveTemplate.defaultCaptionStyle) ??
@@ -1066,6 +1180,68 @@ export function ProjectStudio({
       .map((microclip) => microclip.sceneId)
       .filter((sceneId): sceneId is string => Boolean(sceneId))
   );
+  const reelsFactorySceneRecipes = orderedScenes.map((scene) => ({
+    scene,
+    recipe: parseReelsFactorySceneRecipe(scene.visualRecipe)
+  }));
+  const reelsFactoryRecommendedNextActions = readFactoryRecommendedActions(
+    reelsFactorySceneRecipes.map((entry) => entry.recipe),
+    Boolean(reelsFactoryTemplate?.allowsMicroclip)
+  );
+  const reelsFactoryOperationalChecklist = isReelsFactoryProject
+    ? [
+        {
+          id: "narration",
+          label: "Narracao",
+          done:
+            orderedScenes.length > 0 && narrationReadyCount >= orderedScenes.length,
+          detail:
+            narrationReadyCount >= orderedScenes.length && orderedScenes.length > 0
+              ? "Todas as cenas ja possuem narracao efetiva."
+              : `${narrationReadyCount}/${orderedScenes.length} cena(s) com narracao pronta.`,
+          optional: false
+        },
+        {
+          id: "visuals",
+          label: "Visuais",
+          done: orderedScenes.length > 0 && missingVisualCount === 0,
+          detail:
+            missingVisualCount === 0
+              ? "Todas as cenas ja possuem visual efetivo."
+              : `${missingVisualCount} cena(s) ainda sem visual efetivo.`,
+          optional: false
+        },
+        {
+          id: "microclip",
+          label: "Microclip opcional",
+          done:
+            !reelsFactoryTemplate?.allowsMicroclip ||
+            editorialMicroclips.length > 0,
+          detail: reelsFactoryTemplate?.allowsMicroclip
+            ? editorialMicroclips.length > 0
+              ? `${editorialMicroclips.length} microclip(s) anexado(s).`
+              : "Template aceita microclip, mas ele continua opcional."
+            : "Este template nao precisa de microclip para seguir.",
+          optional: true
+        },
+        {
+          id: "mastering",
+          label: "Mastering",
+          done: Boolean(selectedAudioMasteringPreset.id),
+          detail: `Preset ativo ${selectedAudioMasteringPreset.name}.`,
+          optional: false
+        },
+        {
+          id: "render",
+          label: "Render",
+          done: Boolean(liveProductionChecklist?.readyToRender),
+          detail: liveProductionChecklist?.readyToRender
+            ? "Checklist operacional ja libera render."
+            : "Ainda faltam itens do checklist antes do render final.",
+          optional: false
+        }
+      ]
+    : [];
   const qualityAlerts = [
     ...new Set(
       [
@@ -1078,6 +1254,20 @@ export function ProjectStudio({
           ? "Projeto sem canal associado."
           : null
       ].filter((value): value is string => Boolean(value))
+    )
+  ];
+  const filteredQualityAlerts = [
+    ...new Set(
+      qualityAlerts.filter((alert) =>
+        filterContradictoryNarrativeNotice(alert, {
+          climaxDetected:
+            liveProductionChecklist?.climaxDetected ??
+            storyAnalysis.analysis.climaxDetected,
+          ctaDetected:
+            liveProductionChecklist?.ctaDetected ??
+            storyAnalysis.analysis.ctaDetected
+        })
+      )
     )
   ];
 
@@ -1733,6 +1923,19 @@ export function ProjectStudio({
                 Canal {project.channel?.name ?? "Sem canal"} - formato{" "}
                 {project.format} - alvo {formatDuration(project.durationTarget)}
               </p>
+              {isReelsFactoryProject && reelsFactoryTemplate ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-[#ffe28a]/25 bg-[#ffe28a]/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-[#fff2c9]">
+                    Reels Factory
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-mist/70">
+                    {reelsFactoryTemplate.id}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-mist/70">
+                    workflow {reelsFactoryTemplate.recommendedWorkflowPackId}
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div
               className={`rounded-full border px-3 py-1 text-xs ${
@@ -1846,6 +2049,9 @@ export function ProjectStudio({
               const sceneMicroclipDuration = sceneMicroclips.reduce(
                 (total, microclip) => total + microclip.durationSeconds,
                 0
+              );
+              const sceneFactoryRecipe = parseReelsFactorySceneRecipe(
+                scene.visualRecipe
               );
 
               return (
@@ -2030,6 +2236,19 @@ export function ProjectStudio({
                         transicao{" "}
                         {scene.transition ?? presetPreview.effective.suggestedTransition}
                       </p>
+                      {scene.visualPrompt ? (
+                        <p className="mt-3 text-xs leading-6 text-mist/60">
+                          {scene.visualPrompt}
+                        </p>
+                      ) : null}
+                      {sceneFactoryRecipe ? (
+                        <p className="mt-3 text-xs leading-6 text-mist/60">
+                          workflow {sceneFactoryRecipe.suggestedWorkflowPackId ?? "n/a"} /
+                          voice {sceneFactoryRecipe.suggestedVoicePackId ?? "n/a"} /
+                          mastering{" "}
+                          {sceneFactoryRecipe.suggestedAudioMasteringPresetId ?? "n/a"}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
                       <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
@@ -2078,6 +2297,112 @@ export function ProjectStudio({
       </section>
 
       <aside className="space-y-6">
+        {isReelsFactoryProject && reelsFactoryTemplate ? (
+          <article className="rounded-[1.9rem] border border-[#ffe28a]/20 bg-[#ffe28a]/8 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                  Reels Factory
+                </p>
+                <h2 className="mt-3 text-2xl font-semibold text-white">
+                  Factory template ativo no projeto
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-mist/68">
+                  {reelsFactoryTemplate.description}
+                </p>
+              </div>
+              <span className="rounded-full border border-[#ffe28a]/25 bg-[#ffe28a]/10 px-3 py-1 text-xs uppercase tracking-[0.22em] text-[#fff2c9]">
+                {reelsFactoryTemplate.id}
+              </span>
+            </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Best for
+                </p>
+                <p className="mt-2 text-sm leading-7 text-white">
+                  {reelsFactoryTemplate.bestFor}
+                </p>
+              </div>
+              <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Pack stack
+                </p>
+                <p className="mt-2 text-sm leading-7 text-white">
+                  workflow {reelsFactoryTemplate.recommendedWorkflowPackId} / voice{" "}
+                  {reelsFactoryTemplate.recommendedVoicePackId} / mastering{" "}
+                  {selectedAudioMasteringPreset.id}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              {reelsFactoryRecommendedNextActions.map((action) => (
+                <span
+                  key={action}
+                  className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white"
+                >
+                  {formatFactoryActionLabel(action)}
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-3">
+              {reelsFactoryOperationalChecklist.map((item) => (
+                <div
+                  key={item.id}
+                  className={`rounded-[1.2rem] border px-4 py-3 ${
+                    item.done
+                      ? "border-emerald-400/20 bg-emerald-400/10"
+                      : item.optional
+                        ? "border-white/10 bg-black/20"
+                        : "border-amber-400/20 bg-amber-400/10"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-white">{item.label}</p>
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-mist/70">
+                      {item.done ? "ok" : item.optional ? "opcional" : "pendente"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-6 text-mist/65">
+                    {item.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-3">
+              {reelsFactorySceneRecipes.map(({ scene, recipe }) => (
+                <div
+                  key={scene.id}
+                  className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-white">
+                      Cena {scene.order} - {scene.title}
+                    </p>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-mist/70">
+                      {recipe?.suggestedWorkflowPackId ?? "workflow n/a"}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-6 text-mist/60">
+                    {scene.visualPrompt ?? "Prompt visual ainda nao definido."}
+                  </p>
+                  <p className="mt-2 text-xs leading-6 text-mist/60">
+                    voice {recipe?.suggestedVoicePackId ?? "n/a"} / mastering{" "}
+                    {recipe?.suggestedAudioMasteringPresetId ?? selectedAudioMasteringPreset.id}
+                    {recipe?.microclipSlot?.label
+                      ? ` / microclip ${recipe.microclipSlot.label}`
+                      : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
         <StoryEnginePanel analysis={storyAnalysis} />
 
         <article className="rounded-[1.9rem] border border-white/10 bg-white/[0.04] p-6">
@@ -2129,8 +2454,8 @@ export function ProjectStudio({
           </div>
 
           <div className="mt-6 space-y-3">
-            {qualityAlerts.length > 0 ? (
-              qualityAlerts.map((alert) => (
+            {filteredQualityAlerts.length > 0 ? (
+              filteredQualityAlerts.map((alert) => (
                 <div
                   key={alert}
                   className="rounded-[1.2rem] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"

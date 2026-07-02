@@ -20,11 +20,30 @@ function renderStateLabel(value: boolean) {
   return value ? "Detectado" : "Ausente";
 }
 
+function normalizeNarrativeNotice(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}+/gu, "")
+    .toLowerCase();
+}
+
 export function StoryEnginePanel({ analysis }: StoryEnginePanelProps) {
   const combinedNotices = [
     ...analysis.analysis.alerts,
     ...analysis.analysis.pacingWarnings
-  ];
+  ].filter((notice) => {
+    const normalized = normalizeNarrativeNotice(notice);
+
+    if (analysis.analysis.climaxDetected && normalized.includes("nenhum cl")) {
+      return false;
+    }
+
+    if (analysis.analysis.ctaDetected && normalized.includes("nenhum cta")) {
+      return false;
+    }
+
+    return true;
+  });
 
   return (
     <article className="rounded-[1.9rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(99,255,225,0.08),transparent_30%),rgba(255,255,255,0.04)] p-6">

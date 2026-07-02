@@ -31,6 +31,9 @@
       "@reelforge/story-engine": [
         "packages/story-engine/src/index.ts"
       ],
+      "@reelforge/story-engine/reels-factory": [
+        "packages/story-engine/src/reels-factory.ts"
+      ],
       "@reelforge/research-collector": [
         "packages/research-collector/src/index.ts"
       ],

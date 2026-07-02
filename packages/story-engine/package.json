@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./reels-factory": {
+      "types": "./dist/reels-factory.d.ts",
+      "default": "./dist/reels-factory.js"
     }
   },
   "scripts": {

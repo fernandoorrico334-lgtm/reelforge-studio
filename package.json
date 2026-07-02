@@ -44,6 +44,7 @@
     "smoke:premium-audio-render": "node scripts/smoke-premium-audio-render.mjs",
     "smoke:editorial-microclips": "node scripts/smoke-editorial-microclips.mjs",
     "smoke:render-with-microclips": "node scripts/smoke-render-with-microclips.mjs",
+    "smoke:reels-factory": "node scripts/smoke-reels-factory.mjs",
     "smoke:narration-windows-sapi:local": "node scripts/smoke-narration-windows-sapi-local.mjs"
   },
   "prisma": {

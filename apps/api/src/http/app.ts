@@ -28,6 +28,7 @@ import { handleMediaCollectorRoute } from "./routes/media-collector-routes.js";
 import { handleNarrationRoute } from "./routes/narration-routes.js";
 import { handleProductionRoute } from "./routes/production-routes.js";
 import { handlePromptEngineRoute } from "./routes/prompt-engine-routes.js";
+import { handleReelsFactoryRoute } from "./routes/reels-factory-routes.js";
 import { handleResearchRoute } from "./routes/research-routes.js";
 import { handleRenderJobRoute } from "./routes/render-job-routes.js";
 import { handleRenderMediaRoute } from "./routes/render-media-routes.js";
@@ -149,6 +150,20 @@ export function createApp({
         url.pathname,
         {
           assetRepository,
+          channelRepository,
+          projectRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
+      await handleReelsFactoryRoute(
+        request,
+        response,
+        url.pathname,
+        {
           channelRepository,
           projectRepository
         }
@@ -474,6 +489,11 @@ export function createApp({
         "/research/dossiers/:id/create-production",
         "/research/asset-requirements/:id/generate-visual",
         "/production/create-from-script",
+        "/reels-factory/templates",
+        "/reels-factory/templates/:id",
+        "/reels-factory/preview",
+        "/reels-factory/create-project",
+        "/reels-factory/create-batch",
         "/video-projects/:id/audio-plan",
         "/media/assets/:assetId",
         "/media/candidates/:candidateId/preview",

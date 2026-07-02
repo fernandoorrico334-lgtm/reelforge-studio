@@ -131,6 +131,13 @@ export default async function HomePage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-10">
         <DashboardCard
+          href="/reels-factory"
+          title="Reels Factory"
+          value="Batch"
+          description="Transforme temas editoriais em projetos prontos com roteiro, prompts, narracao e proximos passos."
+          accent="#ffe28a"
+        />
+        <DashboardCard
           href="/produce"
           title="Nova Producao"
           value="Flow"

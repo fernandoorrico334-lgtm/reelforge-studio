@@ -4,6 +4,10 @@ import {
   getNegativePromptPacks,
   getVisualPromptPacks
 } from "@reelforge/prompt-engine";
+import {
+  generateReelsFactoryPreview,
+  getReelsFactoryTemplates
+} from "@reelforge/story-engine/reels-factory";
 import { getTemplates } from "@reelforge/templates";
 import {
   mockAssets,
@@ -102,6 +106,12 @@ import type {
   ResearchSourceStatus,
   ResearchSourceType,
   ReelTemplateSummary,
+  ReelsFactoryBatchPayload,
+  ReelsFactoryBatchResponse,
+  ReelsFactoryCreateProjectResponse,
+  ReelsFactoryPreviewPayload,
+  ReelsFactoryPreviewResponse,
+  ReelsFactoryTemplate,
   RenderBlueprintResponse,
   ResearchRequirementPromptBuildResponse,
   ScenePayload,
@@ -952,6 +962,75 @@ export async function getTemplatesSnapshot(): Promise<{
     logServerFallback('templates', error);
     return { items: getTemplates(), source: 'mock' };
   }
+}
+
+export async function getReelsFactoryTemplatesSnapshot(): Promise<{
+  items: ReelsFactoryTemplate[];
+  source: DataSource;
+}> {
+  try {
+    const items = await requestJson<ReelsFactoryTemplate[]>(
+      "/reels-factory/templates"
+    );
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("reels-factory/templates", error);
+    return {
+      items: getReelsFactoryTemplates() as unknown as ReelsFactoryTemplate[],
+      source: "mock"
+    };
+  }
+}
+
+export async function previewReelsFactoryRequest(
+  payload: ReelsFactoryPreviewPayload
+) {
+  return requestJson<ReelsFactoryPreviewResponse>("/reels-factory/preview", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function previewReelsFactorySnapshot(
+  payload: ReelsFactoryPreviewPayload
+): Promise<{
+  item: ReelsFactoryPreviewResponse;
+  source: DataSource;
+}> {
+  try {
+    const item = await previewReelsFactoryRequest(payload);
+    return { item, source: "api" };
+  } catch (error) {
+    logServerFallback("reels-factory/preview", error);
+    return {
+      item: generateReelsFactoryPreview(payload) as unknown as ReelsFactoryPreviewResponse,
+      source: "mock"
+    };
+  }
+}
+
+export async function createReelsFactoryProjectRequest(
+  payload: ReelsFactoryPreviewPayload
+) {
+  return requestJson<ReelsFactoryCreateProjectResponse>(
+    "/reels-factory/create-project",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function createReelsFactoryBatchRequest(
+  payload: ReelsFactoryBatchPayload
+) {
+  return requestJson<ReelsFactoryBatchResponse>(
+    "/reels-factory/create-batch",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
 }
 
 export async function getCaptionStylesSnapshot(): Promise<{

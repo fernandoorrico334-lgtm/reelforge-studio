@@ -18,6 +18,10 @@ temp/
 *.temp
 packages/cinematic-engine/src/index.js
 packages/cinematic-engine/src/index.d.ts
+packages/audio-engine/src/index.js
+packages/audio-engine/src/index.d.ts
+packages/audio-engine/src/mastering.js
+packages/audio-engine/src/mastering.d.ts
 
 storage/assets/*
 !storage/assets/.gitkeep

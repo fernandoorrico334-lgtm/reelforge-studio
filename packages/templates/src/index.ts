@@ -9,7 +9,15 @@ export const templateIds = [
   "history_dark",
   "sports_hype",
   "true_crime",
-  "cinematic_story"
+  "cinematic_story",
+  "player_threat_analysis",
+  "tactical_breakdown",
+  "match_preview",
+  "post_match_hot_take",
+  "rivalry_hype",
+  "top_3_ranking",
+  "underdog_story",
+  "brazil_warning"
 ] as const;
 
 export type TemplateId = (typeof templateIds)[number];
@@ -205,6 +213,158 @@ const templateRegistry: Record<TemplateId, ReelTemplate> = {
     recommendedSceneDuration: 4.7,
     introStyle: "hook then context ladder",
     outroStyle: "clean resolve or CTA depending niche"
+  },
+  player_threat_analysis: {
+    id: "player_threat_analysis",
+    name: "Player Threat Analysis",
+    description:
+      "Template editorial para reels que isolam a maior ameaca individual de um confronto.",
+    niche: "sports threat analysis",
+    defaultVisualPreset: "action",
+    defaultCaptionStyle: "sports_hype",
+    defaultTransition: "whip-cut",
+    colorMood: "stadium contrast with urgent neon edges",
+    musicMood: "pressure drums and rising synths",
+    sfxMood: "impact sweeps and sharp crowd lifts",
+    pacing: "fast analytical build",
+    cameraBehavior: "tight pushes with tactical emphasis",
+    overlayStyle: "scoreboard overlays and danger callouts",
+    recommendedSceneDuration: 5.2,
+    introStyle: "hard warning in the first second",
+    outroStyle: "debate question around the threat"
+  },
+  tactical_breakdown: {
+    id: "tactical_breakdown",
+    name: "Tactical Breakdown",
+    description:
+      "Template para explicar espacos, linhas de passe e ajustes decisivos em formato curto.",
+    niche: "sports tactical analysis",
+    defaultVisualPreset: "suspense",
+    defaultCaptionStyle: "documentary_clean",
+    defaultTransition: "cut",
+    colorMood: "chalkboard teal with broadcast white",
+    musicMood: "measured pulse with restrained tension",
+    sfxMood: "marker swipes and subtle impacts",
+    pacing: "measured tactical climb",
+    cameraBehavior: "controlled drifts and zone highlights",
+    overlayStyle: "analysis cards and field-map accents",
+    recommendedSceneDuration: 5.4,
+    introStyle: "where the game opens",
+    outroStyle: "final tactical adjustment"
+  },
+  match_preview: {
+    id: "match_preview",
+    name: "Match Preview",
+    description:
+      "Template premium para previas editoriais de jogo com tensao, chave tática e expectativa.",
+    niche: "sports match preview",
+    defaultVisualPreset: "epic",
+    defaultCaptionStyle: "sports_hype",
+    defaultTransition: "flash",
+    colorMood: "floodlight silver with electric accents",
+    musicMood: "trailer percussion with broadcast pulse",
+    sfxMood: "crowd swells and kickoff sweeps",
+    pacing: "expectation curve",
+    cameraBehavior: "hero framing with selective punch-ins",
+    overlayStyle: "fixture cards and pre-match HUD",
+    recommendedSceneDuration: 5,
+    introStyle: "big question opener",
+    outroStyle: "prediction or pressure prompt"
+  },
+  post_match_hot_take: {
+    id: "post_match_hot_take",
+    name: "Post Match Hot Take",
+    description:
+      "Template de opiniao quente logo apos o jogo, com tese forte e punch editorial.",
+    niche: "sports hot take",
+    defaultVisualPreset: "drama",
+    defaultCaptionStyle: "sports_hype",
+    defaultTransition: "cut",
+    colorMood: "late-night highlight glow with sharp contrast",
+    musicMood: "snappy bass hits and editorial pulse",
+    sfxMood: "stings, swishes and hard punctuation",
+    pacing: "short explosive beats",
+    cameraBehavior: "tight cuts and statement framing",
+    overlayStyle: "headline bars and quick stat badges",
+    recommendedSceneDuration: 4.8,
+    introStyle: "strong opinion opener",
+    outroStyle: "agree or disagree CTA"
+  },
+  rivalry_hype: {
+    id: "rivalry_hype",
+    name: "Rivalry Hype",
+    description:
+      "Template de duelo grande, fisico e emocional, ideal para confrontos pesados.",
+    niche: "sports rivalry hype",
+    defaultVisualPreset: "epic",
+    defaultCaptionStyle: "sports_hype",
+    defaultTransition: "flash",
+    colorMood: "high-voltage contrast with national-color streaks",
+    musicMood: "arena rise and heavy percussion",
+    sfxMood: "hits, whooshes and crowd detonations",
+    pacing: "collision course",
+    cameraBehavior: "impact pushes and collision framing",
+    overlayStyle: "versus frames and rivalry badges",
+    recommendedSceneDuration: 5.1,
+    introStyle: "collision hook",
+    outroStyle: "side-picking prompt"
+  },
+  top_3_ranking: {
+    id: "top_3_ranking",
+    name: "Top 3 Ranking",
+    description:
+      "Template ordenado para rankings editoriais curtos com leitura premium.",
+    niche: "sports ranking",
+    defaultVisualPreset: "drama",
+    defaultCaptionStyle: "premium_yellow",
+    defaultTransition: "cut",
+    colorMood: "studio amber with sharp black panels",
+    musicMood: "clean pulse with ranking stabs",
+    sfxMood: "ticks, drops and reveal clicks",
+    pacing: "ordered acceleration",
+    cameraBehavior: "card slides and spotlight reveals",
+    overlayStyle: "ranking plates and clean number stacks",
+    recommendedSceneDuration: 5.6,
+    introStyle: "ranking promise",
+    outroStyle: "ask for the audience ranking"
+  },
+  underdog_story: {
+    id: "underdog_story",
+    name: "Underdog Story",
+    description:
+      "Template para narrativas de ascensao, superacao e crescimento inesperado em torneios.",
+    niche: "sports underdog story",
+    defaultVisualPreset: "drama",
+    defaultCaptionStyle: "premium_yellow",
+    defaultTransition: "soft-dissolve",
+    colorMood: "warm contrast with underdog grit",
+    musicMood: "hopeful cinematic bed",
+    sfxMood: "subtle rises and controlled impacts",
+    pacing: "emotional climb",
+    cameraBehavior: "measured documentary drifts",
+    overlayStyle: "story cards and trajectory markers",
+    recommendedSceneDuration: 5.5,
+    introStyle: "nobody believed opener",
+    outroStyle: "how far can they go CTA"
+  },
+  brazil_warning: {
+    id: "brazil_warning",
+    name: "Brazil Warning",
+    description:
+      "Template de alerta curto e direto sobre riscos que o Brasil nao pode ignorar.",
+    niche: "brazil warning",
+    defaultVisualPreset: "suspense",
+    defaultCaptionStyle: "premium_yellow",
+    defaultTransition: "flash",
+    colorMood: "warning gold against stadium shadow",
+    musicMood: "tense pulse with controlled hits",
+    sfxMood: "alarm swells and tactical clicks",
+    pacing: "warning escalation",
+    cameraBehavior: "pressure close-ups and sharp pauses",
+    overlayStyle: "warning frames and attention bars",
+    recommendedSceneDuration: 4.9,
+    introStyle: "hard caution opener",
+    outroStyle: "is Brazil ready prompt"
   }
 };
 

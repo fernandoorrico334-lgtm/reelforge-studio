@@ -270,7 +270,15 @@ export const templateIds = [
   "history_dark",
   "sports_hype",
   "true_crime",
-  "cinematic_story"
+  "cinematic_story",
+  "player_threat_analysis",
+  "tactical_breakdown",
+  "match_preview",
+  "post_match_hot_take",
+  "rivalry_hype",
+  "top_3_ranking",
+  "underdog_story",
+  "brazil_warning"
 ] as const;
 
 export type TemplateId = (typeof templateIds)[number];
@@ -382,6 +390,155 @@ export interface ReelTemplateSummary {
   recommendedSceneDuration: number;
   introStyle: string;
   outroStyle: string;
+}
+
+export const reelsFactoryTemplateIds = [
+  "player_threat_analysis",
+  "tactical_breakdown",
+  "match_preview",
+  "post_match_hot_take",
+  "rivalry_hype",
+  "top_3_ranking",
+  "underdog_story",
+  "brazil_warning"
+] as const;
+
+export type ReelsFactoryTemplateId =
+  (typeof reelsFactoryTemplateIds)[number];
+
+export type ReelsFactoryNextAction =
+  | "generate_narration"
+  | "generate_visuals"
+  | "attach_microclip"
+  | "render";
+
+export type ReelsFactorySceneRole =
+  | "hook"
+  | "setup"
+  | "development"
+  | "impactMoment"
+  | "conclusion"
+  | "cta";
+
+export interface ReelsFactoryTemplateStructure {
+  hook: string;
+  setup: string;
+  development: string;
+  impactMoment: string;
+  conclusion: string;
+  cta: string;
+}
+
+export interface ReelsFactoryTemplate {
+  id: ReelsFactoryTemplateId;
+  name: string;
+  description: string;
+  bestFor: string;
+  defaultDurationSeconds: number;
+  defaultSceneCount: number;
+  recommendedTone: string;
+  recommendedVoicePackId: string;
+  recommendedWorkflowPackId: string;
+  recommendedQualityPresetId: "draft" | "standard" | "high";
+  recommendedAudioMasteringPresetId: AudioMasteringPresetId;
+  allowsMicroclip: boolean;
+  microclipSuggestion: string;
+  structure: ReelsFactoryTemplateStructure;
+}
+
+export interface ReelsFactorySceneMicroclipSlot {
+  label: string;
+  usageMode: "supporting_evidence" | "impact_moment" | "quick_reference";
+  textOverlay: string | null;
+}
+
+export interface ReelsFactorySceneDraft {
+  orderIndex: number;
+  role: ReelsFactorySceneRole;
+  title: string;
+  durationSeconds: number;
+  narrationText: string;
+  onScreenText: string;
+  visualPrompt: string;
+  suggestedWorkflowPackId: string;
+  suggestedVoicePackId: string;
+  suggestedAudioMasteringPresetId: AudioMasteringPresetId;
+  suggestedVisualPresetId: CinematicPresetId;
+  captionStyleId: CaptionStyleId;
+  transition: string;
+  energyLevel: number;
+  microclipSlot: ReelsFactorySceneMicroclipSlot | null;
+}
+
+export interface ReelsFactoryPreviewPayload {
+  channelId?: string | null;
+  topic: string;
+  subject: string;
+  angle: string;
+  templateId: ReelsFactoryTemplateId;
+  tone: string;
+  durationSeconds: number;
+  language: string;
+  includeMicroclip: boolean;
+}
+
+export interface ReelsFactoryBatchItemPayload {
+  topic: string;
+  subject?: string | null;
+  angle?: string | null;
+}
+
+export interface ReelsFactoryBatchPayload {
+  channelId?: string | null;
+  items: ReelsFactoryBatchItemPayload[];
+  templateId: ReelsFactoryTemplateId;
+  tone: string;
+  durationSeconds: number;
+  language: string;
+  includeMicroclip: boolean;
+}
+
+export interface ReelsFactoryPreviewResponse {
+  title: string;
+  shortDescription: string;
+  hook: string;
+  templateId: ReelsFactoryTemplateId;
+  tone: string;
+  language: string;
+  durationSeconds: number;
+  includeMicroclip: boolean;
+  scenes: ReelsFactorySceneDraft[];
+  hashtags: string[];
+  caption: string;
+  checklist: string[];
+  recommendedNextActions: ReelsFactoryNextAction[];
+}
+
+export interface ReelsFactoryCreateProjectResponse {
+  projectId: string;
+  title: string;
+  scenesCreated: number;
+  project: StudioProject;
+  preview: ReelsFactoryPreviewResponse;
+  recommendedNextActions: ReelsFactoryNextAction[];
+}
+
+export interface ReelsFactoryBatchProjectResult {
+  projectId: string;
+  title: string;
+  scenesCreated: number;
+  topic: string;
+}
+
+export interface ReelsFactoryBatchFailure {
+  topic: string;
+  error: string;
+}
+
+export interface ReelsFactoryBatchResponse {
+  projects: ReelsFactoryBatchProjectResult[];
+  failures: ReelsFactoryBatchFailure[];
+  totalCreated: number;
 }
 
 export interface StudioChannel {
