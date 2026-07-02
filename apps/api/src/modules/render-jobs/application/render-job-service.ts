@@ -32,6 +32,9 @@ async function createPreparedRenderJob(
     videoProjectId: string;
     renderMode?: CreateRenderJobRequestInput["renderMode"];
     renderQuality?: CreateRenderJobRequestInput["renderQuality"];
+    audioMasteringPresetId?:
+      | CreateRenderJobRequestInput["audioMasteringPresetId"]
+      | null;
     attempt?: number;
     retriedFromJobId?: string | null;
   }
@@ -51,6 +54,7 @@ async function createPreparedRenderJob(
     videoProjectId: input.videoProjectId,
     renderMode: input.renderMode ?? defaultRenderMode,
     renderQuality: input.renderQuality ?? defaultRenderQuality,
+    audioMasteringPresetId: input.audioMasteringPresetId ?? null,
     retriedFromJobId: input.retriedFromJobId ?? null
   };
 
@@ -115,6 +119,10 @@ export async function createRenderJobForProject(
 
   if (input.renderQuality) {
     createInput.renderQuality = input.renderQuality;
+  }
+
+  if (input.audioMasteringPresetId) {
+    createInput.audioMasteringPresetId = input.audioMasteringPresetId;
   }
 
   return createPreparedRenderJob(
@@ -209,6 +217,7 @@ export async function retryRenderJob(
       videoProjectId: renderJob.videoProjectId,
       renderMode: renderJob.renderMode,
       renderQuality: renderJob.renderQuality,
+      audioMasteringPresetId: renderJob.audioMasteringPresetId,
       retriedFromJobId: renderJob.id,
       attempt: renderJob.attempt + 1
     }

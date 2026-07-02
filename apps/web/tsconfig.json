@@ -11,6 +11,7 @@
     "noEmit": true,
     "paths": {
       "@reelforge/audio-engine": ["../../packages/audio-engine/src/index.ts"],
+      "@reelforge/audio-engine/mastering": ["../../packages/audio-engine/src/mastering.ts"],
       "@reelforge/narration-engine": ["../../packages/narration-engine/src/index.ts"],
       "@reelforge/video-engine": ["../../packages/video-engine/src/index.ts"],
       "@reelforge/story-engine": ["../../packages/story-engine/src/index.ts"],

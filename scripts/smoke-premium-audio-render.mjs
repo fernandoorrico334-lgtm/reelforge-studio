@@ -13,16 +13,17 @@ import {
   resolveFirstExistingPath,
   safeCheckFfmpeg,
   safeCheckFfprobe,
-  writeMinimalPng
+  writeMinimalPng,
+  writeMinimalWav
 } from "./lib/smoke-utils.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, "..");
-const smokeChannelName = "Smoke Render Narration Channel";
-const smokeProjectTitle = "Smoke Render With Narration";
+const smokeChannelName = "Smoke Premium Audio Channel";
+const smokeProjectTitle = "Smoke Premium Audio Render";
 
 function log(message) {
-  console.log(`[smoke:render-with-narration] ${message}`);
+  console.log(`[smoke:premium-audio-render] ${message}`);
 }
 
 function assert(condition, message) {
@@ -39,7 +40,7 @@ function createCommandError(command, args, code, stdout, stderr) {
   const tail = `${stderr}${stdout}`
     .trim()
     .split(/\r?\n/u)
-    .slice(-8)
+    .slice(-10)
     .join(" | ");
   const error = new Error(
     `Command '${formatCommand(command, args)}' failed with code ${code ?? "unknown"}. ${tail || "No stdout/stderr output captured."}`
@@ -71,10 +72,7 @@ function createSpawnError(command, args, error) {
 
 function extractAttemptedCommand(error, fallbackCommand = null) {
   if (error && typeof error === "object" && "command" in error && "args" in error) {
-    return formatCommand(
-      error.command,
-      Array.isArray(error.args) ? error.args : []
-    );
+    return formatCommand(error.command, Array.isArray(error.args) ? error.args : []);
   }
 
   return fallbackCommand;
@@ -121,7 +119,7 @@ async function importModule(relativePath) {
 async function ensureBuildArtifacts() {
   const apiBuildRoot = await resolveApiBuildRoot(
     projectRoot,
-    "Run 'npm run build' before running smoke:render-with-narration."
+    "Run 'npm run build' before running smoke:premium-audio-render."
   );
   const workerBuildRoot = await resolveFirstExistingPath(
     projectRoot,
@@ -130,7 +128,7 @@ async function ensureBuildArtifacts() {
       "apps/worker/dist/src",
       "apps/worker/dist"
     ],
-    "Run 'npm run build' before running smoke:render-with-narration."
+    "Run 'npm run build' before running smoke:premium-audio-render."
   );
   const apiArtifacts = [
     "infrastructure/database/prisma-client.js",
@@ -157,7 +155,7 @@ async function ensureBuildArtifacts() {
       ...apiArtifacts,
       ...workerArtifacts
     ],
-    "Run 'npm run build' before running smoke:render-with-narration."
+    "Run 'npm run build' before running smoke:premium-audio-render."
   );
 
   return { apiBuildRoot, workerBuildRoot };
@@ -249,6 +247,21 @@ async function loadDependencies(apiBuildRoot, workerBuildRoot) {
   };
 }
 
+function parseRenderMetadata(value) {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 async function cleanupPreviousSmokeData(prismaClient) {
   const previousProjects = await prismaClient.videoProject.findMany({
     where: { title: smokeProjectTitle },
@@ -293,7 +306,12 @@ async function cleanupPreviousSmokeData(prismaClient) {
     where: { id: { in: previousProjectIds } }
   });
   await prismaClient.asset.deleteMany({
-    where: { id: { in: previousGeneratedAssetIds } }
+    where: {
+      OR: [
+        { id: { in: previousGeneratedAssetIds } },
+        { path: { startsWith: "storage/assets/smoke/premium-audio-render/" } }
+      ]
+    }
   });
 }
 
@@ -301,17 +319,17 @@ async function ensureSmokeChannel(prismaClient) {
   return prismaClient.channel.upsert({
     where: { name: smokeChannelName },
     update: {
-      niche: "render narration smoke",
+      niche: "premium audio smoke",
       language: "pt-BR",
-      visualStyle: "deterministic smoke boards",
+      visualStyle: "deterministic smoke frames",
       narrativeTone: "technical validation",
       defaultTemplate: "cinematic_story"
     },
     create: {
       name: smokeChannelName,
-      niche: "render narration smoke",
+      niche: "premium audio smoke",
       language: "pt-BR",
-      visualStyle: "deterministic smoke boards",
+      visualStyle: "deterministic smoke frames",
       narrativeTone: "technical validation",
       defaultTemplate: "cinematic_story"
     }
@@ -319,7 +337,7 @@ async function ensureSmokeChannel(prismaClient) {
 }
 
 async function ensureSceneImageAsset(prismaClient, definition) {
-  const relativePath = `storage/assets/smoke/render-with-narration/${definition.filename}`;
+  const relativePath = `storage/assets/smoke/premium-audio-render/${definition.filename}`;
   const absolutePath = await writeMinimalPng(
     join(projectRoot, relativePath),
     definition.filename
@@ -336,10 +354,10 @@ async function ensureSceneImageAsset(prismaClient, definition) {
       franchise: "Smoke Test",
       character: null,
       emotion: definition.emotion,
-      tags: JSON.stringify(["smoke", "render-with-narration", definition.visualPreset]),
+      tags: JSON.stringify(["smoke", "premium-audio-render", definition.visualPreset]),
       licenseType: "local-generated",
       copyrightRisk: "LOW",
-      recommendedUse: "Render with narration smoke image",
+      recommendedUse: "Premium audio render smoke image",
       duration: null,
       width: 1080,
       height: 1920,
@@ -356,10 +374,10 @@ async function ensureSceneImageAsset(prismaClient, definition) {
       franchise: "Smoke Test",
       character: null,
       emotion: definition.emotion,
-      tags: JSON.stringify(["smoke", "render-with-narration", definition.visualPreset]),
+      tags: JSON.stringify(["smoke", "premium-audio-render", definition.visualPreset]),
       licenseType: "local-generated",
       copyrightRisk: "LOW",
-      recommendedUse: "Render with narration smoke image",
+      recommendedUse: "Premium audio render smoke image",
       duration: null,
       width: 1080,
       height: 1920,
@@ -370,29 +388,85 @@ async function ensureSceneImageAsset(prismaClient, definition) {
   });
 }
 
+async function ensureWaveAsset(prismaClient, definition) {
+  const relativePath = `storage/assets/smoke/premium-audio-render/${definition.filename}`;
+  const absolutePath = await writeMinimalWav(
+    join(projectRoot, relativePath),
+    definition.duration,
+    definition.sampleRate ?? 48000,
+    definition.filename
+  );
+  const fileStats = await stat(absolutePath);
+
+  return prismaClient.asset.upsert({
+    where: { path: relativePath },
+    update: {
+      filename: definition.filename,
+      originalName: definition.filename,
+      type: definition.type,
+      category: definition.category,
+      franchise: "Smoke Test",
+      character: null,
+      emotion: definition.emotion,
+      tags: JSON.stringify(definition.tags),
+      licenseType: "local-generated",
+      copyrightRisk: "LOW",
+      recommendedUse: definition.recommendedUse,
+      duration: definition.duration,
+      width: null,
+      height: null,
+      mimeType: "audio/wav",
+      extension: ".wav",
+      fileSize: fileStats.size
+    },
+    create: {
+      filename: definition.filename,
+      originalName: definition.filename,
+      path: relativePath,
+      type: definition.type,
+      category: definition.category,
+      franchise: "Smoke Test",
+      character: null,
+      emotion: definition.emotion,
+      tags: JSON.stringify(definition.tags),
+      licenseType: "local-generated",
+      copyrightRisk: "LOW",
+      recommendedUse: definition.recommendedUse,
+      duration: definition.duration,
+      width: null,
+      height: null,
+      mimeType: "audio/wav",
+      extension: ".wav",
+      fileSize: fileStats.size
+    }
+  });
+}
+
 async function prepareSmokeData(deps) {
   const sceneDefinitions = [
     {
       filename: "scene-1.png",
-      title: "Narrated opener",
+      title: "Opening beat",
       narrationText:
-        "Esta primeira cena valida a entrada de narracao mock no render final.",
-      captionText: "Narracao presente no mix",
-      duration: 3,
-      emotion: "CURIOUS",
-      visualPreset: "calm",
-      transition: "fade"
-    },
-    {
-      filename: "scene-2.png",
-      title: "Narrated close",
-      narrationText:
-        "A segunda cena fecha o smoke e confirma que o blueprint usa narration effective asset.",
-      captionText: "Blueprint com effective narration",
+        "A abertura valida a narracao mock sobre uma cama musical com ducking premium.",
+      captionText: "Narracao + musica + ducking",
       duration: 3,
       emotion: "EPIC",
       visualPreset: "epic",
-      transition: "hard-cut"
+      transition: "fade",
+      sfxStartTime: 0.15
+    },
+    {
+      filename: "scene-2.png",
+      title: "Closing beat",
+      narrationText:
+        "A segunda cena confirma o limiter final e o equilibrio do audio no export vertical.",
+      captionText: "Limiter e loudness",
+      duration: 3,
+      emotion: "TENSE",
+      visualPreset: "action",
+      transition: "hard-cut",
+      sfxStartTime: 0.25
     }
   ];
 
@@ -405,16 +479,44 @@ async function prepareSmokeData(deps) {
     imageAssets.push(await ensureSceneImageAsset(deps.apiPrisma, definition));
   }
 
+  const musicAsset = await ensureWaveAsset(deps.apiPrisma, {
+    filename: "music-bed.wav",
+    duration: 6,
+    sampleRate: 48000,
+    type: "MUSIC",
+    category: "TRACK",
+    emotion: "EPIC",
+    tags: ["smoke", "premium-audio-render", "music"],
+    recommendedUse: "Premium audio render smoke music bed"
+  });
+  const sfxAsset = await ensureWaveAsset(deps.apiPrisma, {
+    filename: "impact.wav",
+    duration: 0.5,
+    sampleRate: 48000,
+    type: "SFX",
+    category: "EFFECT",
+    emotion: "TENSE",
+    tags: ["smoke", "premium-audio-render", "sfx"],
+    recommendedUse: "Premium audio render smoke transition SFX"
+  });
+
   const project = await deps.apiPrisma.videoProject.create({
     data: {
       title: smokeProjectTitle,
-      status: "SCENE_PLANNING",
+      status: "READY_FOR_EDIT",
       channelId: channel.id,
-      script: "Projeto de smoke para validar mix local de narracao no render.",
+      script: "Projeto de smoke para validar mix premium com narracao, musica e SFX.",
       durationTarget: 6,
       format: "9:16",
       templateId: "cinematic_story",
       defaultCaptionStyle: "premium_yellow",
+      backgroundMusicAssetId: musicAsset.id,
+      audioMood: "sports_hype",
+      musicVolume: 0.22,
+      voiceVolume: 1,
+      sfxVolume: 0.82,
+      enableAudioDucking: true,
+      duckingLevel: 0.35,
       scenes: {
         create: sceneDefinitions.map((definition, index) => ({
           order: index + 1,
@@ -424,9 +526,16 @@ async function prepareSmokeData(deps) {
           duration: definition.duration,
           emotion: definition.emotion,
           assetId: imageAssets[index]?.id ?? null,
+          sfxAssetId: sfxAsset.id,
+          sfxStartTime: definition.sfxStartTime,
+          sfxVolume: index === 0 ? 0.76 : 0.84,
           visualPreset: definition.visualPreset,
           visualSourceMode: "asset_only",
-          transition: definition.transition
+          transition: definition.transition,
+          captionStyle: "premium_yellow",
+          captionPosition: "lower-third",
+          captionEmphasisWords: JSON.stringify(["premium", "audio", `scene-${index + 1}`]),
+          energyLevel: index === 0 ? 72 : 86
         }))
       }
     },
@@ -460,7 +569,7 @@ async function prepareSmokeData(deps) {
         scene.id,
         {
           provider: "mock-tts",
-          voicePackId: "documentary_ptbr",
+          voicePackId: "sports_hype_ptbr",
           text: null,
           language: "pt-BR",
           autoAttach: true
@@ -481,8 +590,8 @@ async function prepareSmokeData(deps) {
     project.id,
     {
       renderMode: "v1",
-      renderQuality: "draft",
-      audioMasteringPresetId: "shorts_clean_voice"
+      renderQuality: "standard",
+      audioMasteringPresetId: "football_hype"
     }
   );
 
@@ -496,13 +605,6 @@ async function prepareSmokeData(deps) {
 
 async function inspectWithFfprobe(absoluteOutputPath) {
   const ffprobeCommand = resolveBinaryCommand("ffprobe").command;
-
-  try {
-    await runCommand(ffprobeCommand, ["-version"]);
-  } catch {
-    return null;
-  }
-
   const { stdout } = await runCommand(ffprobeCommand, [
     "-v",
     "error",
@@ -528,8 +630,8 @@ async function inspectWithFfprobe(absoluteOutputPath) {
     hasAudio: Boolean(audioStream),
     audioCodec:
       typeof audioStream?.codec_name === "string" ? audioStream.codec_name : null,
-    videoCodec:
-      typeof videoStream?.codec_name === "string" ? videoStream.codec_name : null,
+    audioChannels: Number(audioStream?.channels ?? 0) || null,
+    audioSampleRate: Number(audioStream?.sample_rate ?? 0) || null,
     durationSeconds:
       Number.isFinite(durationValue) && durationValue > 0
         ? Math.round(durationValue * 1000) / 1000
@@ -561,9 +663,27 @@ async function validateRenderResult(deps, smokeSetup) {
     throw new Error("Render output is empty.");
   }
 
-  if (!renderJob.hasAudio || !ffprobe?.hasAudio) {
-    throw new Error("Render completed without an audio stream containing narration.");
-  }
+  const metadata = parseRenderMetadata(renderJob.metadata);
+  const audioQualityReport = metadata.audioQualityReport ?? null;
+
+  assert(audioQualityReport, "Render job metadata is missing audioQualityReport.");
+  assert(
+    audioQualityReport.masteringPresetId === "football_hype",
+    `Expected masteringPresetId=football_hype, received ${audioQualityReport.masteringPresetId}.`
+  );
+  assert(audioQualityReport.narrationIncluded, "Expected narrationIncluded=true.");
+  assert(audioQualityReport.musicIncluded, "Expected musicIncluded=true.");
+  assert(audioQualityReport.sfxIncluded, "Expected sfxIncluded=true.");
+  assert(audioQualityReport.duckingEnabled, "Expected duckingEnabled=true.");
+  assert(
+    audioQualityReport.duckingMode === "sidechain" ||
+      audioQualityReport.duckingMode === "global_reduction",
+    `Unexpected duckingMode '${audioQualityReport.duckingMode}'.`
+  );
+
+  const audioCodec = renderJob.audioCodec ?? ffprobe.audioCodec;
+  assert(audioCodec === "aac", `Expected audioCodec=aac, received ${audioCodec}.`);
+  assert(Boolean(renderJob.hasAudio && ffprobe.hasAudio), "Render output is missing audio.");
 
   const projectRepository = deps.createPrismaProjectRepository({
     prismaClient: deps.apiPrisma
@@ -578,28 +698,20 @@ async function validateRenderResult(deps, smokeSetup) {
   );
 
   assert(
-    blueprint.audio.sceneNarrations.length >= 1,
-    "Blueprint audio plan did not include scene narrations."
+    blueprint.audio.sceneNarrations.length >= 2,
+    "Blueprint audio plan did not include generated scene narrations."
   );
-
-  const metadata = renderJob.metadata ? JSON.parse(renderJob.metadata) : {};
-  const audioQualityReport =
-    metadata && typeof metadata === "object" && !Array.isArray(metadata)
-      ? metadata.audioQualityReport ?? null
-      : null;
-
-  assert(audioQualityReport, "Render job metadata is missing audioQualityReport.");
   assert(
-    audioQualityReport.masteringPresetId === "shorts_clean_voice",
-    `Expected masteringPresetId=shorts_clean_voice, received ${audioQualityReport.masteringPresetId}.`
+    blueprint.scenes.every((scene) => Boolean(scene.effectiveNarrationAssetId)),
+    "Expected every smoke scene to expose effectiveNarrationAssetId."
   );
 
   return {
     renderJob,
     ffprobe,
     blueprint,
-    absoluteOutputPath,
-    audioQualityReport
+    audioQualityReport,
+    absoluteOutputPath
   };
 }
 
@@ -613,22 +725,27 @@ async function main() {
   const ffmpegResolution = resolveBinaryCommand("ffmpeg");
   const ffprobeResolution = resolveBinaryCommand("ffprobe");
 
-  log("Checking FFmpeg availability.");
+  log("Checking FFmpeg and FFprobe availability.");
+
   try {
     ffmpegAvailability = await safeCheckFfmpeg(runCommand);
     ffprobeAvailability = await safeCheckFfprobe(runCommand);
 
-    if (!ffmpegAvailability.available) {
+    if (!ffmpegAvailability.available || !ffprobeAvailability.available) {
+      const blockingBinary = !ffmpegAvailability.available
+        ? ffmpegAvailability
+        : ffprobeAvailability;
+
       printSmokeSummary({
-        smoke: "render-with-narration",
+        smoke: "premium-audio-render",
         status: "skipped",
         stage: currentStage,
-        reason: ffmpegAvailability.blockedByEnvironment
+        reason: blockingBinary.blockedByEnvironment
           ? buildEnvironmentBlockerMessage(
-              "Smoke de render com narracao",
-              "`npm run smoke:narration-render-plan`"
+              "Smoke de render premium com audio",
+              "`npm run smoke:audio-mastering-presets`"
             )
-          : ffmpegAvailability.errorMessage ?? "FFmpeg unavailable.",
+          : blockingBinary.errorMessage ?? "FFmpeg or FFprobe unavailable.",
         ffmpegCommand: ffmpegAvailability.command,
         ffmpegSource: ffmpegAvailability.source,
         ffmpegEnvVar: ffmpegAvailability.envVar,
@@ -637,9 +754,9 @@ async function main() {
         ffprobeSource: ffprobeAvailability.source,
         ffprobeEnvVar: ffprobeAvailability.envVar,
         ffprobeError: ffprobeAvailability.errorMessage,
-        suggestion: ffmpegAvailability.notFound
-          ? `Confirme o PATH ou defina ${ffmpegAvailability.envVar}.`
-          : "Rode o doctor para diagnosticar o runtime: `npm run doctor:ffmpeg`."
+        suggestion: blockingBinary.notFound
+          ? `Confirme o PATH ou defina ${blockingBinary.envVar}.`
+          : "Rode `npm run doctor:ffmpeg` para diagnosticar o runtime antes do smoke premium."
       });
       return;
     }
@@ -664,25 +781,20 @@ async function main() {
     } catch (error) {
       if (isSpawnPermissionError(error)) {
         printSmokeSummary({
-          smoke: "render-with-narration",
+          smoke: "premium-audio-render",
           status: "skipped",
           stage: currentStage,
           reason: buildEnvironmentBlockerMessage(
-            "Smoke de render com narracao",
-            "`npm run smoke:narration-render-plan`"
+            "Smoke de render premium com audio",
+            "`npm run smoke:audio-mastering-presets`"
           ),
           ffmpegCommand: ffmpegAvailability.command,
           ffmpegSource: ffmpegAvailability.source,
-          ffmpegError: ffmpegAvailability.errorMessage,
           ffprobeCommand: ffprobeAvailability.command,
           ffprobeSource: ffprobeAvailability.source,
-          ffprobeError: ffprobeAvailability.errorMessage,
-          attemptedCommand: extractAttemptedCommand(
-            error,
-            lastAttemptedCommand
-          ),
+          attemptedCommand: extractAttemptedCommand(error, lastAttemptedCommand),
           suggestion:
-            "O runtime do Node nao conseguiu abrir um processo filho. Rode `npm run doctor:ffmpeg` e depois execute o smoke em um terminal normal/elevado fora deste sandbox."
+            "O runtime do Node nao conseguiu abrir um processo filho. Rode `npm run doctor:ffmpeg` e depois execute este smoke fora do sandbox."
         });
         return;
       }
@@ -693,21 +805,17 @@ async function main() {
     if (workerResult.exitCode !== 0) {
       if (isSpawnPermissionError(workerResult.errorMessage ?? "")) {
         printSmokeSummary({
-          smoke: "render-with-narration",
+          smoke: "premium-audio-render",
           status: "skipped",
           stage: currentStage,
           reason: buildEnvironmentBlockerMessage(
-            "Smoke de render com narracao",
-            "`npm run smoke:narration-render-plan`"
+            "Smoke de render premium com audio",
+            "`npm run smoke:audio-mastering-presets`"
           ),
           ffmpegCommand: ffmpegAvailability.command,
-          ffmpegSource: ffmpegAvailability.source,
-          ffmpegError: ffmpegAvailability.errorMessage,
           ffprobeCommand: ffprobeAvailability.command,
-          ffprobeSource: ffprobeAvailability.source,
-          ffprobeError: ffprobeAvailability.errorMessage,
           suggestion:
-            "O worker encontrou bloqueio de spawn. Rode `npm run doctor:ffmpeg` para confirmar se o bloqueio e do ambiente ou do caminho do binario."
+            "O worker encontrou bloqueio de spawn. Rode `npm run doctor:ffmpeg` em terminal normal/elevado."
         });
         return;
       }
@@ -722,7 +830,7 @@ async function main() {
     const validation = await validateRenderResult(deps, smokeSetup);
 
     printSmokeSummary({
-      smoke: "render-with-narration",
+      smoke: "premium-audio-render",
       projectId: smokeSetup.projectId,
       sceneIds: smokeSetup.sceneIds,
       jobId: smokeSetup.renderJobId,
@@ -731,17 +839,21 @@ async function main() {
       ),
       outputPath: validation.renderJob.outputPath,
       absoluteOutputPath: validation.absoluteOutputPath,
-      narrationIncluded:
-        validation.blueprint.audio.sceneNarrations.length > 0 &&
-        Boolean(validation.renderJob.hasAudio),
       masteringPresetId: validation.audioQualityReport.masteringPresetId,
+      narrationIncluded: validation.audioQualityReport.narrationIncluded,
+      musicIncluded: validation.audioQualityReport.musicIncluded,
+      sfxIncluded: validation.audioQualityReport.sfxIncluded,
+      duckingEnabled: validation.audioQualityReport.duckingEnabled,
       duckingMode: validation.audioQualityReport.duckingMode,
       compressorApplied: validation.audioQualityReport.compressorApplied,
       limiterApplied: validation.audioQualityReport.limiterApplied,
       loudnormApplied: validation.audioQualityReport.loudnormApplied,
-      audioCodec: validation.renderJob.audioCodec ?? validation.ffprobe?.audioCodec ?? null,
+      audioCodec: validation.renderJob.audioCodec ?? validation.ffprobe.audioCodec ?? null,
+      finalAudioSampleRate:
+        validation.audioQualityReport.finalAudioSampleRate ??
+        validation.ffprobe.audioSampleRate,
       durationSeconds:
-        validation.renderJob.outputDuration ?? validation.ffprobe?.durationSeconds ?? null,
+        validation.renderJob.outputDuration ?? validation.ffprobe.durationSeconds ?? null,
       ffmpegCommand: ffmpegAvailability.command,
       ffmpegSource: ffmpegAvailability.source,
       ffmpegVersion: ffmpegAvailability.versionLine,
@@ -754,7 +866,7 @@ async function main() {
     lastAttemptedCommand = extractAttemptedCommand(error, lastAttemptedCommand);
 
     printSmokeSummary({
-      smoke: "render-with-narration",
+      smoke: "premium-audio-render",
       status: isSpawnPermissionError(error) ? "skipped" : "failed",
       stage: currentStage,
       reason: error instanceof Error ? error.message : String(error),
@@ -768,8 +880,8 @@ async function main() {
       ffprobeError: ffprobeAvailability?.errorMessage ?? null,
       attemptedCommand: lastAttemptedCommand,
       suggestion: isSpawnPermissionError(error)
-        ? "O shell consegue ver o binario, mas o Node nao conseguiu abrir um subprocesso. Rode o smoke fora deste sandbox ou em terminal elevado."
-        : "Abra o render.log do job gerado e compare o comando tentado com `npm run doctor:ffmpeg`."
+        ? "O shell encontra o binario, mas o Node nao conseguiu abrir subprocesso. Rode o smoke em terminal normal/elevado."
+        : "Abra o render.log do job gerado e compare o pipeline com `npm run doctor:ffmpeg`."
     });
 
     if (!isSpawnPermissionError(error)) {
@@ -787,6 +899,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("[smoke:render-with-narration] failed unexpectedly", error);
+  console.error("[smoke:premium-audio-render] failed unexpectedly", error);
   process.exitCode = 1;
 });

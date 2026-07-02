@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./mastering": {
+      "types": "./dist/mastering.d.ts",
+      "default": "./dist/mastering.js"
     }
   },
   "scripts": {

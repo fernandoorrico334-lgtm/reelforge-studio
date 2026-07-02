@@ -36,6 +36,7 @@ interface RenderOutputMetadata {
   audioCodec: string | null;
   audioChannels: number | null;
   audioSampleRate: number | null;
+  audioBitrate: string | null;
 }
 
 const maxCapturedCommandOutputChars = 200_000;
@@ -305,6 +306,21 @@ async function runLoggedCommand(
   });
 }
 
+function parseRenderMetadata(value: string | null) {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 async function generateThumbnail(
   outputPath: string,
   thumbnailPath: string,
@@ -375,7 +391,8 @@ async function probeOutputMetadata(
     hasAudio: null,
     audioCodec: null,
     audioChannels: null,
-    audioSampleRate: null
+    audioSampleRate: null,
+    audioBitrate: null
   };
 
   try {
@@ -403,6 +420,7 @@ async function probeOutputMetadata(
         codec_name?: string;
         channels?: number | string;
         sample_rate?: number | string;
+        bit_rate?: number | string;
       }>;
       format?: {
         duration?: number | string;
@@ -437,7 +455,11 @@ async function probeOutputMetadata(
           ? audioStream.codec_name.trim()
           : null,
       audioChannels: Number(audioStream?.channels ?? 0) || null,
-      audioSampleRate: Number(audioStream?.sample_rate ?? 0) || null
+      audioSampleRate: Number(audioStream?.sample_rate ?? 0) || null,
+      audioBitrate:
+        Number(audioStream?.bit_rate ?? 0) > 0
+          ? `${Math.round(Number(audioStream?.bit_rate ?? 0) / 1000)}k`
+          : null
     };
 
     await appendRenderLog(
@@ -494,11 +516,16 @@ async function processRenderJob(renderJobId: string) {
     initialJob.videoProjectId,
     `Render mode: ${initialJob.renderMode ?? "v1"} | quality: ${initialJob.renderQuality ?? "standard"}.`
   );
+  const initialMetadata = parseRenderMetadata(initialJob.metadata);
+  const audioMasteringPresetId =
+    typeof initialMetadata.audioMasteringPresetId === "string"
+      ? initialMetadata.audioMasteringPresetId
+      : null;
   await appendRenderLog(
     initialJob.logPath,
     renderJobId,
     initialJob.videoProjectId,
-    `Runtime binaries: ffmpeg='${getFfmpegCommand()}' | ffprobe='${getFfprobeCommand()}'.`
+    `Runtime binaries: ffmpeg='${getFfmpegCommand()}' | ffprobe='${getFfprobeCommand()}'. masteringPreset='${audioMasteringPresetId ?? "shorts_clean_voice"}'.`
   );
 
   try {
@@ -572,6 +599,7 @@ async function processRenderJob(renderJobId: string) {
             videoProjectId: initialJob.videoProjectId,
             renderJobId,
             renderQuality,
+            audioMasteringPresetId,
             ...renderCallbacks
           })
         : await renderBlueprintV1({
@@ -580,6 +608,7 @@ async function processRenderJob(renderJobId: string) {
             rendersStorageRoot,
             videoProjectId: initialJob.videoProjectId,
             renderJobId,
+            audioMasteringPresetId,
             ...renderCallbacks
           });
 
@@ -625,6 +654,28 @@ async function processRenderJob(renderJobId: string) {
       "completed"
     );
     await updateRenderJob(renderJobId, {
+      metadata: JSON.stringify({
+        ...initialMetadata,
+        audioMasteringPresetId:
+          audioMasteringPresetId ?? "shorts_clean_voice",
+        audioQualityReport: artifacts.audioQualityReport
+          ? {
+              ...artifacts.audioQualityReport,
+              measuredOutputDuration:
+                outputMetadata.outputDuration ??
+                artifacts.audioQualityReport.measuredOutputDuration,
+              finalAudioCodec:
+                outputMetadata.audioCodec ??
+                artifacts.audioQualityReport.finalAudioCodec,
+              finalAudioSampleRate:
+                outputMetadata.audioSampleRate ??
+                artifacts.audioQualityReport.finalAudioSampleRate,
+              finalAudioBitrate:
+                outputMetadata.audioBitrate ??
+                artifacts.audioQualityReport.finalAudioBitrate
+            }
+          : null
+      }),
       status: "completed",
       outputPath: artifacts.outputPath,
       srtPath: artifacts.srtPath,
@@ -700,6 +751,11 @@ async function processRenderJob(renderJobId: string) {
       `Render job failed: ${message}`
     );
     await updateRenderJob(renderJobId, {
+      metadata: JSON.stringify({
+        ...initialMetadata,
+        audioMasteringPresetId:
+          audioMasteringPresetId ?? "shorts_clean_voice"
+      }),
       status: "failed",
       errorMessage: message,
       completedAt: new Date()

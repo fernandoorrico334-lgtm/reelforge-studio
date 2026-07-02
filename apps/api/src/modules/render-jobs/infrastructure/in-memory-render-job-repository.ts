@@ -6,8 +6,10 @@ import {
 import type { RenderJobRepository } from "../application/render-job-repository.js";
 import {
   buildRenderMediaLinks,
+  normalizeOptionalAudioMasteringPresetId,
   type CreateRenderJobInput,
   type RenderJobProjectSummary,
+  type RenderJobMetadata,
   type StudioRenderJob
 } from "../domain/render-job.js";
 
@@ -43,9 +45,41 @@ function toStudioRenderJob(
     return null;
   }
 
+  let metadata: RenderJobMetadata | null = null;
+
+  if (record.metadata) {
+    try {
+      const parsed = JSON.parse(record.metadata) as Record<string, unknown>;
+      const audioMasteringPresetId = normalizeOptionalAudioMasteringPresetId(
+        parsed.audioMasteringPresetId
+      );
+
+      if (audioMasteringPresetId) {
+        const audioQualityReport =
+          "audioQualityReport" in parsed
+            ? (parsed.audioQualityReport as RenderJobMetadata["audioQualityReport"])
+            : undefined;
+
+        metadata =
+          audioQualityReport === undefined
+            ? {
+                audioMasteringPresetId
+              }
+            : {
+                audioMasteringPresetId,
+                audioQualityReport
+              };
+      }
+    } catch {
+      metadata = null;
+    }
+  }
+
   return {
     ...record,
     currentStep: record.currentStep as StudioRenderJob["currentStep"],
+    audioMasteringPresetId: metadata?.audioMasteringPresetId ?? null,
+    metadata,
     ...buildRenderMediaLinks(record.id, {
       hasOutput: Boolean(record.outputPath),
       hasLog: Boolean(record.logPath),
@@ -53,6 +87,21 @@ function toStudioRenderJob(
     }),
     videoProject: projectSummary
   };
+}
+
+function parseRecordMetadata(value: string | null) {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 export function createRenderJobRepository(): RenderJobRepository {
@@ -87,6 +136,14 @@ export function createRenderJobRepository(): RenderJobRepository {
         status: "queued" as const,
         renderMode: input.renderMode ?? "v1",
         renderQuality: input.renderQuality ?? "standard",
+        metadata:
+          input.metadata
+            ? JSON.stringify(input.metadata)
+            : input.audioMasteringPresetId
+              ? JSON.stringify({
+                  audioMasteringPresetId: input.audioMasteringPresetId
+                })
+              : null,
         outputPath: null,
         blueprintPath: null,
         srtPath: null,
@@ -134,9 +191,26 @@ export function createRenderJobRepository(): RenderJobRepository {
         return null;
       }
 
+      const {
+        metadata,
+        audioMasteringPresetId,
+        ...restInput
+      } = input;
+      let nextMetadata = record.metadata;
+
+      if (metadata !== undefined) {
+        nextMetadata = metadata ? JSON.stringify(metadata) : null;
+      } else if (audioMasteringPresetId !== undefined) {
+        nextMetadata = JSON.stringify({
+          ...parseRecordMetadata(record.metadata),
+          audioMasteringPresetId
+        });
+      }
+
       const nextRecord = {
         ...record,
-        ...input,
+        ...restInput,
+        metadata: nextMetadata,
         updatedAt: createTimestamp()
       };
       const renderJobs = getMemoryStudioState().renderJobs;

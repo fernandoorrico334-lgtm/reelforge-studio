@@ -922,6 +922,7 @@ export async function renderCinematicV2({
   videoProjectId,
   renderJobId,
   renderQuality = "standard",
+  audioMasteringPresetId,
   onStep,
   onScene,
   onProgress,
@@ -1107,7 +1108,7 @@ export async function renderCinematicV2({
     await throwIfCancellationRequested(shouldCancel, "mixing_audio");
   }
 
-  await finalizeRenderAudio({
+  const audioResult = await finalizeRenderAudio({
     blueprint,
     projectRoot,
     jobRoot: paths.jobRoot,
@@ -1116,6 +1117,7 @@ export async function renderCinematicV2({
     totalDuration,
     logPath: paths.logPath,
     context: baseContext,
+    audioMasteringPresetId: audioMasteringPresetId ?? null,
     logger: {
       appendLog,
       runCommand
@@ -1137,7 +1139,8 @@ export async function renderCinematicV2({
     outputPath: toRelativeStoragePath(projectRoot, paths.outputPath),
     srtPath: toRelativeStoragePath(projectRoot, paths.srtPath),
     assPath: toRelativeStoragePath(projectRoot, paths.assPath),
-    logPath: toRelativeStoragePath(projectRoot, paths.logPath)
+    logPath: toRelativeStoragePath(projectRoot, paths.logPath),
+    audioQualityReport: audioResult.audioQualityReport
   };
 }
 

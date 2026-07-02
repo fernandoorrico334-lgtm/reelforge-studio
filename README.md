@@ -4,7 +4,7 @@ ReelForge Studio e uma plataforma local em evolucao para transformar imagens,
 videos, quadrinhos, artes, screenshots, audios, musicas, efeitos e overlays em
 videos verticais 9:16 com acabamento cinematografico.
 
-Esta base agora cobre quinze camadas do produto:
+Esta base agora cobre dezessete camadas do produto:
 
 - fundacao do monorepo;
 - persistencia local com Prisma + SQLite preparada;
@@ -33,6 +33,9 @@ Esta base agora cobre quinze camadas do produto:
   narracao, WAV local gerado por cena, provider offline `mock-tts`, provider
   opcional `windows-sapi-local`, pagina `/generated-audio` e integracao basica
   com blueprint/audio plan.
+- Premium Audio Studio Pipeline com presets de masterizacao, ducking real ou
+  fallback global, compressor/limiter/loudnorm via FFmpeg quando disponiveis,
+  metadata no `RenderJob` e smokes dedicados.
 
 Continuam fora do escopo nesta etapa:
 
@@ -72,8 +75,8 @@ Continuam fora do escopo nesta etapa:
 - `packages/templates` com templates premium por nicho.
 - `packages/video-engine` com composicao de blueprint, Render V1 e
   Cinematic V2 server-side.
-- `packages/audio-engine` com moods, plano de mixagem e validacao
-  deterministica de audio.
+- `packages/audio-engine` com moods, plano de mixagem, presets premium de
+  masterizacao e validacao deterministica de audio.
 - `scripts/smoke-render-v1.mjs` para validacao ponta a ponta com assets reais
   gerados localmente.
 - `scripts/smoke-render-audio.mjs` para validacao ponta a ponta do pipeline de
@@ -779,6 +782,35 @@ curl http://localhost:4000/audio-moods/dark_suspense
 curl http://localhost:4000/video-projects/<project-id>/audio-plan
 ```
 
+## Como testar Premium Audio Studio Pipeline
+
+1. Rode `npm run doctor:ffmpeg`.
+2. Rode `npm run smoke:audio-mastering-presets`.
+3. Rode `npm run smoke:narration-engine`.
+4. Rode `npm run smoke:narration-render-plan`.
+5. Se o ambiente permitir `child_process.spawn`, rode tambem:
+   - `npm run smoke:render-with-narration`
+   - `npm run smoke:premium-audio-render`
+6. Em `/projects/[id]`, no painel `Renderizacoes`, escolha um preset:
+   - `shorts_clean_voice`
+   - `football_hype`
+   - `true_crime_dark`
+   - `cinematic_epic`
+   - `documentary_clean`
+   - `viral_fast_cut`
+7. Confira:
+   - preview de loudness target, ducking, compressor e limiter;
+   - `RenderJob.audioMasteringPresetId` persistido;
+   - `RenderJob.metadata.audioQualityReport` quando houver render real;
+   - `effectiveNarrationAssetId` presente no blueprint quando a cena tiver WAV gerado;
+   - `/generated-audio` listando os WAVs como `raw narration`.
+8. Rotas novas desta etapa:
+
+```bash
+curl http://localhost:4000/audio/mastering-presets
+curl http://localhost:4000/audio/mastering-presets/football_hype
+```
+
 ## Render modes atuais
 
 - `v1`: fallback estavel, mais rapido e conservador, agora com audio opcional.
@@ -993,8 +1025,9 @@ upload para manter os registros apos reiniciar a API.
   animacoes temporais palavra por palavra;
 - a Render Engine V1 ainda usa composicao simples e placeholders quando o asset
   referenciado nao existe fisicamente em `storage/assets`;
-- o Audio Engine atual faz mixagem deterministica V1, mas ainda nao possui
-  sidechain real, automacao dinamica por trecho nem edicao por waveform;
+- o Audio Engine agora aplica presets premium, compressor, limiter, loudnorm e
+  ducking por FFmpeg quando o ambiente permite, mas ainda nao possui edicao por
+  waveform nem automacao fina guiada por envelope visual;
 - o `cinematic_v2` ainda trabalha com fades por cena, sem crossfade real entre
   segmentos;
 - o `cinematic_v2` prioriza imagens e normalizacao segura de video, sem speed
@@ -1005,6 +1038,9 @@ upload para manter os registros apos reiniciar a API.
 - `npm run worker:once` retorna erro quando nao ha job queued, o que e esperado
   para uso diagnostico;
 - o FFmpeg depende da instalacao local da maquina;
+- no sandbox do Codex, `doctor:ffmpeg`, `smoke:render-with-narration` e
+  `smoke:premium-audio-render` podem ficar `skipped` por `spawn EPERM` mesmo
+  com FFmpeg funcionando fora do app;
 - o arquivo seedado referencia alguns assets mockados; sem upload real desses
   arquivos, o render recai para placeholders escuros e registra isso no log;
 - conectores Wikipedia/Wikidata dependem de internet local e podem ficar
@@ -1035,9 +1071,12 @@ upload para manter os registros apos reiniciar a API.
     `npm run smoke:comfy-workflow-pack:local`.
 - Etapa 10F: operacao de fila para visual generation e render com prioridade,
   retries automaticos e cleanup controlado.
-- Etapa 11: refinamento de overlays, transicoes reais e composicao multi-faixa.
-- Etapa 12: evoluir o Audio Engine com ducking dinamico, automacao temporal e
-  mix por faixa.
+- Etapa 11C entregue: Premium Audio Studio Pipeline com presets de
+  masterizacao, metadata de qualidade em `RenderJob` e smokes dedicados.
+- Proximo foco: refinamento de overlays, transicoes reais e composicao
+  multi-faixa visual.
+- Evolucao futura do audio: automacao temporal mais fina, waveform tooling e
+  mix por faixa mais editorial.
 
 ## Principios desta base
 

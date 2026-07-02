@@ -1,5 +1,10 @@
 import { ValidationError } from "../../../shared/errors.js";
 import type { ProjectStatus } from "../../projects/domain/project.js";
+import {
+  audioMasteringPresetIds,
+  type AudioMasteringPresetId,
+  type AudioQualityReport
+} from "@reelforge/audio-engine/mastering";
 
 export const renderJobStatuses = [
   "queued",
@@ -73,6 +78,8 @@ export interface StudioRenderJob extends RenderJobMediaLinks {
   audioCodec: string | null;
   audioChannels: number | null;
   audioSampleRate: number | null;
+  audioMasteringPresetId: AudioMasteringPresetId | null;
+  metadata: RenderJobMetadata | null;
   outputFileSize: number | null;
   thumbnailPath: string | null;
   cancelledAt: string | null;
@@ -85,10 +92,17 @@ export interface StudioRenderJob extends RenderJobMediaLinks {
   videoProject: RenderJobProjectSummary;
 }
 
+export interface RenderJobMetadata {
+  audioMasteringPresetId: AudioMasteringPresetId;
+  audioQualityReport?: AudioQualityReport | null;
+}
+
 export interface CreateRenderJobInput {
   videoProjectId: string;
   renderMode?: RenderMode;
   renderQuality?: RenderQuality;
+  audioMasteringPresetId?: AudioMasteringPresetId | null;
+  metadata?: RenderJobMetadata | null;
   attempt?: number;
   retriedFromJobId?: string | null;
 }
@@ -115,6 +129,8 @@ export interface UpdateRenderJobInput {
   audioCodec?: string | null;
   audioChannels?: number | null;
   audioSampleRate?: number | null;
+  audioMasteringPresetId?: AudioMasteringPresetId | null;
+  metadata?: RenderJobMetadata | null;
   outputFileSize?: number | null;
   thumbnailPath?: string | null;
   cancelledAt?: string | null;
@@ -127,6 +143,7 @@ export interface UpdateRenderJobInput {
 export interface CreateRenderJobRequestInput {
   renderMode?: RenderMode;
   renderQuality?: RenderQuality;
+  audioMasteringPresetId?: AudioMasteringPresetId;
 }
 
 const allowedStatusTransitions: Record<RenderJobStatus, RenderJobStatus[]> = {
@@ -353,6 +370,35 @@ export function normalizeOptionalString(
   return normalized.length > 0 ? normalized : null;
 }
 
+export function normalizeOptionalAudioMasteringPresetId(
+  value: unknown,
+  fieldName = "audioMasteringPresetId"
+) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new ValidationError(
+      `${fieldName} must be one of: ${audioMasteringPresetIds.join(", ")}.`
+    );
+  }
+
+  const normalized = value
+    .trim()
+    .replaceAll("-", "_")
+    .replaceAll(" ", "_")
+    .toLowerCase();
+
+  if (!audioMasteringPresetIds.includes(normalized as AudioMasteringPresetId)) {
+    throw new ValidationError(
+      `${fieldName} must be one of: ${audioMasteringPresetIds.join(", ")}.`
+    );
+  }
+
+  return normalized as AudioMasteringPresetId;
+}
+
 export function normalizeOptionalAttempt(
   value: unknown,
   fieldName = "attempt"
@@ -386,10 +432,14 @@ export function validateCreateRenderJobRequestInput(
   const payload = value as Record<string, unknown>;
   const renderMode = normalizeOptionalRenderMode(payload.renderMode);
   const renderQuality = normalizeOptionalRenderQuality(payload.renderQuality);
+  const audioMasteringPresetId = normalizeOptionalAudioMasteringPresetId(
+    payload.audioMasteringPresetId
+  );
 
   return {
     ...(renderMode ? { renderMode } : {}),
-    ...(renderQuality ? { renderQuality } : {})
+    ...(renderQuality ? { renderQuality } : {}),
+    ...(audioMasteringPresetId ? { audioMasteringPresetId } : {})
   };
 }
 

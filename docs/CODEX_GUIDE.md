@@ -22,6 +22,8 @@ Ajudar qualquer futura sessao do Codex a expandir ReelForge Studio sem quebrar a
 - manter `packages/caption-engine`, `packages/templates` e
   `packages/video-engine` como fontes unicas das regras criativas locais;
 - manter `packages/audio-engine` como fonte unica das regras de mixagem local;
+- quando tocar em presets premium, importar `@reelforge/audio-engine/mastering`
+  em vez de misturar catalogos diretamente em apps;
 - manter `packages/narration-engine` como fonte unica das regras de narracao
   local;
 - manter `packages/research-collector` como fonte unica das heuristicas de
@@ -169,6 +171,19 @@ Ao tocar no Local Narration Pipeline, a sequencia minima passa a ser:
 6. validar `/projects/[id]`
 7. validar `/prompt-lab`
 
+Ao tocar no Premium Audio Studio Pipeline, a sequencia minima passa a ser:
+
+1. `npm run db:generate`
+2. `npm run db:migrate:dev`
+3. `npm run build`
+4. `npm run typecheck`
+5. `npm run doctor:ffmpeg`
+6. `npm run smoke:audio-mastering-presets`
+7. `npm run smoke:narration-engine`
+8. `npm run smoke:narration-render-plan`
+9. se o ambiente permitir spawn: `npm run smoke:render-with-narration`
+10. se o ambiente permitir spawn: `npm run smoke:premium-audio-render`
+
 Ao tocar no Media Collector, a sequencia minima passa a ser:
 
 1. `npm run db:generate`
@@ -190,6 +205,9 @@ Se o smoke falhar:
 - confirmar `ffmpeg -version` e `ffprobe -version`;
 - se necessario, definir `FFMPEG_PATH` e `FFPROBE_PATH` sem hardcode pessoal;
 - rodar `npm run doctor:ffmpeg` para distinguir PATH ausente de bloqueio de `child_process.spawn`;
+- lembrar que o sandbox do Codex pode marcar os smokes de render premium como
+  `skipped` por `spawn EPERM` mesmo quando o mesmo comando funciona num terminal
+  Windows normal/elevado;
 - rerodar um unico job com `npm run worker:once` quando precisar isolar o
   problema do loop do worker.
 

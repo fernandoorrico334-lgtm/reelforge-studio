@@ -111,6 +111,7 @@ export interface MemoryRenderJobRecord {
   status: RenderJobStatus;
   renderMode: RenderMode;
   renderQuality: RenderQuality;
+  metadata: string | null;
   outputPath: string | null;
   blueprintPath: string | null;
   srtPath: string | null;

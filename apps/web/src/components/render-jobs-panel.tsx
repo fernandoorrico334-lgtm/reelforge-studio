@@ -1,5 +1,6 @@
 "use client";
 
+import { getAudioMasteringPresets } from "@reelforge/audio-engine/mastering";
 import { useEffect, useState, useTransition } from "react";
 import {
   cancelRenderJobRequest,
@@ -11,6 +12,8 @@ import {
 import {
   renderModes,
   renderQualities,
+  type AudioMasteringPreview,
+  type AudioMasteringPresetId,
   type DataSource,
   type RenderMode,
   type RenderQuality,
@@ -20,7 +23,12 @@ import { RenderJobCard } from "./render-job-card";
 
 interface RenderJobsPanelProps {
   projectId: string;
+  selectedAudioMasteringPresetId?: AudioMasteringPresetId;
+  onSelectAudioMasteringPreset?: (presetId: AudioMasteringPresetId) => void;
+  audioMasteringPreview?: AudioMasteringPreview | null;
 }
+
+const audioMasteringPresets = getAudioMasteringPresets();
 
 function extractErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
@@ -41,7 +49,12 @@ function countByStatus(
   return renderJobs.filter((renderJob) => statuses.includes(renderJob.status)).length;
 }
 
-export function RenderJobsPanel({ projectId }: RenderJobsPanelProps) {
+export function RenderJobsPanel({
+  projectId,
+  selectedAudioMasteringPresetId,
+  onSelectAudioMasteringPreset,
+  audioMasteringPreview = null
+}: RenderJobsPanelProps) {
   const [jobs, setJobs] = useState<StudioRenderJob[]>([]);
   const [source, setSource] = useState<DataSource>("mock");
   const [statusMessage, setStatusMessage] = useState(
@@ -51,10 +64,27 @@ export function RenderJobsPanel({ projectId }: RenderJobsPanelProps) {
     useState<RenderMode>("v1");
   const [selectedRenderQuality, setSelectedRenderQuality] =
     useState<RenderQuality>("standard");
+  const [localAudioMasteringPresetId, setLocalAudioMasteringPresetId] =
+    useState<AudioMasteringPresetId>("shorts_clean_voice");
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const hasActiveJobs = jobs.some(isRenderJobActive);
+  const effectiveAudioMasteringPresetId =
+    selectedAudioMasteringPresetId ?? localAudioMasteringPresetId;
+  const selectedAudioMasteringPreset =
+    audioMasteringPresets.find(
+      (preset) => preset.id === effectiveAudioMasteringPresetId
+    ) ?? audioMasteringPresets[0]!;
+
+  function handleAudioPresetChange(presetId: AudioMasteringPresetId) {
+    if (onSelectAudioMasteringPreset) {
+      onSelectAudioMasteringPreset(presetId);
+      return;
+    }
+
+    setLocalAudioMasteringPresetId(presetId);
+  }
 
   async function refreshJobs() {
     const snapshot = await getProjectRenderJobsSnapshot(projectId);
@@ -121,7 +151,8 @@ export function RenderJobsPanel({ projectId }: RenderJobsPanelProps) {
       try {
         const createdJob = await createRenderJobRequest(projectId, {
           renderMode: selectedRenderMode,
-          renderQuality: selectedRenderQuality
+          renderQuality: selectedRenderQuality,
+          audioMasteringPresetId: effectiveAudioMasteringPresetId
         });
         setJobs((current) =>
           [createdJob, ...current.filter((job) => job.id !== createdJob.id)].sort(
@@ -130,7 +161,7 @@ export function RenderJobsPanel({ projectId }: RenderJobsPanelProps) {
         );
         setSource("api");
         setStatusMessage(
-          `Render job ${createdJob.id.slice(0, 10)} criado em ${createdJob.renderMode} (${createdJob.renderQuality}) e aguardando o worker.`
+          `Render job ${createdJob.id.slice(0, 10)} criado em ${createdJob.renderMode} (${createdJob.renderQuality}) com preset ${createdJob.audioMasteringPresetId ?? effectiveAudioMasteringPresetId}.`
         );
       } catch (error) {
         setStatusMessage(extractErrorMessage(error));
@@ -258,6 +289,26 @@ export function RenderJobsPanel({ projectId }: RenderJobsPanelProps) {
               ))}
             </select>
           </label>
+          <label className="min-w-[220px]">
+            <span className="mb-2 block text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Audio Mastering
+            </span>
+            <select
+              value={effectiveAudioMasteringPresetId}
+              onChange={(event) =>
+                handleAudioPresetChange(
+                  event.target.value as AudioMasteringPresetId
+                )
+              }
+              className="w-full rounded-full border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+            >
+              {audioMasteringPresets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             disabled={isPending}
@@ -283,6 +334,90 @@ export function RenderJobsPanel({ projectId }: RenderJobsPanelProps) {
         <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
           `cinematic_v2`: motion, fades e look visual mais premium
         </span>
+        <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+          mastering `{selectedAudioMasteringPreset.id}`
+        </span>
+      </div>
+
+      <div className="mt-5 rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Mix Preview
+            </p>
+            <p className="mt-2 text-base font-semibold text-white">
+              {selectedAudioMasteringPreset.name}
+            </p>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-mist/68">
+              {audioMasteringPreview?.summary ?? selectedAudioMasteringPreset.description}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-mist/65">
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+              target {selectedAudioMasteringPreset.targetLufs} LUFS
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+              ducking {audioMasteringPreview?.duckingMode ?? (selectedAudioMasteringPreset.duckingEnabled ? "sidechain" : "none")}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+              compressor {(audioMasteringPreview?.compressorApplied ?? selectedAudioMasteringPreset.compressorEnabled) ? "on" : "off"}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+              limiter {(audioMasteringPreview?.limiterApplied ?? selectedAudioMasteringPreset.limiterEnabled) ? "on" : "off"}
+            </span>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-mist/68">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Narracao
+            </p>
+            <p className="mt-2 text-white">
+              {audioMasteringPreview?.narrationIncluded ? "incluida" : "off"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-mist/68">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Musica
+            </p>
+            <p className="mt-2 text-white">
+              {audioMasteringPreview?.musicIncluded ? "incluida" : "off"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-mist/68">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              SFX
+            </p>
+            <p className="mt-2 text-white">
+              {audioMasteringPreview?.sfxIncluded ? "incluido" : "off"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-mist/68">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Voz gain
+            </p>
+            <p className="mt-2 text-white">
+              {selectedAudioMasteringPreset.narrationGainDb > 0 ? "+" : ""}
+              {selectedAudioMasteringPreset.narrationGainDb} dB
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-mist/68">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Music gain
+            </p>
+            <p className="mt-2 text-white">
+              {selectedAudioMasteringPreset.musicGainDb} dB
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-mist/68">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Peak
+            </p>
+            <p className="mt-2 text-white">
+              {selectedAudioMasteringPreset.truePeakDb} dBTP
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">

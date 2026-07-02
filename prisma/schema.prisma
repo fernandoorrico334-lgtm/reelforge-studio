@@ -664,6 +664,7 @@ model RenderJob {
   cancelledAt       DateTime?
   retriedFromJobId  String?
   attempt           Int              @default(1)
+  metadata          String?
   startedAt         DateTime?
   completedAt       DateTime?
   createdAt         DateTime         @default(now())

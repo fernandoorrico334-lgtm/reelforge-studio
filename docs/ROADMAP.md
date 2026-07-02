@@ -253,6 +253,27 @@ Entregue:
 - smokes `npm run smoke:narration-engine` e
   `npm run smoke:narration-windows-sapi:local`.
 
+## Etapa 11C - Premium Audio Studio Pipeline
+
+Entregue:
+
+- catalogo de presets premium em `packages/audio-engine/src/mastering.ts`;
+- presets:
+  `shorts_clean_voice`, `football_hype`, `true_crime_dark`,
+  `cinematic_epic`, `documentary_clean`, `viral_fast_cut`;
+- chain de audio no `video-engine` com ganho, fades, compressor, limiter,
+  loudnorm e ducking real quando o FFmpeg suportar;
+- fallback seguro para `global_reduction` quando `sidechaincompress` nao
+  estiver disponivel;
+- `RenderJob.metadata` com `audioMasteringPresetId` e `audioQualityReport`;
+- endpoints `GET /audio/mastering-presets` e
+  `GET /audio/mastering-presets/:id`;
+- painel web de selecao de preset no bloco `Renderizacoes`;
+- smokes `npm run smoke:audio-mastering-presets` e
+  `npm run smoke:premium-audio-render`;
+- melhoria de `npm run smoke:render-with-narration` para expor preset e
+  relatorio de audio.
+
 ## Proxima etapa operacional sugerida
 
 - Etapa 10I concluida: Workflow Packs + Image Quality Presets para ComfyUI
@@ -277,7 +298,8 @@ Entregue:
 1. Aprofundar a fila local de visual generation com concorrencia,
    prioridade e cleanup.
 2. Enriquecer overlays, crossfades e composicao multi-faixa.
-3. Aprofundar o Audio Engine com ducking dinamico e automacao temporal.
+3. Aprofundar o audio premium com automacao temporal mais fina, waveform tooling
+   e mix por faixa.
 4. Conectar o Media Collector e o Research Collector a matching mais forte de
    assets e requirements.
 5. Conectar o Manual Intake a associacao mais forte com projetos e presets.

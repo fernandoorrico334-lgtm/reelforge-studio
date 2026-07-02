@@ -392,6 +392,12 @@ Na Etapa 9B, o modulo de projetos/render passou a aceitar ainda:
 - `sfxAssetId`, `sfxStartTime` e `sfxVolume` por cena;
 - resolucao deterministica de audio no blueprint e no `audio-plan`.
 
+Na Etapa 11C, o modulo de render passou a aceitar tambem:
+
+- `audioMasteringPresetId` no body de `POST /video-projects/:id/render-jobs`;
+- persistencia de `RenderJob.metadata` com `audioQualityReport`;
+- leitura operacional desse relatorio no worker e no painel web.
+
 Na Etapa 10A, `channels` e `production` passaram a aceitar ainda:
 
 - defaults editoriais e tecnicos por canal;
@@ -419,6 +425,7 @@ Estado atual:
 - etapas `preparing_audio`, `mixing_audio` e `probing_audio`;
 - persistencia de `hasAudio`, `audioCodec`, `audioChannels` e
   `audioSampleRate`;
+- persistencia de `audioMasteringPresetId` e `audioQualityReport` via metadata;
 - escrita de `captions.srt`, `captions.ass`, `render.log` e `output.mp4`.
 
 ## scripts
@@ -436,6 +443,8 @@ Estado atual:
 - `scripts/smoke-hybrid-visual.mjs`
 - `scripts/smoke-narration-engine.mjs`
 - `scripts/smoke-narration-windows-sapi-local.mjs`
+- `scripts/smoke-audio-mastering-presets.mjs`
+- `scripts/smoke-premium-audio-render.mjs`
 
 Comandos novos relevantes da Etapa 10B:
 
@@ -452,16 +461,22 @@ Estado atual:
 - moods:
   `dark_suspense`, `epic_rise`, `horror_tension`, `documentary_bed`,
   `sports_hype`, `calm_story`, `action_pulse`, `emotional_piano`;
+- presets premium:
+  `shorts_clean_voice`, `football_hype`, `true_crime_dark`,
+  `cinematic_epic`, `documentary_clean`, `viral_fast_cut`;
 - funcoes:
   `getAudioMoodPresets`, `getAudioMoodPresetById`, `buildAudioMixPlan`,
-  `validateAudioMixPlan`, `estimateAudioTimelineDuration` e
-  `summarizeAudioPlan`;
-- regras deterministicas para soundtrack, voiceover, SFX e ducking simples.
+  `validateAudioMixPlan`, `estimateAudioTimelineDuration`,
+  `summarizeAudioPlan`, `getAudioMasteringPresets`,
+  `getAudioMasteringPresetById`, `resolveAudioMasteringPreset` e
+  `buildPremiumAudioMixPlan`;
+- regras deterministicas para soundtrack, voiceover, SFX, ducking e
+  mastering premium.
 
 Proximos passos:
 
-- automacao temporal de volume;
-- sidechain real;
+- automacao temporal por envelope;
+- edicao por waveform;
 - composicao multi-faixa mais rica.
 
 ## packages/narration-engine

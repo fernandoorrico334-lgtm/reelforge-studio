@@ -289,6 +289,12 @@ Na Etapa 9B, o dominio persistido passou a carregar ainda:
 - `Scene.sfxAssetId`, `sfxStartTime` e `sfxVolume`;
 - `RenderJob.hasAudio`, `audioCodec`, `audioChannels` e `audioSampleRate`.
 
+Na Etapa 11C, `RenderJob` passou a persistir tambem:
+
+- `metadata` como JSON string;
+- `audioMasteringPresetId` dentro da metadata do job;
+- `audioQualityReport` com loudness, ducking, compressor, limiter e codec final.
+
 Na Etapa 10A, `Channel` virou tambem uma identidade editorial de producao:
 
 - `defaultRenderMode` e `defaultRenderQuality`;
@@ -491,19 +497,21 @@ Fluxo editorial completo:
    projeto.
 9. O Caption Engine monta preview, analise e exports SRT/ASS.
 10. O Audio Engine resolve soundtrack, voiceover, SFX e validacoes de mixagem.
-11. O Video Engine consolida tudo em um render blueprint local.
-12. A API cria um `RenderJob` e salva a copia do blueprint em `storage/renders`.
-13. O worker local encontra jobs `queued` no SQLite.
-14. O worker escolhe `renderBlueprintV1` ou `renderCinematicV2` com base em
+11. Os presets premium de mastering resolvem loudness target, ducking,
+    compressor, limiter, fades e tratamento de silencio.
+12. O Video Engine consolida tudo em um render blueprint local.
+13. A API cria um `RenderJob` e salva a copia do blueprint em `storage/renders`.
+14. O worker local encontra jobs `queued` no SQLite.
+15. O worker escolhe `renderBlueprintV1` ou `renderCinematicV2` com base em
     `RenderJob.renderMode`.
-15. O worker atualiza `currentStep`, `progress`, `currentSceneIndex` e
+16. O worker atualiza `currentStep`, `progress`, `currentSceneIndex` e
     `totalScenes` conforme o pipeline avanca.
-16. O `packages/video-engine/render-server` usa FFmpeg para gerar segmentos,
+17. O `packages/video-engine/render-server` usa FFmpeg para gerar segmentos,
     concatenar a timeline, queimar `ASS`, mixar audio quando houver e exportar
     `output.mp4`.
-17. O worker gera `thumbnail.jpg` e tenta enriquecer o job com `ffprobe` sem
+18. O worker gera `thumbnail.jpg` e tenta enriquecer o job com `ffprobe` sem
     falhar o render se esse binario nao existir.
-18. O worker persiste metadata de audio quando houver stream final:
+19. O worker persiste metadata de audio quando houver stream final:
     `hasAudio`, `audioCodec`, `audioChannels` e `audioSampleRate`.
 19. A API serve `output.mp4`, `thumbnail.jpg` e `render.log` por `renderJobId`.
 20. A web acompanha status, metadata, thumbnail e acoes de operacao em
@@ -794,8 +802,12 @@ Observacoes importantes:
 - manter interfaces de repositorio e storage na aplicacao, nao no HTTP;
 - manter Story Engine, Caption Engine e Cinematic Engine puros e
   deterministas mesmo com o pipeline de render ativo;
-- manter o Audio Engine puro e deterministico, sem acoplar regras a FFmpeg ou
-  ao banco;
+- manter o Audio Engine puro e deterministico, com catalogos e planos em
+  `packages/audio-engine`, deixando apenas a execucao dos filtros de FFmpeg no
+  `video-engine`/worker;
+- preservar `RenderJob.metadata` como trilha tecnica de execucao, sem empurrar
+  detalhes de mastering para campos relacionais novos quando uma estrutura JSON
+  clara ja for suficiente;
 - tratar uploads grandes com cautela enquanto o parser ainda bufferiza em
   memoria;
 - evoluir preview, ingestao, projetos e render como modulos separados;

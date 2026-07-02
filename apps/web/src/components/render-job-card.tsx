@@ -137,6 +137,10 @@ function formatFileSize(bytes: number | null) {
   return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+function formatBooleanLabel(value: boolean) {
+  return value ? "on" : "off";
+}
+
 export function RenderJobCard({
   renderJob,
   showProjectLink = false,
@@ -151,6 +155,7 @@ export function RenderJobCard({
   const hasThumbnail =
     renderJob.status === "completed" &&
     Boolean(renderJob.thumbnailUrl ?? renderJob.thumbnailPath);
+  const audioQualityReport = renderJob.metadata?.audioQualityReport ?? null;
   const mediaUrl = renderJob.mediaUrl ?? getRenderMediaUrl(renderJob.id);
   const logUrl = renderJob.logUrl ?? getRenderLogUrl(renderJob.id);
   const thumbnailUrl =
@@ -198,6 +203,11 @@ export function RenderJobCard({
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.16em] text-mist/72">
                 {formatQualityLabel(renderJob.renderQuality)}
               </span>
+              {renderJob.audioMasteringPresetId ? (
+                <span className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-3 py-1 text-xs uppercase tracking-[0.16em] text-[#dff8ff]">
+                  {renderJob.audioMasteringPresetId}
+                </span>
+              ) : null}
             </div>
             <h3 className="mt-4 text-xl font-semibold text-white">
               Job {renderJob.id.slice(0, 10)}
@@ -332,6 +342,14 @@ export function RenderJobCard({
           </div>
           <div className="rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3">
             <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Mastering
+            </p>
+            <p className="mt-2 text-sm font-medium text-white">
+              {renderJob.audioMasteringPresetId ?? "default"}
+            </p>
+          </div>
+          <div className="rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
               Resolucao
             </p>
             <p className="mt-2 text-sm font-medium text-white">
@@ -373,6 +391,91 @@ export function RenderJobCard({
             </p>
           </div>
         </div>
+
+        {audioQualityReport ? (
+          <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Audio Quality Report
+                </p>
+                <p className="mt-2 text-sm text-white">
+                  {audioQualityReport.masteringPresetName} -{" "}
+                  {audioQualityReport.targetLufs} LUFS - codec{" "}
+                  {audioQualityReport.finalAudioCodec ?? renderJob.audioCodec ?? "n/a"}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs text-mist/68">
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                  ducking {audioQualityReport.duckingMode}
+                </span>
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                  loudnorm {formatBooleanLabel(audioQualityReport.loudnormApplied)}
+                </span>
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                  limiter {formatBooleanLabel(audioQualityReport.limiterApplied)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Narracao
+                </p>
+                <p className="mt-2 text-white">
+                  {formatBooleanLabel(audioQualityReport.narrationIncluded)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Musica
+                </p>
+                <p className="mt-2 text-white">
+                  {formatBooleanLabel(audioQualityReport.musicIncluded)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  SFX
+                </p>
+                <p className="mt-2 text-white">
+                  {formatBooleanLabel(audioQualityReport.sfxIncluded)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Sample rate
+                </p>
+                <p className="mt-2 text-white">
+                  {audioQualityReport.finalAudioSampleRate ?? renderJob.audioSampleRate ?? "n/a"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Bitrate
+                </p>
+                <p className="mt-2 text-white">
+                  {audioQualityReport.finalAudioBitrate ?? "n/a"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Duracao audio
+                </p>
+                <p className="mt-2 text-white">
+                  {formatDuration(audioQualityReport.measuredOutputDuration)}
+                </p>
+              </div>
+            </div>
+
+            {audioQualityReport.warnings.length > 0 ? (
+              <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                {audioQualityReport.warnings.join(" ")}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {renderJob.errorMessage ? (
           <div className="mt-4 rounded-[1.2rem] border border-[#ff8b8b]/20 bg-[#ff8b8b]/10 px-4 py-3 text-sm text-[#ffd4d4]">

@@ -1,4 +1,5 @@
 import type {
+  AudioMasteringPreview,
   DataSource,
   RenderBlueprintResponse
 } from "../lib/studio-types";
@@ -8,6 +9,7 @@ interface RenderBlueprintPanelProps {
   source: DataSource | null;
   loading: boolean;
   onLoad: () => void;
+  audioMasteringPreview?: AudioMasteringPreview | null;
 }
 
 function renderSourceLabel(source: DataSource | null) {
@@ -68,7 +70,8 @@ export function RenderBlueprintPanel({
   blueprint,
   source,
   loading,
-  onLoad
+  onLoad,
+  audioMasteringPreview = null
 }: RenderBlueprintPanelProps) {
   const narrationReadyCount =
     blueprint?.scenes.filter((scene) => scene.narrationReady).length ?? 0;
@@ -203,6 +206,23 @@ export function RenderBlueprintPanel({
                 {blueprint.audio.backgroundMusic ? "on" : "off"} / voiceover{" "}
                 {blueprint.audio.voiceover ? "on" : "off"}
               </p>
+              {audioMasteringPreview ? (
+                <div className="mt-4 rounded-[1.05rem] border border-white/10 bg-white/[0.03] p-3 text-sm text-mist/68">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                    Audio Quality Report
+                  </p>
+                  <p className="mt-2 text-white">
+                    {audioMasteringPreview.masteringPresetName} - target{" "}
+                    {audioMasteringPreview.targetLufs} LUFS - ducking{" "}
+                    {audioMasteringPreview.duckingMode}
+                  </p>
+                  <p className="mt-2 text-xs text-mist/60">
+                    loudnorm {audioMasteringPreview.loudnormApplied ? "on" : "off"} / limiter{" "}
+                    {audioMasteringPreview.limiterApplied ? "on" : "off"} / narration{" "}
+                    {audioMasteringPreview.narrationIncluded ? "on" : "off"} / codec previsto aac
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
 

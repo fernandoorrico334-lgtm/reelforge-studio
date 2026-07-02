@@ -1,6 +1,10 @@
 "use client";
 
 import {
+  buildPremiumAudioMixPlan,
+  getAudioMasteringPresets
+} from "@reelforge/audio-engine/mastering";
+import {
   getCaptionStyleById,
   getCaptionStyles
 } from "@reelforge/caption-engine";
@@ -15,6 +19,7 @@ import { CaptionEnginePanel } from "./caption-engine-panel";
 import { CaptionFramePreview } from "./caption-frame-preview";
 import { CinematicPresetCard } from "./cinematic-preset-card";
 import { RenderBlueprintPanel } from "./render-blueprint-panel";
+import { RenderJobsPanel } from "./render-jobs-panel";
 import { StoryEnginePanel } from "./story-engine-panel";
 import {
   createSceneRequest,
@@ -40,6 +45,8 @@ import {
   resolveScenePresetPreview
 } from "../lib/project-story-analysis";
 import type {
+  AudioMasteringPreview,
+  AudioMasteringPresetId,
   CaptionPosition,
   CaptionStyleId,
   ComfyWorkflowPack,
@@ -123,6 +130,7 @@ interface SceneFormState {
 
 const captionStylesCatalog = getCaptionStyles();
 const templateCatalog = getTemplates();
+const audioMasteringPresetsCatalog = getAudioMasteringPresets();
 
 function createLocalId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -226,6 +234,36 @@ function parseCommaList(value: string) {
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function toAudioMasteringPreviewSummary(
+  preview: ReturnType<typeof buildPremiumAudioMixPlan> | null
+): AudioMasteringPreview | null {
+  if (!preview) {
+    return null;
+  }
+
+  return {
+    masteringPresetId: preview.masteringPresetId,
+    masteringPresetName: preview.preset.name,
+    narrationIncluded: preview.narrationIncluded,
+    musicIncluded: preview.musicIncluded,
+    sfxIncluded: preview.sfxIncluded,
+    duckingEnabled: preview.duckingEnabled,
+    duckingMode: preview.duckingMode,
+    compressorApplied: preview.compressorApplied,
+    limiterApplied: preview.limiterApplied,
+    loudnormApplied: preview.loudnormApplied,
+    removeLongSilences: preview.removeLongSilences,
+    maxSilenceMs: preview.maxSilenceMs,
+    targetLufs: preview.targetLufs,
+    truePeakDb: preview.truePeakDb,
+    narrationGainDb: preview.narrationGainDb,
+    musicGainDb: preview.musicGainDb,
+    sfxGainDb: preview.sfxGainDb,
+    warnings: preview.warnings,
+    summary: preview.summary
+  };
 }
 
 function toProjectFormState(project: StudioProject): ProjectFormState {
@@ -745,6 +783,14 @@ export function ProjectStudio({
   const [generatedNarrationsSource, setGeneratedNarrationsSource] = useState<DataSource>(
     initialGeneratedNarrationsSource
   );
+  const [audioMasteringPresetId, setAudioMasteringPresetId] =
+    useState<AudioMasteringPresetId>(
+      (audioMasteringPresetsCatalog.find(
+        (preset) => preset.id === "shorts_clean_voice"
+      )?.id ??
+        audioMasteringPresetsCatalog[0]?.id ??
+        "shorts_clean_voice") as AudioMasteringPresetId
+    );
 
   const orderedScenes = sortScenes(project.scenes);
   const selectedVisualScene =
@@ -784,6 +830,20 @@ export function ProjectStudio({
     qualityPresets.find((preset) => preset.id === "standard") ??
     qualityPresets[0] ??
     null;
+  const selectedAudioMasteringPreset =
+    audioMasteringPresetsCatalog.find(
+      (preset) => preset.id === audioMasteringPresetId
+    ) ?? audioMasteringPresetsCatalog[0]!;
+  const audioMasteringPreview = toAudioMasteringPreviewSummary(
+    blueprint
+      ? buildPremiumAudioMixPlan({
+          audioPlan: blueprint.audio,
+          audioMasteringPresetId,
+          preferSidechainDucking: true,
+          loudnormSupported: true
+        })
+      : null
+  );
   const storyAnalysis = buildProjectStoryAnalysis({
     ...project,
     scenes: orderedScenes
@@ -2878,11 +2938,19 @@ export function ProjectStudio({
           </div>
         </article>
 
+        <RenderJobsPanel
+          projectId={project.id}
+          selectedAudioMasteringPresetId={selectedAudioMasteringPreset.id}
+          onSelectAudioMasteringPreset={setAudioMasteringPresetId}
+          audioMasteringPreview={audioMasteringPreview}
+        />
+
         <RenderBlueprintPanel
           blueprint={blueprint}
           source={blueprintSource}
           loading={blueprintLoading}
           onLoad={handleLoadBlueprint}
+          audioMasteringPreview={audioMasteringPreview}
         />
       </aside>
     </div>

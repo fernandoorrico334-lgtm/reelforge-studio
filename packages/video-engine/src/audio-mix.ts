@@ -1,5 +1,11 @@
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
+import {
+  buildPremiumAudioMixPlan,
+  type AudioDuckingMode,
+  type AudioQualityReport,
+  type PremiumAudioMixPlan
+} from "@reelforge/audio-engine/mastering";
 import type { RenderBlueprint } from "./index.js";
 import { getFfmpegCommand } from "./ffmpeg-runtime.js";
 import { resolveStoragePath } from "./render-paths.js";
@@ -35,11 +41,25 @@ export interface FinalizeRenderAudioOptions {
   logPath: string;
   context: AudioMixLogContext;
   logger: AudioMixLogger;
+  audioMasteringPresetId?: string | null;
+}
+
+export interface FinalizeRenderAudioResult {
+  hasAudio: boolean;
+  audioQualityReport: AudioQualityReport;
 }
 
 interface TimeWindow {
   start: number;
   end: number;
+}
+
+interface AudioFilterSupport {
+  acompressor: boolean;
+  alimiter: boolean;
+  loudnorm: boolean;
+  sidechaincompress: boolean;
+  silenceremove: boolean;
 }
 
 function roundToThreeDecimals(value: number) {
@@ -48,6 +68,10 @@ function roundToThreeDecimals(value: number) {
 
 function clampPositive(value: number) {
   return Math.max(roundToThreeDecimals(value), 0);
+}
+
+function dbToLinear(db: number) {
+  return Math.pow(10, db / 20);
 }
 
 async function fileExists(absolutePath: string) {
@@ -148,9 +172,223 @@ function buildDuckedVolumeExpression(
   ).toFixed(3)},1)'`;
 }
 
-export async function muxSilentAudioTrack(
-  options: FinalizeRenderAudioOptions
+function buildFadeFilters(totalDuration: number, fadeIn: number, fadeOut: number) {
+  const filters: string[] = [];
+
+  if (fadeIn > 0) {
+    filters.push(`afade=t=in:st=0:d=${clampPositive(fadeIn).toFixed(3)}`);
+  }
+
+  if (fadeOut > 0) {
+    const fadeStart = Math.max(totalDuration - fadeOut, 0);
+    filters.push(
+      `afade=t=out:st=${clampPositive(fadeStart).toFixed(3)}:d=${clampPositive(
+        fadeOut
+      ).toFixed(3)}`
+    );
+  }
+
+  return filters;
+}
+
+function parseAvailableFilters(output: string): AudioFilterSupport {
+  const support: AudioFilterSupport = {
+    acompressor: false,
+    alimiter: false,
+    loudnorm: false,
+    sidechaincompress: false,
+    silenceremove: false
+  };
+
+  for (const line of output.split(/\r?\n/u)) {
+    const match = line.match(/^[\s\.A-Z\|]+([a-z0-9_]+)\s+/iu);
+
+    if (!match) {
+      continue;
+    }
+
+    const filterName = match[1]?.toLowerCase();
+
+    if (filterName === "acompressor") support.acompressor = true;
+    if (filterName === "alimiter") support.alimiter = true;
+    if (filterName === "loudnorm") support.loudnorm = true;
+    if (filterName === "sidechaincompress") support.sidechaincompress = true;
+    if (filterName === "silenceremove") support.silenceremove = true;
+  }
+
+  return support;
+}
+
+async function loadAudioFilterSupport(
+  options: Pick<FinalizeRenderAudioOptions, "jobRoot" | "logPath" | "context" | "logger">
 ) {
+  try {
+    const result = await options.logger.runCommand(
+      getFfmpegCommand(),
+      ["-hide_banner", "-filters"],
+      options.jobRoot,
+      options.logPath,
+      withLabel(options.context, "audio-filters")
+    );
+    return parseAvailableFilters(`${result.stdout}\n${result.stderr}`);
+  } catch {
+    return {
+      acompressor: false,
+      alimiter: false,
+      loudnorm: false,
+      sidechaincompress: false,
+      silenceremove: false
+    } satisfies AudioFilterSupport;
+  }
+}
+
+function buildNarrationTrimFilters(
+  premiumPlan: PremiumAudioMixPlan,
+  filterSupport: AudioFilterSupport
+) {
+  if (!premiumPlan.removeLongSilences || !filterSupport.silenceremove) {
+    return [];
+  }
+
+  return [
+    `silenceremove=start_periods=1:start_threshold=-45dB:stop_periods=-1:stop_duration=${(
+      premiumPlan.maxSilenceMs / 1000
+    ).toFixed(3)}:stop_threshold=-45dB`
+  ];
+}
+
+function buildMasteringFilters(
+  totalDuration: number,
+  premiumPlan: PremiumAudioMixPlan,
+  filterSupport: AudioFilterSupport
+) {
+  const filters: string[] = [];
+  const appliedFilters: string[] = [];
+  const warnings = [...premiumPlan.warnings];
+  let duckingMode: AudioDuckingMode = premiumPlan.duckingMode;
+  let compressorApplied = false;
+  let limiterApplied = false;
+  let loudnormApplied = false;
+
+  if (premiumPlan.preset.compressorEnabled) {
+    if (filterSupport.acompressor) {
+      filters.push(
+        `acompressor=threshold=${dbToLinear(
+          premiumPlan.preset.compressorThresholdDb
+        ).toFixed(3)}:ratio=${premiumPlan.preset.compressorRatio.toFixed(
+          2
+        )}:attack=${premiumPlan.preset.compressorAttackMs.toFixed(
+          0
+        )}:release=${premiumPlan.preset.compressorReleaseMs.toFixed(
+          0
+        )}:makeup=1`
+      );
+      appliedFilters.push("acompressor");
+      compressorApplied = true;
+    } else {
+      warnings.push("FFmpeg acompressor indisponivel; compressor premium nao aplicado.");
+    }
+  }
+
+  if (filterSupport.loudnorm) {
+    filters.push(
+      `loudnorm=I=${premiumPlan.targetLufs.toFixed(1)}:TP=${premiumPlan.truePeakDb.toFixed(
+        1
+      )}:LRA=11:linear=true:print_format=summary`
+    );
+    appliedFilters.push("loudnorm");
+    loudnormApplied = true;
+  } else {
+    warnings.push("FFmpeg loudnorm indisponivel; mix final ficou no fallback simples.");
+  }
+
+  if (premiumPlan.preset.limiterEnabled) {
+    if (filterSupport.alimiter) {
+      filters.push(
+        `alimiter=limit=${dbToLinear(premiumPlan.truePeakDb).toFixed(
+          3
+        )}:level=disabled`
+      );
+      appliedFilters.push("alimiter");
+      limiterApplied = true;
+    } else {
+      warnings.push("FFmpeg alimiter indisponivel; limiter premium nao aplicado.");
+    }
+  }
+
+  filters.push(
+    ...buildFadeFilters(
+      totalDuration,
+      premiumPlan.preset.fadeInMs / 1000,
+      premiumPlan.preset.fadeOutMs / 1000
+    )
+  );
+
+  if (premiumPlan.preset.fadeInMs > 0 || premiumPlan.preset.fadeOutMs > 0) {
+    appliedFilters.push("afade");
+  }
+
+  if (!premiumPlan.duckingEnabled) {
+    duckingMode = "none";
+  }
+
+  return {
+    filters,
+    appliedFilters,
+    warnings,
+    duckingMode,
+    compressorApplied,
+    limiterApplied,
+    loudnormApplied
+  };
+}
+
+function buildBaseAudioQualityReport(
+  options: {
+    totalDuration: number;
+    premiumPlan: PremiumAudioMixPlan;
+    duckingMode: AudioDuckingMode;
+    appliedFilters: string[];
+    warnings: string[];
+    compressorApplied: boolean;
+    limiterApplied: boolean;
+    loudnormApplied: boolean;
+    silenceTrimmingApplied: boolean;
+  }
+): AudioQualityReport {
+  const { premiumPlan } = options;
+
+  return {
+    masteringPresetId: premiumPlan.masteringPresetId,
+    masteringPresetName: premiumPlan.preset.name,
+    targetLufs: premiumPlan.targetLufs,
+    truePeakDb: premiumPlan.truePeakDb,
+    measuredInputDuration: options.totalDuration,
+    measuredOutputDuration: options.totalDuration,
+    narrationIncluded: premiumPlan.narrationIncluded,
+    musicIncluded: premiumPlan.musicIncluded,
+    sfxIncluded: premiumPlan.sfxIncluded,
+    duckingEnabled: premiumPlan.duckingEnabled,
+    duckingMode: options.duckingMode,
+    compressorApplied: options.compressorApplied,
+    limiterApplied: options.limiterApplied,
+    loudnormApplied: options.loudnormApplied,
+    silenceTrimmingApplied: options.silenceTrimmingApplied,
+    narrationGainDb: premiumPlan.narrationGainDb,
+    musicGainDb: premiumPlan.musicGainDb,
+    sfxGainDb: premiumPlan.sfxGainDb,
+    finalAudioCodec: "aac",
+    finalAudioSampleRate: 48000,
+    finalAudioBitrate: "192k",
+    warnings: [...new Set(options.warnings)],
+    appliedFilters: options.appliedFilters
+  };
+}
+
+export async function muxSilentAudioTrack(
+  options: FinalizeRenderAudioOptions,
+  premiumPlan: PremiumAudioMixPlan
+): Promise<FinalizeRenderAudioResult> {
   const { logger, visualOutputPath, outputPath, totalDuration, jobRoot, logPath, context } =
     options;
 
@@ -180,6 +418,8 @@ export async function muxSilentAudioTrack(
       "copy",
       "-c:a",
       "aac",
+      "-b:a",
+      "192k",
       "-ar",
       "48000",
       "-ac",
@@ -195,50 +435,59 @@ export async function muxSilentAudioTrack(
   );
 
   return {
-    hasAudio: false
+    hasAudio: false,
+    audioQualityReport: buildBaseAudioQualityReport({
+      totalDuration,
+      premiumPlan,
+      duckingMode: "none",
+      appliedFilters: ["anullsrc"],
+      warnings: [
+        ...premiumPlan.warnings,
+        "Audio plan desabilitado; render final recebeu trilha silenciosa de compatibilidade."
+      ],
+      compressorApplied: false,
+      limiterApplied: false,
+      loudnormApplied: false,
+      silenceTrimmingApplied: false
+    })
   };
-}
-
-function buildFadeFilters(totalDuration: number, fadeIn: number, fadeOut: number) {
-  const filters: string[] = [];
-
-  if (fadeIn > 0) {
-    filters.push(`afade=t=in:st=0:d=${clampPositive(fadeIn).toFixed(3)}`);
-  }
-
-  if (fadeOut > 0) {
-    const fadeStart = Math.max(totalDuration - fadeOut, 0);
-    filters.push(
-      `afade=t=out:st=${clampPositive(fadeStart).toFixed(3)}:d=${clampPositive(
-        fadeOut
-      ).toFixed(3)}`
-    );
-  }
-
-  return filters;
 }
 
 export async function finalizeRenderAudio(
   options: FinalizeRenderAudioOptions
-) {
+): Promise<FinalizeRenderAudioResult> {
   const { blueprint, projectRoot, jobRoot, visualOutputPath, outputPath, totalDuration, logPath, context, logger } =
     options;
   const plan = blueprint.audio;
   const labelContext = withLabel(context, "audio");
+  const filterSupport = await loadAudioFilterSupport(options);
+  const premiumPlan = buildPremiumAudioMixPlan({
+    audioPlan: plan,
+    ...(options.audioMasteringPresetId !== undefined
+      ? {
+          audioMasteringPresetId: options.audioMasteringPresetId
+        }
+      : {}),
+    preferSidechainDucking: true,
+    loudnormSupported: filterSupport.loudnorm
+  });
+  const silenceTrimmingApplied =
+    premiumPlan.removeLongSilences && filterSupport.silenceremove;
 
   await logger.appendLog(
     logPath,
     labelContext,
-    `Audio enabled=${plan.enabled} | configured=${plan.hasConfiguredAudio} | mood=${plan.mood?.id ?? "none"} | summary=${plan.summary}`
+    `Audio enabled=${plan.enabled} | configured=${plan.hasConfiguredAudio} | mood=${plan.mood?.id ?? "none"} | preset=${premiumPlan.masteringPresetId} | summary=${plan.summary}`
   );
 
   if (!plan.enabled) {
-    return muxSilentAudioTrack(options);
+    return muxSilentAudioTrack(options, premiumPlan);
   }
 
   const trackInputs: string[] = [];
   const filterChains: string[] = [];
   const mixLabels: string[] = [];
+  const duckBusLabels: string[] = [];
   const warnings = [...plan.warnings];
   const sceneNarrationWindows = plan.sceneNarrations.map((sceneNarration) => ({
     start: sceneNarration.startTime,
@@ -260,7 +509,22 @@ export async function finalizeRenderAudio(
           sceneNarration.asset.duration ?? sceneNarration.duration
         )
     }));
+  const duckingAmountLinear = Math.min(
+    clampPositive(plan.duckingLevel),
+    roundToThreeDecimals(dbToLinear(premiumPlan.preset.duckingAmountDb))
+  );
+  const narrationGainScalar = dbToLinear(premiumPlan.narrationGainDb);
+  const musicGainScalar = dbToLinear(premiumPlan.musicGainDb);
+  const sfxGainScalar = dbToLinear(premiumPlan.sfxGainDb);
   let inputIndex = 1;
+  let musicOutputLabel: string | null = null;
+  let duckingMode: AudioDuckingMode = premiumPlan.duckingMode;
+
+  if (premiumPlan.removeLongSilences && !filterSupport.silenceremove) {
+    warnings.push(
+      "FFmpeg silenceremove indisponivel; a narracao foi mantida sem limpeza de silencio."
+    );
+  }
 
   if (plan.backgroundMusic) {
     const musicPath = resolveStoragePath(projectRoot, plan.backgroundMusic.asset.path);
@@ -271,17 +535,22 @@ export async function finalizeRenderAudio(
       );
     }
 
-    const effectiveMusicVolume =
-      plan.enableAudioDucking && plan.voiceover
-        ? roundToThreeDecimals(plan.backgroundMusic.volume * plan.duckingLevel)
-        : plan.backgroundMusic.volume;
+    let effectiveMusicVolume = plan.backgroundMusic.volume * musicGainScalar;
+
+    if (premiumPlan.duckingEnabled && duckingMode !== "sidechain") {
+      if (plan.voiceover) {
+        effectiveMusicVolume *= duckingAmountLinear;
+      }
+    }
+
     const musicVolumeFilter =
-      plan.enableAudioDucking &&
+      premiumPlan.duckingEnabled &&
+      duckingMode !== "sidechain" &&
       !plan.voiceover &&
       duckingNarrationWindows.length > 0
         ? `volume=${buildDuckedVolumeExpression(
             effectiveMusicVolume,
-            plan.duckingLevel,
+            duckingAmountLinear,
             duckingNarrationWindows
           )}`
         : `volume=${roundToThreeDecimals(effectiveMusicVolume).toFixed(3)}`;
@@ -297,8 +566,8 @@ export async function finalizeRenderAudio(
     ];
 
     trackInputs.push("-stream_loop", "-1", "-i", musicPath);
-    filterChains.push(`[${inputIndex}:a]${musicFilters.join(",")}[amusic]`);
-    mixLabels.push("[amusic]");
+    filterChains.push(`[${inputIndex}:a]${musicFilters.join(",")}[amusicraw]`);
+    musicOutputLabel = "[amusicraw]";
     inputIndex += 1;
   }
 
@@ -315,12 +584,28 @@ export async function finalizeRenderAudio(
     const voiceFilters = [
       `atrim=0:${totalDuration.toFixed(3)}`,
       "asetpts=N/SR/TB",
-      `volume=${buildMutedVolumeExpression(plan.voiceover.volume, sceneNarrationWindows)}`
+      ...buildNarrationTrimFilters(premiumPlan, filterSupport),
+      `volume=${buildMutedVolumeExpression(
+        plan.voiceover.volume * narrationGainScalar,
+        sceneNarrationWindows
+      )}`
     ];
-    filterChains.push(
-      `[${inputIndex}:a]${voiceFilters.join(",")}[avoice]`
-    );
+    filterChains.push(`[${inputIndex}:a]${voiceFilters.join(",")}[avoice]`);
     mixLabels.push("[avoice]");
+
+    if (premiumPlan.duckingEnabled && duckingMode === "sidechain") {
+      const duckVoiceFilters = [
+        `atrim=0:${totalDuration.toFixed(3)}`,
+        "asetpts=N/SR/TB",
+        ...buildNarrationTrimFilters(premiumPlan, filterSupport),
+        "volume=1.000"
+      ];
+      filterChains.push(
+        `[${inputIndex}:a]${duckVoiceFilters.join(",")}[aduckvoice]`
+      );
+      duckBusLabels.push("[aduckvoice]");
+    }
+
     inputIndex += 1;
   }
 
@@ -347,7 +632,10 @@ export async function finalizeRenderAudio(
     const narrationFilters = [
       `atrim=0:${clipDuration.toFixed(3)}`,
       "asetpts=N/SR/TB",
-      `volume=${roundToThreeDecimals(sceneNarration.volume).toFixed(3)}`,
+      ...buildNarrationTrimFilters(premiumPlan, filterSupport),
+      `volume=${roundToThreeDecimals(
+        sceneNarration.volume * narrationGainScalar
+      ).toFixed(3)}`,
       ...buildFadeFilters(
         clipDuration,
         sceneNarration.fadeInDuration,
@@ -359,6 +647,21 @@ export async function finalizeRenderAudio(
     trackInputs.push("-i", narrationPath);
     filterChains.push(`[${inputIndex}:a]${narrationFilters.join(",")}[${outputLabel}]`);
     mixLabels.push(`[${outputLabel}]`);
+
+    if (premiumPlan.duckingEnabled && duckingMode === "sidechain") {
+      const duckFilters = [
+        `atrim=0:${clipDuration.toFixed(3)}`,
+        "asetpts=N/SR/TB",
+        ...buildNarrationTrimFilters(premiumPlan, filterSupport),
+        "volume=1.000",
+        `adelay=${delayMs}|${delayMs}`
+      ];
+      filterChains.push(
+        `[${inputIndex}:a]${duckFilters.join(",")}[aducknarr${index}]`
+      );
+      duckBusLabels.push(`[aducknarr${index}]`);
+    }
+
     inputIndex += 1;
   }
 
@@ -377,22 +680,77 @@ export async function finalizeRenderAudio(
 
     trackInputs.push("-i", sfxPath);
     filterChains.push(
-      `[${inputIndex}:a]atrim=0:${remainingDuration.toFixed(3)},asetpts=N/SR/TB,volume=${roundToThreeDecimals(
-        sceneSfx.volume
+      `[${inputIndex}:a]atrim=0:${remainingDuration.toFixed(
+        3
+      )},asetpts=N/SR/TB,volume=${roundToThreeDecimals(
+        sceneSfx.volume * sfxGainScalar
       ).toFixed(3)},adelay=${delayMs}|${delayMs}[${outputLabel}]`
     );
     mixLabels.push(`[${outputLabel}]`);
     inputIndex += 1;
   }
 
-  if (mixLabels.length === 0) {
+  if (mixLabels.length === 0 && !musicOutputLabel) {
     warnings.push("Audio plan was configured but no valid audio tracks were resolved.");
     await logger.appendLog(
       logPath,
       labelContext,
       warnings[warnings.length - 1] ?? "Audio track resolution warning."
     );
-    return muxSilentAudioTrack(options);
+    return muxSilentAudioTrack(options, premiumPlan);
+  }
+
+  if (
+    premiumPlan.duckingEnabled &&
+    duckingMode === "sidechain" &&
+    musicOutputLabel &&
+    duckBusLabels.length > 0 &&
+    filterSupport.sidechaincompress
+  ) {
+    if (duckBusLabels.length === 1) {
+      filterChains.push(
+        `${duckBusLabels[0]}aresample=48000:async=1:first_pts=0[aduckbus]`
+      );
+    } else {
+      filterChains.push(
+        `${duckBusLabels.join("")}amix=inputs=${duckBusLabels.length}:duration=longest:dropout_transition=0,aresample=48000:async=1:first_pts=0[aduckbus]`
+      );
+    }
+
+    const sidechainRatio = Math.min(
+      Math.max(Math.abs(premiumPlan.preset.duckingAmountDb) / 2 + 2, 2),
+      12
+    );
+    filterChains.push(
+      `${musicOutputLabel}[aduckbus]sidechaincompress=threshold=0.025:ratio=${sidechainRatio.toFixed(
+        2
+      )}:attack=${premiumPlan.preset.duckingAttackMs.toFixed(
+        0
+      )}:release=${premiumPlan.preset.duckingReleaseMs.toFixed(0)}[amusic]`
+    );
+    musicOutputLabel = "[amusic]";
+  } else if (
+    premiumPlan.duckingEnabled &&
+    duckingMode === "sidechain" &&
+    musicOutputLabel
+  ) {
+    duckingMode = premiumPlan.musicIncluded && premiumPlan.narrationIncluded
+      ? "global_reduction"
+      : "none";
+    warnings.push(
+      "FFmpeg sidechaincompress indisponivel; ducking caiu para global_reduction."
+    );
+    filterChains.push(`${musicOutputLabel}anull[amusic]`);
+    musicOutputLabel = "[amusic]";
+  }
+
+  if (musicOutputLabel) {
+    if (musicOutputLabel === "[amusicraw]") {
+      filterChains.push(`${musicOutputLabel}anull[amusic]`);
+      musicOutputLabel = "[amusic]";
+    }
+
+    mixLabels.unshift(musicOutputLabel);
   }
 
   const outputAudioLabel = "[aout]";
@@ -401,20 +759,25 @@ export async function finalizeRenderAudio(
     filterChains.push(
       `${mixLabels[0]}aresample=48000:async=1:first_pts=0,atrim=0:${totalDuration.toFixed(
         3
-      )}${outputAudioLabel}`
+      )}[amixbase]`
     );
   } else {
     filterChains.push(
       `${mixLabels.join("")}amix=inputs=${mixLabels.length}:duration=longest:dropout_transition=0,aresample=48000:async=1:first_pts=0,atrim=0:${totalDuration.toFixed(
         3
-      )}${outputAudioLabel}`
+      )}[amixbase]`
     );
   }
+
+  const mastering = buildMasteringFilters(totalDuration, premiumPlan, filterSupport);
+  filterChains.push(
+    `[amixbase]${mastering.filters.join(",")}${outputAudioLabel}`
+  );
 
   await logger.appendLog(
     logPath,
     labelContext,
-    `Background music asset: ${plan.backgroundMusic?.asset.path ?? "none"} | voiceover asset: ${plan.voiceover?.asset.path ?? "none"} | scene narrations: ${plan.sceneNarrations.length} | scene SFX count: ${plan.sceneSfx.length} | ducking=${plan.enableAudioDucking ? `${plan.duckingLevel}` : "off"}`
+    `Background music asset: ${plan.backgroundMusic?.asset.path ?? "none"} | voiceover asset: ${plan.voiceover?.asset.path ?? "none"} | scene narrations: ${plan.sceneNarrations.length} | scene SFX count: ${plan.sceneSfx.length} | preset=${premiumPlan.masteringPresetId} | ducking=${duckingMode}`
   );
 
   await logger.runCommand(
@@ -434,6 +797,8 @@ export async function finalizeRenderAudio(
       "copy",
       "-c:a",
       "aac",
+      "-b:a",
+      "192k",
       "-ar",
       "48000",
       "-ac",
@@ -449,6 +814,17 @@ export async function finalizeRenderAudio(
   );
 
   return {
-    hasAudio: true
+    hasAudio: true,
+    audioQualityReport: buildBaseAudioQualityReport({
+      totalDuration,
+      premiumPlan,
+      duckingMode,
+      appliedFilters: mastering.appliedFilters,
+      warnings: [...warnings, ...mastering.warnings],
+      compressorApplied: mastering.compressorApplied,
+      limiterApplied: mastering.limiterApplied,
+      loudnormApplied: mastering.loudnormApplied,
+      silenceTrimmingApplied
+    })
   };
 }

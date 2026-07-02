@@ -7,6 +7,7 @@ import {
   generateSrt,
   getCaptionStyleById
 } from "@reelforge/caption-engine";
+import type { AudioQualityReport } from "@reelforge/audio-engine/mastering";
 import type { RenderBlueprint, RenderBlueprintScene } from "./index.js";
 import { finalizeRenderAudio } from "./audio-mix.js";
 import {
@@ -54,6 +55,7 @@ export interface RenderBlueprintV1Options {
   rendersStorageRoot: string;
   videoProjectId: string;
   renderJobId: string;
+  audioMasteringPresetId?: string | null;
   onStep?: (step: RenderPipelineStep) => Promise<void> | void;
   onScene?: (
     sceneIndex: number,
@@ -69,6 +71,7 @@ export interface RenderArtifacts {
   srtPath: string;
   assPath: string;
   logPath: string;
+  audioQualityReport?: AudioQualityReport | null;
 }
 
 interface CommandResult {
@@ -761,6 +764,7 @@ export async function renderBlueprintV1({
   rendersStorageRoot,
   videoProjectId,
   renderJobId,
+  audioMasteringPresetId,
   onStep,
   onScene,
   onProgress,
@@ -929,7 +933,7 @@ export async function renderBlueprintV1({
     await throwIfCancellationRequested(shouldCancel, "mixing_audio");
   }
 
-  await finalizeRenderAudio({
+  const audioResult = await finalizeRenderAudio({
     blueprint,
     projectRoot,
     jobRoot: paths.jobRoot,
@@ -938,6 +942,7 @@ export async function renderBlueprintV1({
     totalDuration,
     logPath: paths.logPath,
     context: baseContext,
+    audioMasteringPresetId: audioMasteringPresetId ?? null,
     logger: {
       appendLog,
       runCommand
@@ -959,7 +964,8 @@ export async function renderBlueprintV1({
     outputPath: toRelativeStoragePath(projectRoot, paths.outputPath),
     srtPath: toRelativeStoragePath(projectRoot, paths.srtPath),
     assPath: toRelativeStoragePath(projectRoot, paths.assPath),
-    logPath: toRelativeStoragePath(projectRoot, paths.logPath)
+    logPath: toRelativeStoragePath(projectRoot, paths.logPath),
+    audioQualityReport: audioResult.audioQualityReport
   };
 }
 

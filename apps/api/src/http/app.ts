@@ -14,6 +14,7 @@ import type { RenderJobRepository } from "../modules/render-jobs/application/ren
 import type { RenderStorage } from "../modules/render-jobs/application/render-storage.js";
 import { handleAssetMediaRoute } from "./routes/asset-media-routes.js";
 import { handleAssetRoute } from "./routes/assets-routes.js";
+import { handleAudioMasteringRoute } from "./routes/audio-mastering-routes.js";
 import { handleAudioMoodRoute } from "./routes/audio-mood-routes.js";
 import { handleCandidateMediaRoute } from "./routes/candidate-media-routes.js";
 import { handleCaptionStyleRoute } from "./routes/caption-style-routes.js";
@@ -172,6 +173,10 @@ export function createApp({
     }
 
     if (await handleTemplateRoute(request, response, url.pathname)) {
+      return;
+    }
+
+    if (await handleAudioMasteringRoute(request, response, url.pathname)) {
       return;
     }
 

@@ -5,6 +5,7 @@ import {
   buildRenderMediaLinks,
   defaultRenderMode,
   defaultRenderQuality,
+  normalizeOptionalAudioMasteringPresetId,
   normalizeOptionalAttempt,
   normalizeOptionalIndex,
   normalizeOptionalPositiveNumber,
@@ -14,6 +15,7 @@ import {
   normalizeOptionalRenderJobStep,
   normalizeOptionalString,
   type CreateRenderJobInput,
+  type RenderJobMetadata,
   type StudioRenderJob,
   type UpdateRenderJobInput
 } from "../domain/render-job.js";
@@ -34,7 +36,50 @@ type RenderJobRecord = Prisma.RenderJobGetPayload<{
   include: typeof renderJobInclude;
 }>;
 
+function parseMetadata(
+  value: string | null
+): RenderJobMetadata | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+
+    const record = parsed as Record<string, unknown>;
+    const audioMasteringPresetId = normalizeOptionalAudioMasteringPresetId(
+      record.audioMasteringPresetId
+    );
+
+    if (!audioMasteringPresetId) {
+      return null;
+    }
+
+    const audioQualityReport =
+      "audioQualityReport" in record
+        ? (record.audioQualityReport as RenderJobMetadata["audioQualityReport"])
+        : undefined;
+
+    return audioQualityReport === undefined
+      ? {
+          audioMasteringPresetId
+        }
+      : {
+          audioMasteringPresetId,
+          audioQualityReport
+        };
+  } catch {
+    return null;
+  }
+}
+
 function mapRenderJob(record: RenderJobRecord): StudioRenderJob {
+  const metadata = parseMetadata(record.metadata);
+
   return {
     id: record.id,
     videoProjectId: record.videoProjectId,
@@ -59,6 +104,8 @@ function mapRenderJob(record: RenderJobRecord): StudioRenderJob {
     audioCodec: record.audioCodec,
     audioChannels: record.audioChannels,
     audioSampleRate: record.audioSampleRate,
+    audioMasteringPresetId: metadata?.audioMasteringPresetId ?? null,
+    metadata,
     outputFileSize: record.outputFileSize,
     thumbnailPath: record.thumbnailPath,
     cancelledAt: record.cancelledAt?.toISOString() ?? null,
@@ -87,6 +134,15 @@ function serializeCreateInput(
   input: CreateRenderJobInput
 ): Prisma.RenderJobCreateInput {
   const attempt = normalizeOptionalAttempt(input.attempt) ?? 1;
+  const audioMasteringPresetId =
+    normalizeOptionalAudioMasteringPresetId(input.audioMasteringPresetId) ?? null;
+  const metadata =
+    input.metadata ??
+    (audioMasteringPresetId
+      ? {
+          audioMasteringPresetId
+        }
+      : null);
 
   return {
     videoProject: {
@@ -99,6 +155,7 @@ function serializeCreateInput(
       normalizeOptionalRenderMode(input.renderMode) ?? defaultRenderMode,
     renderQuality:
       normalizeOptionalRenderQuality(input.renderQuality) ?? defaultRenderQuality,
+    metadata: metadata ? JSON.stringify(metadata) : null,
     progress: 0,
     attempt,
     retriedFromJobId: normalizeOptionalString(
@@ -290,6 +347,10 @@ function serializeUpdateInput(input: UpdateRenderJobInput): Prisma.RenderJobUpda
     if (audioSampleRate !== undefined) {
       updateData.audioSampleRate = audioSampleRate;
     }
+  }
+
+  if ("metadata" in input) {
+    updateData.metadata = input.metadata ? JSON.stringify(input.metadata) : null;
   }
 
   if ("outputFileSize" in input) {

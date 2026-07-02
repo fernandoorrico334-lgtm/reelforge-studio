@@ -154,6 +154,94 @@ export const audioMoodPresetIds = [
 
 export type AudioMoodPresetId = (typeof audioMoodPresetIds)[number];
 
+export const audioMasteringPresetIds = [
+  "shorts_clean_voice",
+  "football_hype",
+  "true_crime_dark",
+  "cinematic_epic",
+  "documentary_clean",
+  "viral_fast_cut"
+] as const;
+
+export type AudioMasteringPresetId =
+  (typeof audioMasteringPresetIds)[number];
+
+export type AudioDuckingMode = "sidechain" | "global_reduction" | "none";
+
+export interface AudioMasteringPresetSummary {
+  id: AudioMasteringPresetId;
+  name: string;
+  description: string;
+  targetLufs: number;
+  truePeakDb: number;
+  narrationGainDb: number;
+  musicGainDb: number;
+  sfxGainDb: number;
+  duckingEnabled: boolean;
+  duckingAmountDb: number;
+  duckingAttackMs: number;
+  duckingReleaseMs: number;
+  compressorEnabled: boolean;
+  compressorThresholdDb: number;
+  compressorRatio: number;
+  compressorAttackMs: number;
+  compressorReleaseMs: number;
+  limiterEnabled: boolean;
+  fadeInMs: number;
+  fadeOutMs: number;
+  removeLongSilences: boolean;
+  maxSilenceMs: number;
+  recommendedUse: string;
+}
+
+export interface AudioMasteringPreview {
+  masteringPresetId: AudioMasteringPresetId;
+  masteringPresetName: string;
+  narrationIncluded: boolean;
+  musicIncluded: boolean;
+  sfxIncluded: boolean;
+  duckingEnabled: boolean;
+  duckingMode: AudioDuckingMode;
+  compressorApplied: boolean;
+  limiterApplied: boolean;
+  loudnormApplied: boolean;
+  removeLongSilences: boolean;
+  maxSilenceMs: number;
+  targetLufs: number;
+  truePeakDb: number;
+  narrationGainDb: number;
+  musicGainDb: number;
+  sfxGainDb: number;
+  warnings: string[];
+  summary: string;
+}
+
+export interface AudioQualityReport {
+  masteringPresetId: AudioMasteringPresetId;
+  masteringPresetName: string;
+  targetLufs: number;
+  truePeakDb: number;
+  measuredInputDuration: number;
+  measuredOutputDuration: number | null;
+  narrationIncluded: boolean;
+  musicIncluded: boolean;
+  sfxIncluded: boolean;
+  duckingEnabled: boolean;
+  duckingMode: AudioDuckingMode;
+  compressorApplied: boolean;
+  limiterApplied: boolean;
+  loudnormApplied: boolean;
+  silenceTrimmingApplied: boolean;
+  narrationGainDb: number;
+  musicGainDb: number;
+  sfxGainDb: number;
+  finalAudioCodec: string | null;
+  finalAudioSampleRate: number | null;
+  finalAudioBitrate: string | null;
+  warnings: string[];
+  appliedFilters: string[];
+}
+
 export const narrationProviders = [
   "mock-tts",
   "windows-sapi-local",
@@ -2169,6 +2257,11 @@ export interface StudioRenderJob {
   audioCodec: string | null;
   audioChannels: number | null;
   audioSampleRate: number | null;
+  audioMasteringPresetId: AudioMasteringPresetId | null;
+  metadata: {
+    audioMasteringPresetId: AudioMasteringPresetId;
+    audioQualityReport?: AudioQualityReport | null;
+  } | null;
   outputFileSize: number | null;
   thumbnailPath: string | null;
   cancelledAt: string | null;
@@ -2187,6 +2280,7 @@ export interface StudioRenderJob {
 export interface CreateRenderJobPayload {
   renderMode?: RenderMode;
   renderQuality?: RenderQuality;
+  audioMasteringPresetId?: AudioMasteringPresetId;
 }
 
 export interface StudioProject {

@@ -246,6 +246,9 @@ export function GeneratedAudioManager({
                     em uso
                   </span>
                 ) : null}
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-mist/72">
+                  raw narration
+                </span>
                 <span className="rounded-full border border-[#92a7ff]/25 bg-[#92a7ff]/10 px-3 py-1 text-xs text-[#e2e8ff]">
                   {selectedItem.job.provider}
                 </span>

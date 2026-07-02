@@ -25,6 +25,7 @@
     "typecheck": "tsc -b tsconfig.json --pretty false"
   },
   "dependencies": {
+    "@reelforge/audio-engine": "file:../audio-engine",
     "@reelforge/caption-engine": "file:../caption-engine",
     "@reelforge/cinematic-engine": "file:../cinematic-engine",
     "@reelforge/story-engine": "file:../story-engine",

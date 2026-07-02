@@ -39,7 +39,9 @@
     "smoke:prompt-engine": "node scripts/smoke-prompt-engine.mjs",
     "smoke:narration-engine": "node scripts/smoke-narration-engine.mjs",
     "smoke:narration-render-plan": "node scripts/smoke-narration-render-plan.mjs",
+    "smoke:audio-mastering-presets": "node scripts/smoke-audio-mastering-presets.mjs",
     "smoke:render-with-narration": "node scripts/smoke-render-with-narration.mjs",
+    "smoke:premium-audio-render": "node scripts/smoke-premium-audio-render.mjs",
     "smoke:narration-windows-sapi:local": "node scripts/smoke-narration-windows-sapi-local.mjs"
   },
   "prisma": {
