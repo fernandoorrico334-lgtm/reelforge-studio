@@ -216,6 +216,31 @@ function parseAvailableFilters(output: string): AudioFilterSupport {
     if (filterName === "silenceremove") support.silenceremove = true;
   }
 
+  const normalizedOutput = output.toLowerCase();
+
+  if (!support.acompressor && normalizedOutput.includes("acompressor")) {
+    support.acompressor = true;
+  }
+
+  if (!support.alimiter && normalizedOutput.includes("alimiter")) {
+    support.alimiter = true;
+  }
+
+  if (!support.loudnorm && normalizedOutput.includes("loudnorm")) {
+    support.loudnorm = true;
+  }
+
+  if (
+    !support.sidechaincompress &&
+    normalizedOutput.includes("sidechaincompress")
+  ) {
+    support.sidechaincompress = true;
+  }
+
+  if (!support.silenceremove && normalizedOutput.includes("silenceremove")) {
+    support.silenceremove = true;
+  }
+
   return support;
 }
 
@@ -516,6 +541,10 @@ export async function finalizeRenderAudio(
   const narrationGainScalar = dbToLinear(premiumPlan.narrationGainDb);
   const musicGainScalar = dbToLinear(premiumPlan.musicGainDb);
   const sfxGainScalar = dbToLinear(premiumPlan.sfxGainDb);
+  const canUseSidechainDucking =
+    premiumPlan.duckingEnabled &&
+    premiumPlan.duckingMode === "sidechain" &&
+    filterSupport.sidechaincompress;
   let inputIndex = 1;
   let musicOutputLabel: string | null = null;
   let duckingMode: AudioDuckingMode = premiumPlan.duckingMode;
@@ -593,7 +622,7 @@ export async function finalizeRenderAudio(
     filterChains.push(`[${inputIndex}:a]${voiceFilters.join(",")}[avoice]`);
     mixLabels.push("[avoice]");
 
-    if (premiumPlan.duckingEnabled && duckingMode === "sidechain") {
+    if (canUseSidechainDucking) {
       const duckVoiceFilters = [
         `atrim=0:${totalDuration.toFixed(3)}`,
         "asetpts=N/SR/TB",
@@ -648,7 +677,7 @@ export async function finalizeRenderAudio(
     filterChains.push(`[${inputIndex}:a]${narrationFilters.join(",")}[${outputLabel}]`);
     mixLabels.push(`[${outputLabel}]`);
 
-    if (premiumPlan.duckingEnabled && duckingMode === "sidechain") {
+    if (canUseSidechainDucking) {
       const duckFilters = [
         `atrim=0:${clipDuration.toFixed(3)}`,
         "asetpts=N/SR/TB",
@@ -705,7 +734,7 @@ export async function finalizeRenderAudio(
     duckingMode === "sidechain" &&
     musicOutputLabel &&
     duckBusLabels.length > 0 &&
-    filterSupport.sidechaincompress
+    canUseSidechainDucking
   ) {
     if (duckBusLabels.length === 1) {
       filterChains.push(
