@@ -65,6 +65,19 @@ export interface AudioSceneInput {
   sfxAssetId?: string | null;
   sfxStartTime?: number | null;
   sfxVolume?: number | null;
+  clipAudioInserts?: AudioSceneClipInsertInput[];
+}
+
+export interface AudioSceneClipInsertInput {
+  microclipId: string;
+  label: string;
+  assetId: string;
+  startTime: number;
+  sourceStartTime: number;
+  duration: number;
+  volume: number;
+  volumeMode: "low_original" | "keep_original";
+  narrationOverlay?: boolean | null;
 }
 
 export interface AudioMixPlanAsset {
@@ -112,6 +125,21 @@ export interface AudioMixPlanSceneSfx {
   asset: AudioMixPlanAsset;
 }
 
+export interface AudioMixPlanSceneClipAudio {
+  microclipId: string;
+  label: string;
+  sceneId: string;
+  sceneOrder: number;
+  sceneTitle: string;
+  startTime: number;
+  sourceStartTime: number;
+  duration: number;
+  volume: number;
+  volumeMode: "low_original" | "keep_original";
+  narrationOverlay: boolean;
+  asset: AudioMixPlanAsset;
+}
+
 export interface AudioMixPlanValidation {
   valid: boolean;
   errors: string[];
@@ -127,6 +155,7 @@ export interface AudioMixPlan {
   voiceover: AudioMixPlanTrack | null;
   sceneNarrations: AudioMixPlanSceneNarration[];
   sceneSfx: AudioMixPlanSceneSfx[];
+  sceneClipAudio: AudioMixPlanSceneClipAudio[];
   musicVolume: number;
   voiceVolume: number;
   sfxVolume: number;
@@ -254,6 +283,7 @@ const validMusicTypes = new Set(["MUSIC", "AUDIO"]);
 const validVoiceTypes = new Set(["AUDIO"]);
 const validNarrationTypes = new Set(["AUDIO"]);
 const validSfxTypes = new Set(["SFX", "AUDIO"]);
+const validClipAudioTypes = new Set(["VIDEO", "AUDIO", "SFX"]);
 
 function roundToThreeDecimals(value: number) {
   return Math.round(value * 1000) / 1000;
@@ -415,6 +445,26 @@ export function validateAudioMixPlan(plan: AudioMixPlan): AudioMixPlanValidation
     }
   }
 
+  for (const sceneClipAudio of plan.sceneClipAudio) {
+    if (!validClipAudioTypes.has(sceneClipAudio.asset.type)) {
+      errors.push(
+        `Microclip audio '${sceneClipAudio.asset.filename}' must be VIDEO, AUDIO or SFX.`
+      );
+    }
+
+    if (!sceneClipAudio.asset.exists) {
+      errors.push(
+        `Microclip audio asset '${sceneClipAudio.asset.path}' is missing on disk.`
+      );
+    }
+
+    if (sceneClipAudio.startTime > plan.totalDuration) {
+      warnings.push(
+        `Scene '${sceneClipAudio.sceneTitle}' has microclip audio start ${sceneClipAudio.startTime}s beyond total duration ${plan.totalDuration}s.`
+      );
+    }
+  }
+
   if (plan.voiceover?.asset.duration && plan.voiceover.asset.duration > plan.totalDuration) {
     warnings.push(
       `Voiceover duration ${plan.voiceover.asset.duration}s exceeds project duration ${plan.totalDuration}s and will be trimmed.`
@@ -457,6 +507,7 @@ export function summarizeAudioPlan(plan: AudioMixPlan) {
       : "no voiceover",
     `${plan.sceneNarrations.length} scene narrations`,
     `${plan.sceneSfx.length} scene SFX`,
+    `${plan.sceneClipAudio.length} microclip audio`,
     plan.enableAudioDucking && (plan.voiceover || plan.sceneNarrations.length > 0)
       ? `ducking ${Math.round(plan.duckingLevel * 100)}%`
       : "ducking off"
@@ -520,6 +571,7 @@ export function buildAudioMixPlan(
   let accumulatedSceneStart = 0;
   const sceneNarrations: AudioMixPlanSceneNarration[] = [];
   const sceneSfx: AudioMixPlanSceneSfx[] = [];
+  const sceneClipAudio: AudioMixPlanSceneClipAudio[] = [];
 
   for (const scene of orderedScenes) {
     const resolvedSceneDuration = normalizeDuration(scene.duration, defaultSceneDuration);
@@ -532,6 +584,7 @@ export function buildAudioMixPlan(
       assetMap.get(scene.narrationAssetId ?? "") ?? null,
       options.resolveAssetExists
     );
+    const clipAudioInserts = scene.clipAudioInserts ?? [];
     const sfxStartTime =
       roundToThreeDecimals(sceneStartTime + normalizeTime(scene.sfxStartTime));
 
@@ -570,6 +623,37 @@ export function buildAudioMixPlan(
         startTime: sfxStartTime,
         volume: normalizeVolume(scene.sfxVolume, sfxVolume),
         asset: sceneAsset
+      });
+    }
+
+    for (const clipAudioInsert of clipAudioInserts) {
+      const clipAsset = toPlanAsset(
+        assetMap.get(clipAudioInsert.assetId) ?? null,
+        options.resolveAssetExists
+      );
+
+      if (!clipAsset) {
+        warnings.push(
+          `Scene '${scene.title}' references missing microclip audio asset '${clipAudioInsert.assetId}'.`
+        );
+        continue;
+      }
+
+      sceneClipAudio.push({
+        microclipId: clipAudioInsert.microclipId,
+        label: clipAudioInsert.label,
+        sceneId: scene.id,
+        sceneOrder: scene.order,
+        sceneTitle: scene.title,
+        startTime: roundToThreeDecimals(
+          sceneStartTime + normalizeTime(clipAudioInsert.startTime)
+        ),
+        sourceStartTime: normalizeTime(clipAudioInsert.sourceStartTime),
+        duration: normalizeDuration(clipAudioInsert.duration, resolvedSceneDuration),
+        volume: normalizeVolume(clipAudioInsert.volume, sfxVolume),
+        volumeMode: clipAudioInsert.volumeMode,
+        narrationOverlay: clipAudioInsert.narrationOverlay ?? true,
+        asset: clipAsset
       });
     }
 
@@ -613,12 +697,22 @@ export function buildAudioMixPlan(
       project.voiceoverAssetId ||
       sceneNarrations.length > 0 ||
       sceneSfx.length > 0 ||
+      sceneClipAudio.length > 0 ||
       orderedScenes.some(
-        (scene) => Boolean(scene.sfxAssetId || scene.narrationAssetId)
+        (scene) =>
+          Boolean(
+            scene.sfxAssetId ||
+              scene.narrationAssetId ||
+              (scene.clipAudioInserts?.length ?? 0) > 0
+          )
       )
   );
   const enabled = Boolean(
-    backgroundMusic || voiceover || sceneNarrations.length > 0 || sceneSfx.length > 0
+    backgroundMusic ||
+      voiceover ||
+      sceneNarrations.length > 0 ||
+      sceneSfx.length > 0 ||
+      sceneClipAudio.length > 0
   );
 
   const preliminaryPlan: AudioMixPlan = {
@@ -630,6 +724,7 @@ export function buildAudioMixPlan(
     voiceover,
     sceneNarrations,
     sceneSfx,
+    sceneClipAudio,
     musicVolume,
     voiceVolume,
     sfxVolume,

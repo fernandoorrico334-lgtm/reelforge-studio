@@ -1088,6 +1088,21 @@ export interface AudioMixPlanSceneSfx {
   asset: AudioMixPlanAsset;
 }
 
+export interface AudioMixPlanSceneClipAudio {
+  microclipId: string;
+  label: string;
+  sceneId: string;
+  sceneOrder: number;
+  sceneTitle: string;
+  startTime: number;
+  sourceStartTime: number;
+  duration: number;
+  volume: number;
+  volumeMode: "low_original" | "keep_original";
+  narrationOverlay: boolean;
+  asset: AudioMixPlanAsset;
+}
+
 export interface AudioMixPlanValidation {
   valid: boolean;
   errors: string[];
@@ -1103,6 +1118,7 @@ export interface ProjectAudioPlanResponse {
   voiceover: AudioMixPlanTrack | null;
   sceneNarrations: AudioMixPlanSceneNarration[];
   sceneSfx: AudioMixPlanSceneSfx[];
+  sceneClipAudio: AudioMixPlanSceneClipAudio[];
   musicVolume: number;
   voiceVolume: number;
   sfxVolume: number;
@@ -1845,6 +1861,94 @@ export interface ScenePayload {
   narrationVoicePackId?: string | null;
 }
 
+export const editorialMicroclipSourceTypes = [
+  "local_clip",
+  "uploaded_clip",
+  "library_clip"
+] as const;
+
+export type EditorialMicroclipSourceType =
+  (typeof editorialMicroclipSourceTypes)[number];
+
+export const editorialMicroclipUsageModes = [
+  "supporting_evidence",
+  "impact_moment",
+  "quick_reference"
+] as const;
+
+export type EditorialMicroclipUsageMode =
+  (typeof editorialMicroclipUsageModes)[number];
+
+export const editorialMicroclipCalloutStyles = [
+  "none",
+  "minimal",
+  "bold"
+] as const;
+
+export type EditorialMicroclipCalloutStyle =
+  (typeof editorialMicroclipCalloutStyles)[number];
+
+export const editorialMicroclipTransitions = [
+  "cut",
+  "flash",
+  "whoosh"
+] as const;
+
+export type EditorialMicroclipTransition =
+  (typeof editorialMicroclipTransitions)[number];
+
+export const editorialMicroclipVolumeModes = [
+  "mute_original",
+  "low_original",
+  "keep_original"
+] as const;
+
+export type EditorialMicroclipVolumeMode =
+  (typeof editorialMicroclipVolumeModes)[number];
+
+export interface EditorialMicroclip {
+  id: string;
+  projectId: string;
+  sceneId: string | null;
+  assetId: string;
+  asset: StudioAsset | null;
+  label: string;
+  sourceType: EditorialMicroclipSourceType;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  durationSeconds: number;
+  usageMode: EditorialMicroclipUsageMode;
+  narrationOverlay: boolean;
+  textOverlay: string | null;
+  calloutStyle: EditorialMicroclipCalloutStyle;
+  transitionIn: EditorialMicroclipTransition;
+  transitionOut: EditorialMicroclipTransition;
+  volumeMode: EditorialMicroclipVolumeMode;
+  orderIndex: number;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EditorialMicroclipPayload {
+  projectId: string;
+  sceneId: string | null;
+  assetId: string;
+  label: string;
+  sourceType?: EditorialMicroclipSourceType;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  usageMode: EditorialMicroclipUsageMode;
+  narrationOverlay: boolean;
+  textOverlay: string | null;
+  calloutStyle: EditorialMicroclipCalloutStyle;
+  transitionIn: EditorialMicroclipTransition;
+  transitionOut: EditorialMicroclipTransition;
+  volumeMode: EditorialMicroclipVolumeMode;
+  orderIndex: number;
+  metadata?: Record<string, unknown> | null;
+}
+
 export interface SceneReorderPayload {
   sceneIds: string[];
 }
@@ -2151,6 +2255,7 @@ export interface RenderBlueprintScene {
   storyRole: NarrativeSceneRole;
   storyReason: string;
   readingSpeedStatus: CaptionQualityAnalysis["readingSpeedStatus"];
+  editorialMicroclips: RenderBlueprintEditorialMicroclip[];
   warnings: string[];
   ready: boolean;
 }
@@ -2162,6 +2267,31 @@ export interface RenderBlueprintSummary {
   scenesWithProblems: number;
   templateId: string;
   defaultCaptionStyleId: CaptionStyleId;
+  hasEditorialMicroclips: boolean;
+  microclipCount: number;
+  totalMicroclipDurationSeconds: number;
+}
+
+export interface RenderBlueprintEditorialMicroclip {
+  microclipId: string;
+  assetId: string;
+  assetPath: string | null;
+  asset: RenderBlueprintAsset | null;
+  label: string;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  durationSeconds: number;
+  usageMode: EditorialMicroclipUsageMode;
+  narrationOverlay: boolean;
+  textOverlay: string | null;
+  calloutStyle: EditorialMicroclipCalloutStyle;
+  transitionIn: EditorialMicroclipTransition;
+  transitionOut: EditorialMicroclipTransition;
+  volumeMode: EditorialMicroclipVolumeMode;
+  orderIndex: number;
+  insertStartSeconds: number;
+  insertEndSeconds: number;
+  metadata: Record<string, unknown> | null;
 }
 
 export interface RenderBlueprintResponse {
@@ -2182,6 +2312,9 @@ export interface RenderBlueprintResponse {
   fps: 30;
   durationTotal: number;
   sceneCount: number;
+  hasEditorialMicroclips: boolean;
+  microclipCount: number;
+  totalMicroclipDurationSeconds: number;
   audio: ProjectAudioPlanResponse;
   summary: RenderBlueprintSummary;
   subtitleExports: {
@@ -2261,6 +2394,9 @@ export interface StudioRenderJob {
   metadata: {
     audioMasteringPresetId: AudioMasteringPresetId;
     audioQualityReport?: AudioQualityReport | null;
+    hasEditorialMicroclips?: boolean;
+    microclipCount?: number;
+    totalMicroclipDurationSeconds?: number;
   } | null;
   outputFileSize: number | null;
   thumbnailPath: string | null;

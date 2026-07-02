@@ -4,6 +4,7 @@ import type { AppEnv } from "../config/env.js";
 import type { AssetRepository } from "../modules/assets/application/asset-repository.js";
 import type { CharacterRepository } from "../modules/characters/application/character-repository.js";
 import type { ChannelRepository } from "../modules/channels/application/channel-repository.js";
+import type { EditorialMicroclipRepository } from "../modules/editorial-microclips/application/editorial-microclip-repository.js";
 import type { VisualGenerationJobRepository } from "../modules/hybrid-visual/application/visual-generation-job-repository.js";
 import type { IntakeRepository } from "../modules/intake/application/intake-repository.js";
 import type { NarrationJobRepository } from "../modules/narration/application/narration-job-repository.js";
@@ -20,6 +21,7 @@ import { handleCandidateMediaRoute } from "./routes/candidate-media-routes.js";
 import { handleCaptionStyleRoute } from "./routes/caption-style-routes.js";
 import { handleCharacterRoute } from "./routes/characters-routes.js";
 import { handleChannelRoute } from "./routes/channels-routes.js";
+import { handleEditorialMicroclipRoute } from "./routes/editorial-microclip-routes.js";
 import { handleHybridVisualRoute } from "./routes/hybrid-visual-routes.js";
 import { handleIntakeRoute } from "./routes/intake-routes.js";
 import { handleMediaCollectorRoute } from "./routes/media-collector-routes.js";
@@ -45,6 +47,7 @@ interface AppDependencies {
   assetRepository: AssetRepository;
   characterRepository: CharacterRepository;
   channelRepository: ChannelRepository;
+  editorialMicroclipRepository: EditorialMicroclipRepository;
   intakeRepository: IntakeRepository;
   narrationJobRepository: NarrationJobRepository;
   repositoryMode: RepositoryMode;
@@ -61,6 +64,7 @@ export function createApp({
   assetRepository,
   characterRepository,
   channelRepository,
+  editorialMicroclipRepository,
   intakeRepository,
   narrationJobRepository,
   repositoryMode,
@@ -101,6 +105,21 @@ export function createApp({
         {
           channelRepository,
           assetRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
+      await handleEditorialMicroclipRoute(
+        request,
+        response,
+        url.pathname,
+        {
+          assetRepository,
+          editorialMicroclipRepository,
+          projectRepository
         }
       )
     ) {
@@ -286,6 +305,7 @@ export function createApp({
       await handleVideoProjectRoute(request, response, url.pathname, {
         assetRepository,
         channelRepository,
+        editorialMicroclipRepository,
         projectRepository,
         renderJobRepository,
         renderStorage
@@ -301,6 +321,7 @@ export function createApp({
         url.pathname,
         {
           assetRepository,
+          editorialMicroclipRepository,
           projectRepository,
           renderJobRepository,
           renderStorage
@@ -385,6 +406,8 @@ export function createApp({
         "/templates/:id",
         "/audio-moods",
         "/audio-moods/:id",
+        "/editorial-microclips/project/:projectId",
+        "/editorial-microclips/:id",
         "/caption-styles",
         "/caption-styles/:id",
         "/prompt-packs",

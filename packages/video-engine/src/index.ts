@@ -75,6 +75,28 @@ export interface BlueprintAssetInput {
   extension: string | null;
 }
 
+export interface BlueprintEditorialMicroclipInput {
+  id: string;
+  projectId: string;
+  sceneId: string | null;
+  assetId: string;
+  asset: BlueprintAssetInput | null;
+  label: string;
+  sourceType: "local_clip" | "uploaded_clip" | "library_clip";
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  durationSeconds: number;
+  usageMode: "supporting_evidence" | "impact_moment" | "quick_reference";
+  narrationOverlay: boolean;
+  textOverlay: string | null;
+  calloutStyle: "none" | "minimal" | "bold";
+  transitionIn: "cut" | "flash" | "whoosh";
+  transitionOut: "cut" | "flash" | "whoosh";
+  volumeMode: "mute_original" | "low_original" | "keep_original";
+  orderIndex: number;
+  metadata: Record<string, unknown> | null;
+}
+
 export interface BlueprintSceneInput {
   id: string;
   order: number;
@@ -103,6 +125,7 @@ export interface BlueprintSceneInput {
   captionPosition: string | null;
   captionEmphasisWords: string[];
   energyLevel: number | null;
+  editorialMicroclips?: BlueprintEditorialMicroclipInput[];
 }
 
 export interface BlueprintProjectInput {
@@ -227,8 +250,31 @@ export interface RenderBlueprintScene {
   storyRole: NarrativeSceneRole;
   storyReason: string;
   readingSpeedStatus: CaptionQualityAnalysis["readingSpeedStatus"];
+  editorialMicroclips: RenderBlueprintEditorialMicroclip[];
   warnings: string[];
   ready: boolean;
+}
+
+export interface RenderBlueprintEditorialMicroclip {
+  microclipId: string;
+  assetId: string;
+  assetPath: string | null;
+  asset: BlueprintAssetInput | null;
+  label: string;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  durationSeconds: number;
+  usageMode: "supporting_evidence" | "impact_moment" | "quick_reference";
+  narrationOverlay: boolean;
+  textOverlay: string | null;
+  calloutStyle: "none" | "minimal" | "bold";
+  transitionIn: "cut" | "flash" | "whoosh";
+  transitionOut: "cut" | "flash" | "whoosh";
+  volumeMode: "mute_original" | "low_original" | "keep_original";
+  orderIndex: number;
+  insertStartSeconds: number;
+  insertEndSeconds: number;
+  metadata: Record<string, unknown> | null;
 }
 
 export interface RenderBlueprintSummary {
@@ -238,6 +284,9 @@ export interface RenderBlueprintSummary {
   scenesWithProblems: number;
   templateId: string;
   defaultCaptionStyleId: CaptionStyleId;
+  hasEditorialMicroclips: boolean;
+  microclipCount: number;
+  totalMicroclipDurationSeconds: number;
 }
 
 export interface RenderBlueprint {
@@ -258,6 +307,9 @@ export interface RenderBlueprint {
   fps: 30;
   durationTotal: number;
   sceneCount: number;
+  hasEditorialMicroclips: boolean;
+  microclipCount: number;
+  totalMicroclipDurationSeconds: number;
   audio: AudioMixPlan;
   summary: RenderBlueprintSummary;
   subtitleExports: {
@@ -539,6 +591,74 @@ function normalizeEmotionTag(
   }
 }
 
+function normalizeSceneDurationValue(duration: number | null | undefined) {
+  if (typeof duration !== "number" || Number.isNaN(duration) || duration <= 0) {
+    return 4;
+  }
+
+  return duration;
+}
+
+function roundToThreeDecimals(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
+function resolveSceneEditorialMicroclips(
+  scene: BlueprintSceneInput
+): RenderBlueprintEditorialMicroclip[] {
+  const rawMicroclips = [...(scene.editorialMicroclips ?? [])]
+    .filter((microclip) => microclip.sceneId === scene.id)
+    .sort((left, right) => left.orderIndex - right.orderIndex);
+
+  if (rawMicroclips.length === 0) {
+    return [];
+  }
+
+  const sceneDuration = normalizeSceneDurationValue(scene.duration);
+  const totalClipDuration = rawMicroclips.reduce(
+    (total, microclip) => total + microclip.durationSeconds,
+    0
+  );
+  const gapCount = rawMicroclips.length + 1;
+  const baseGap = Math.max((sceneDuration - totalClipDuration) / gapCount, 0.08);
+  let cursor = Math.min(baseGap, 0.6);
+
+  return rawMicroclips.map((microclip) => {
+    const remainingAfter = rawMicroclips
+      .slice(rawMicroclips.indexOf(microclip) + 1)
+      .reduce((total, entry) => total + entry.durationSeconds, 0);
+    const maxStart = Math.max(sceneDuration - microclip.durationSeconds - remainingAfter, 0);
+    const insertStartSeconds = roundToThreeDecimals(Math.min(cursor, maxStart));
+    const insertEndSeconds = roundToThreeDecimals(
+      Math.min(insertStartSeconds + microclip.durationSeconds, sceneDuration)
+    );
+
+    cursor = roundToThreeDecimals(insertEndSeconds + baseGap);
+
+    return {
+      microclipId: microclip.id,
+      assetId: microclip.assetId,
+      assetPath: microclip.asset?.path ?? null,
+      asset: microclip.asset,
+      label: microclip.label,
+      startTimeSeconds: microclip.startTimeSeconds,
+      endTimeSeconds: microclip.endTimeSeconds,
+      durationSeconds: microclip.durationSeconds,
+      usageMode: microclip.usageMode,
+      narrationOverlay: microclip.narrationOverlay,
+      textOverlay: microclip.textOverlay,
+      calloutStyle: microclip.calloutStyle,
+      transitionIn: microclip.transitionIn,
+      transitionOut: microclip.transitionOut,
+      volumeMode: microclip.volumeMode,
+      orderIndex: microclip.orderIndex,
+      insertStartSeconds,
+      insertEndSeconds,
+      metadata: microclip.metadata
+    };
+  });
+}
+
 function toStoryProjectInput(project: BlueprintProjectInput) {
   return {
     id: project.id,
@@ -576,11 +696,17 @@ function average(values: number[]) {
 function buildBlueprintAudioPlan(
   project: BlueprintProjectInput
 ) {
+  const sceneMicroclipMap = new Map(
+    project.scenes.map((scene) => [scene.id, resolveSceneEditorialMicroclips(scene)] as const)
+  );
   const audioAssets = [
     project.backgroundMusicAsset,
     project.voiceoverAsset,
     ...project.scenes.map((scene) => scene.sfxAsset),
-    ...project.scenes.map((scene) => scene.generatedNarrationAsset ?? null)
+    ...project.scenes.map((scene) => scene.generatedNarrationAsset ?? null),
+    ...project.scenes.flatMap((scene) =>
+      (sceneMicroclipMap.get(scene.id) ?? []).map((microclip) => microclip.asset)
+    )
   ]
     .filter((asset): asset is BlueprintAssetInput => asset !== null)
     .map((asset) => ({
@@ -616,7 +742,30 @@ function buildBlueprintAudioPlan(
       narrationSource: scene.generatedNarrationAssetId ? "generated" : null,
       sfxAssetId: scene.sfxAssetId,
       sfxStartTime: scene.sfxStartTime,
-      sfxVolume: scene.sfxVolume
+      sfxVolume: scene.sfxVolume,
+      clipAudioInserts: (sceneMicroclipMap.get(scene.id) ?? [])
+        .filter(
+          (microclip) =>
+            microclip.volumeMode === "low_original" ||
+            microclip.volumeMode === "keep_original"
+        )
+        .map((microclip) => ({
+          microclipId: microclip.microclipId,
+          label: microclip.label,
+          assetId: microclip.assetId,
+          startTime: microclip.insertStartSeconds,
+          sourceStartTime: microclip.startTimeSeconds,
+          duration: microclip.durationSeconds,
+          volume:
+            microclip.volumeMode === "keep_original"
+              ? 0.78
+              : 0.34,
+          volumeMode:
+            microclip.volumeMode === "keep_original"
+              ? "keep_original"
+              : "low_original",
+          narrationOverlay: microclip.narrationOverlay
+        }))
     })),
     [...new Map(audioAssets.map((asset) => [asset.id, asset] as const)).values()]
   );
@@ -863,6 +1012,7 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
       resolvedTemplate.template.defaultTransition;
     const effectiveVisual = resolveEffectiveAsset(scene);
     const effectiveNarration = resolveEffectiveNarration(scene, project);
+    const editorialMicroclips = resolveSceneEditorialMicroclips(scene);
     const warnings: string[] = [];
 
     if (!effectiveVisual.effectiveAssetId) {
@@ -876,6 +1026,10 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     if (captionScene) {
       warnings.push(...captionScene.quality.lineWarnings);
       warnings.push(...captionScene.quality.durationWarnings);
+    }
+
+    if (editorialMicroclips.some((microclip) => !microclip.assetPath)) {
+      warnings.push("Existe microclip editorial sem asset resolvido.");
     }
 
     return {
@@ -905,6 +1059,7 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
       storyReason:
         role?.reason ?? "Fallback local aplicado por ausencia de papel narrativo.",
       readingSpeedStatus: captionScene?.quality.readingSpeedStatus ?? "slow",
+      editorialMicroclips,
       warnings: [...new Set(warnings)],
       ready: warnings.length === 0
     };
@@ -912,6 +1067,22 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
 
   const readyScenes = scenes.filter((scene) => scene.ready).length;
   const scenesWithProblems = scenes.length - readyScenes;
+  const microclipCount = scenes.reduce(
+    (total, scene) => total + scene.editorialMicroclips.length,
+    0
+  );
+  const totalMicroclipDurationSeconds = roundToSingleDecimal(
+    scenes.reduce(
+      (total, scene) =>
+        total +
+        scene.editorialMicroclips.reduce(
+          (sceneTotal, microclip) => sceneTotal + microclip.durationSeconds,
+          0
+        ),
+      0
+    )
+  );
+  const hasEditorialMicroclips = microclipCount > 0;
   const durationTotal = roundToSingleDecimal(
     orderedScenes.reduce((total, scene) => total + (scene.duration ?? 0), 0)
   );
@@ -937,6 +1108,9 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     fps: 30,
     durationTotal,
     sceneCount: scenes.length,
+    hasEditorialMicroclips,
+    microclipCount,
+    totalMicroclipDurationSeconds,
     audio,
     summary: {
       durationTotal,
@@ -944,7 +1118,10 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
       readyScenes,
       scenesWithProblems,
       templateId: resolvedTemplate.template.id,
-      defaultCaptionStyleId: defaultCaptionStyle.id
+      defaultCaptionStyleId: defaultCaptionStyle.id,
+      hasEditorialMicroclips,
+      microclipCount,
+      totalMicroclipDurationSeconds
     },
     subtitleExports: {
       srt: generateSrt({

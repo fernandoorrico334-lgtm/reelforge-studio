@@ -716,6 +716,11 @@ export function AssetsManager({
                           quality {qualityPresetId}
                         </span>
                       ) : null}
+                      {asset.type === "VIDEO" ? (
+                        <span className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-1 text-xs text-[#fff0cb]">
+                          microclip-ready
+                        </span>
+                      ) : null}
                     </div>
                     <h3 className="mt-4 text-xl font-semibold text-white">
                       {asset.filename}
@@ -786,6 +791,14 @@ export function AssetsManager({
                       {tag}
                     </span>
                   ))}
+                  {asset.type === "VIDEO" ? (
+                    <a
+                      href="/projects"
+                      className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-1 text-xs text-[#fff0cb]"
+                    >
+                      usar como microclip
+                    </a>
+                  ) : null}
                 </div>
 
                 <p className="mt-5 text-xs text-mist/45">

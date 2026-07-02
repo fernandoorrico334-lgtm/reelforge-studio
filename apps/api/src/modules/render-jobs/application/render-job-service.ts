@@ -1,6 +1,7 @@
 import { NotFoundError, ValidationError } from "../../../shared/errors.js";
 import { getVideoProjectRenderBlueprint } from "../../projects/application/project-render-blueprint-service.js";
 import type { AssetRepository } from "../../assets/application/asset-repository.js";
+import type { EditorialMicroclipRepository } from "../../editorial-microclips/application/editorial-microclip-repository.js";
 import type { ProjectRepository } from "../../projects/application/project-repository.js";
 import type { RenderJobRepository } from "./render-job-repository.js";
 import type { RenderStorage } from "./render-storage.js";
@@ -27,6 +28,7 @@ async function createPreparedRenderJob(
   renderJobRepository: RenderJobRepository,
   projectRepository: ProjectRepository,
   assetRepository: AssetRepository,
+  editorialMicroclipRepository: EditorialMicroclipRepository | undefined,
   renderStorage: RenderStorage,
   input: {
     videoProjectId: string;
@@ -48,6 +50,7 @@ async function createPreparedRenderJob(
   const blueprint = await getVideoProjectRenderBlueprint(
     projectRepository,
     assetRepository,
+    editorialMicroclipRepository ?? input.videoProjectId,
     input.videoProjectId
   );
   const createInput: CreateRenderJobInput = {
@@ -55,6 +58,13 @@ async function createPreparedRenderJob(
     renderMode: input.renderMode ?? defaultRenderMode,
     renderQuality: input.renderQuality ?? defaultRenderQuality,
     audioMasteringPresetId: input.audioMasteringPresetId ?? null,
+    metadata: {
+      audioMasteringPresetId:
+        input.audioMasteringPresetId ?? "shorts_clean_voice",
+      hasEditorialMicroclips: blueprint.hasEditorialMicroclips,
+      microclipCount: blueprint.microclipCount,
+      totalMicroclipDurationSeconds: blueprint.totalMicroclipDurationSeconds
+    },
     retriedFromJobId: input.retriedFromJobId ?? null
   };
 
@@ -105,11 +115,27 @@ export async function createRenderJobForProject(
   renderJobRepository: RenderJobRepository,
   projectRepository: ProjectRepository,
   assetRepository: AssetRepository,
-  renderStorage: RenderStorage,
-  projectId: string,
-  input: CreateRenderJobRequestInput = {}
+  editorialMicroclipRepositoryOrRenderStorage:
+    | EditorialMicroclipRepository
+    | RenderStorage,
+  renderStorageOrProjectId: RenderStorage | string,
+  projectIdOrInput?: string | CreateRenderJobRequestInput,
+  inputMaybe: CreateRenderJobRequestInput = {}
 ) {
-  const createInput: Parameters<typeof createPreparedRenderJob>[4] = {
+  const usingLegacySignature = typeof renderStorageOrProjectId === "string";
+  const editorialMicroclipRepository = usingLegacySignature
+    ? undefined
+    : (editorialMicroclipRepositoryOrRenderStorage as EditorialMicroclipRepository);
+  const renderStorage = usingLegacySignature
+    ? (editorialMicroclipRepositoryOrRenderStorage as RenderStorage)
+    : (renderStorageOrProjectId as RenderStorage);
+  const projectId = usingLegacySignature
+    ? (renderStorageOrProjectId as string)
+    : (projectIdOrInput as string);
+  const input = usingLegacySignature
+    ? ((projectIdOrInput as CreateRenderJobRequestInput | undefined) ?? {})
+    : inputMaybe;
+  const createInput: Parameters<typeof createPreparedRenderJob>[5] = {
     videoProjectId: projectId
   };
 
@@ -129,6 +155,7 @@ export async function createRenderJobForProject(
     renderJobRepository,
     projectRepository,
     assetRepository,
+    editorialMicroclipRepository,
     renderStorage,
     createInput
   );
@@ -197,9 +224,22 @@ export async function retryRenderJob(
   renderJobRepository: RenderJobRepository,
   projectRepository: ProjectRepository,
   assetRepository: AssetRepository,
-  renderStorage: RenderStorage,
-  renderJobId: string
+  editorialMicroclipRepositoryOrRenderStorage:
+    | EditorialMicroclipRepository
+    | RenderStorage,
+  renderStorageOrRenderJobId: RenderStorage | string,
+  renderJobIdMaybe?: string
 ) {
+  const usingLegacySignature = typeof renderStorageOrRenderJobId === "string";
+  const editorialMicroclipRepository = usingLegacySignature
+    ? undefined
+    : (editorialMicroclipRepositoryOrRenderStorage as EditorialMicroclipRepository);
+  const renderStorage = usingLegacySignature
+    ? (editorialMicroclipRepositoryOrRenderStorage as RenderStorage)
+    : (renderStorageOrRenderJobId as RenderStorage);
+  const renderJobId = usingLegacySignature
+    ? (renderStorageOrRenderJobId as string)
+    : (renderJobIdMaybe ?? "");
   const renderJob = await getRenderJobById(renderJobRepository, renderJobId);
 
   if (!canRetryRenderJob(renderJob.status)) {
@@ -212,6 +252,7 @@ export async function retryRenderJob(
     renderJobRepository,
     projectRepository,
     assetRepository,
+    editorialMicroclipRepository,
     renderStorage,
     {
       videoProjectId: renderJob.videoProjectId,

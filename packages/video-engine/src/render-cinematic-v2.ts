@@ -51,6 +51,22 @@ interface LogContext {
   label?: string;
 }
 
+interface SceneBaseVisualSegment {
+  kind: "base";
+  duration: number;
+  sourceOffsetSeconds: number;
+}
+
+interface SceneMicroclipVisualSegment {
+  kind: "microclip";
+  duration: number;
+  microclip: RenderBlueprintScene["editorialMicroclips"][number];
+}
+
+type SceneVisualSegment =
+  | SceneBaseVisualSegment
+  | SceneMicroclipVisualSegment;
+
 const maxCapturedCommandOutputChars = 200_000;
 
 interface PlaceholderVisualConfig {
@@ -332,6 +348,74 @@ function createSegmentFilename(order: number) {
   return `segment-${String(order).padStart(3, "0")}.mp4`;
 }
 
+function createScenePartFilename(order: number, partIndex: number) {
+  return `scene-${String(order).padStart(3, "0")}-part-${String(partIndex).padStart(3, "0")}.mp4`;
+}
+
+function createSceneConcatFilename(order: number) {
+  return `scene-${String(order).padStart(3, "0")}-concat.txt`;
+}
+
+function buildSceneVisualSegments(
+  scene: RenderBlueprintScene,
+  sceneDuration: number
+): SceneVisualSegment[] {
+  const sortedMicroclips = [...scene.editorialMicroclips].sort(
+    (left, right) =>
+      left.insertStartSeconds - right.insertStartSeconds ||
+      left.orderIndex - right.orderIndex
+  );
+  const segments: SceneVisualSegment[] = [];
+  let cursor = 0;
+
+  for (const microclip of sortedMicroclips) {
+    const start = Math.max(
+      cursor,
+      Math.min(microclip.insertStartSeconds, sceneDuration)
+    );
+    const end = Math.max(
+      start,
+      Math.min(microclip.insertEndSeconds, sceneDuration)
+    );
+
+    if (start - cursor > 0.04) {
+      segments.push({
+        kind: "base",
+        duration: roundToThreeDecimals(start - cursor),
+        sourceOffsetSeconds: roundToThreeDecimals(cursor)
+      });
+    }
+
+    if (end - start > 0.04) {
+      segments.push({
+        kind: "microclip",
+        duration: roundToThreeDecimals(end - start),
+        microclip
+      });
+    }
+
+    cursor = end;
+  }
+
+  if (sceneDuration - cursor > 0.04) {
+    segments.push({
+      kind: "base",
+      duration: roundToThreeDecimals(sceneDuration - cursor),
+      sourceOffsetSeconds: roundToThreeDecimals(cursor)
+    });
+  }
+
+  if (segments.length === 0) {
+    segments.push({
+      kind: "base",
+      duration: roundToThreeDecimals(sceneDuration),
+      sourceOffsetSeconds: 0
+    });
+  }
+
+  return segments;
+}
+
 function createImageZoomExpressions(
   totalFrames: number,
   startZoom: number,
@@ -555,7 +639,11 @@ async function renderVideoSegment(
   logPath: string,
   context: LogContext,
   templateId: string,
-  renderQuality: CinematicRenderQuality
+  renderQuality: CinematicRenderQuality,
+  options: {
+    sourceOffsetSeconds?: number;
+    overlayFilter?: string | null;
+  } = {}
 ) {
   const { plan, qualityProfile, fadeFilters } = resolveCinematicFilterPlan({
     scene,
@@ -573,6 +661,7 @@ async function renderVideoSegment(
       plan.shakeY
     ),
     ...buildColorFilters(plan),
+    options.overlayFilter ?? null,
     ...fadeFilters,
     "fps=30",
     "format=yuv420p"
@@ -584,31 +673,43 @@ async function renderVideoSegment(
     `Cinematic V2 video plan '${plan.presetKey}' with crop motion and ${plan.transitionMode} transition handling.`
   );
 
+  const args = [
+    "-y",
+    "-stream_loop",
+    "-1"
+  ];
+
+  if (
+    typeof options.sourceOffsetSeconds === "number" &&
+    options.sourceOffsetSeconds > 0
+  ) {
+    args.push("-ss", options.sourceOffsetSeconds.toFixed(3));
+  }
+
+  args.push(
+    "-i",
+    inputPath,
+    "-t",
+    duration.toFixed(3),
+    "-vf",
+    filter,
+    "-r",
+    "30",
+    "-c:v",
+    "libx264",
+    "-preset",
+    qualityProfile.segmentPreset,
+    "-crf",
+    String(qualityProfile.segmentCrf),
+    "-pix_fmt",
+    "yuv420p",
+    "-an",
+    outputPath
+  );
+
   await runCommand(
     getFfmpegCommand(),
-    [
-      "-y",
-      "-stream_loop",
-      "-1",
-      "-i",
-      inputPath,
-      "-t",
-      duration.toFixed(3),
-      "-vf",
-      filter,
-      "-r",
-      "30",
-      "-c:v",
-      "libx264",
-      "-preset",
-      qualityProfile.segmentPreset,
-      "-crf",
-      String(qualityProfile.segmentCrf),
-      "-pix_fmt",
-      "yuv420p",
-      "-an",
-      outputPath
-    ],
+    args,
     dirname(outputPath),
     logPath,
     context
@@ -680,6 +781,264 @@ async function renderPlaceholderSegment(
   );
 }
 
+function buildMicroclipOverlayFilter(
+  microclip: RenderBlueprintScene["editorialMicroclips"][number],
+  fontFile: string | null
+) {
+  if (!microclip.textOverlay || !fontFile) {
+    return null;
+  }
+
+  const fontSize = microclip.calloutStyle === "bold" ? 50 : 34;
+  const boxBorder = microclip.calloutStyle === "bold" ? 30 : 20;
+  const boxOpacity =
+    microclip.calloutStyle === "bold" ? "black@0.58" : "black@0.30";
+  const yPosition = microclip.calloutStyle === "bold" ? 1360 : 1450;
+
+  return `drawtext=fontfile='${escapeDrawtextValue(fontFile)}':text='${escapeDrawtextText(
+    microclip.textOverlay
+  )}':fontcolor=white:fontsize=${fontSize}:x=(w-text_w)/2:y=${yPosition}:box=1:boxcolor=${boxOpacity}:boxborderw=${boxBorder}`;
+}
+
+async function renderBaseVisualSegment(
+  scene: RenderBlueprintScene,
+  projectRoot: string,
+  outputPath: string,
+  duration: number,
+  sourceOffsetSeconds: number,
+  logPath: string,
+  context: LogContext,
+  templateId: string,
+  renderQuality: CinematicRenderQuality,
+  fontFile: string | null
+) {
+  const renderAsset = scene.effectiveAsset ?? scene.asset;
+
+  if (!renderAsset) {
+    await appendLog(
+      logPath,
+      context,
+      `Base visual gap ${duration.toFixed(3)}s has no asset, generating cinematic placeholder.`
+    );
+    await renderPlaceholderSegment(
+      scene,
+      outputPath,
+      duration,
+      logPath,
+      context,
+      templateId,
+      renderQuality,
+      fontFile
+    );
+    return;
+  }
+
+  let absoluteInputPath: string;
+
+  try {
+    absoluteInputPath = resolveStoragePath(projectRoot, renderAsset.path);
+  } catch {
+    await appendLog(
+      logPath,
+      context,
+      `Base asset path '${renderAsset.path}' escaped storage root, using placeholder.`
+    );
+    await renderPlaceholderSegment(
+      scene,
+      outputPath,
+      duration,
+      logPath,
+      context,
+      templateId,
+      renderQuality,
+      fontFile
+    );
+    return;
+  }
+
+  if (!(await fileExists(absoluteInputPath))) {
+    await appendLog(
+      logPath,
+      context,
+      `Base asset '${absoluteInputPath}' not found, using placeholder.`
+    );
+    await renderPlaceholderSegment(
+      scene,
+      outputPath,
+      duration,
+      logPath,
+      context,
+      templateId,
+      renderQuality,
+      fontFile
+    );
+    return;
+  }
+
+  if (renderAsset.type === "IMAGE" || renderAsset.type === "OVERLAY") {
+    await renderImageSegment(
+      scene,
+      absoluteInputPath,
+      outputPath,
+      duration,
+      logPath,
+      context,
+      templateId,
+      renderQuality
+    );
+    return;
+  }
+
+  if (renderAsset.type === "VIDEO") {
+    await renderVideoSegment(
+      scene,
+      absoluteInputPath,
+      outputPath,
+      duration,
+      logPath,
+      context,
+      templateId,
+      renderQuality,
+      {
+        sourceOffsetSeconds
+      }
+    );
+    return;
+  }
+
+  await appendLog(
+    logPath,
+    context,
+    `Base asset type '${renderAsset.type}' is unsupported in cinematic_v2, using placeholder.`
+  );
+  await renderPlaceholderSegment(
+    scene,
+    outputPath,
+    duration,
+    logPath,
+    context,
+    templateId,
+    renderQuality,
+    fontFile
+  );
+}
+
+async function renderMicroclipSegment(
+  scene: RenderBlueprintScene,
+  microclip: RenderBlueprintScene["editorialMicroclips"][number],
+  projectRoot: string,
+  outputPath: string,
+  duration: number,
+  logPath: string,
+  context: LogContext,
+  templateId: string,
+  renderQuality: CinematicRenderQuality,
+  fontFile: string | null
+) {
+  if (!microclip.assetPath) {
+    await appendLog(
+      logPath,
+      context,
+      `Microclip '${microclip.label}' has no asset path, using cinematic placeholder insert.`
+    );
+    await renderPlaceholderSegment(
+      scene,
+      outputPath,
+      duration,
+      logPath,
+      context,
+      templateId,
+      renderQuality,
+      fontFile
+    );
+    return;
+  }
+
+  let absoluteInputPath: string;
+
+  try {
+    absoluteInputPath = resolveStoragePath(projectRoot, microclip.assetPath);
+  } catch {
+    await appendLog(
+      logPath,
+      context,
+      `Microclip path '${microclip.assetPath}' escaped storage root, using cinematic placeholder insert.`
+    );
+    await renderPlaceholderSegment(
+      scene,
+      outputPath,
+      duration,
+      logPath,
+      context,
+      templateId,
+      renderQuality,
+      fontFile
+    );
+    return;
+  }
+
+  if (!(await fileExists(absoluteInputPath))) {
+    await appendLog(
+      logPath,
+      context,
+      `Microclip file '${absoluteInputPath}' not found, using cinematic placeholder insert.`
+    );
+    await renderPlaceholderSegment(
+      scene,
+      outputPath,
+      duration,
+      logPath,
+      context,
+      templateId,
+      renderQuality,
+      fontFile
+    );
+    return;
+  }
+
+  if (
+    microclip.transitionIn !== "cut" ||
+    microclip.transitionOut !== "cut"
+  ) {
+    await appendLog(
+      logPath,
+      context,
+      `Microclip '${microclip.label}' requested transitions ${microclip.transitionIn}/${microclip.transitionOut}; cinematic_v2 is using hard cuts in this V1 support layer.`
+    );
+  }
+
+  if (microclip.textOverlay && !fontFile) {
+    await appendLog(
+      logPath,
+      context,
+      `Microclip '${microclip.label}' has textOverlay, but no local font was found. Overlay text was skipped.`
+    );
+  }
+
+  const overlayFilter = buildMicroclipOverlayFilter(microclip, fontFile);
+
+  await appendLog(
+    logPath,
+    context,
+    `Rendering cinematic editorial microclip '${microclip.label}' (${microclip.usageMode}) from ${microclip.startTimeSeconds.toFixed(3)}s to ${microclip.endTimeSeconds.toFixed(3)}s.`
+  );
+
+  await renderVideoSegment(
+    scene,
+    absoluteInputPath,
+    outputPath,
+    duration,
+    logPath,
+    context,
+    templateId,
+    renderQuality,
+    {
+      sourceOffsetSeconds: microclip.startTimeSeconds,
+      overlayFilter
+    }
+  );
+}
+
 async function renderSceneSegment(
   scene: RenderBlueprintScene,
   projectRoot: string,
@@ -707,58 +1066,22 @@ async function renderSceneSegment(
   );
 
   try {
-    if (!renderAsset) {
+    const visualSegments = buildSceneVisualSegments(scene, duration);
+
+    if (scene.editorialMicroclips.length === 0) {
       await appendLog(
         logPath,
         context,
-        "No asset linked, generating cinematic placeholder."
+        renderAsset
+          ? "Rendering scene without editorial microclips."
+          : "No asset linked, generating cinematic placeholder."
       );
-      await renderPlaceholderSegment(
+      await renderBaseVisualSegment(
         scene,
+        projectRoot,
         outputPath,
         duration,
-        logPath,
-        context,
-        templateId,
-        renderQuality,
-        fontFile
-      );
-      return outputPath;
-    }
-
-    let absoluteInputPath: string;
-
-    try {
-      absoluteInputPath = resolveStoragePath(projectRoot, renderAsset.path);
-    } catch {
-      await appendLog(
-        logPath,
-        context,
-        `Asset path '${renderAsset.path}' escaped storage root, using cinematic placeholder instead.`
-      );
-      await renderPlaceholderSegment(
-        scene,
-        outputPath,
-        duration,
-        logPath,
-        context,
-        templateId,
-        renderQuality,
-        fontFile
-      );
-      return outputPath;
-    }
-
-    if (!(await fileExists(absoluteInputPath))) {
-      await appendLog(
-        logPath,
-        context,
-        `Asset file '${absoluteInputPath}' was not found, using cinematic placeholder.`
-      );
-      await renderPlaceholderSegment(
-        scene,
-        outputPath,
-        duration,
+        0,
         logPath,
         context,
         templateId,
@@ -771,51 +1094,60 @@ async function renderSceneSegment(
     await appendLog(
       logPath,
       context,
-      `Resolved asset absolute path '${absoluteInputPath}'.`
+      `Rendering ${scene.editorialMicroclips.length} editorial microclip insert(s) across ${visualSegments.length} cinematic visual segment(s).`
     );
 
-    if (renderAsset.type === "IMAGE" || renderAsset.type === "OVERLAY") {
-      await renderImageSegment(
-        scene,
-        absoluteInputPath,
-        outputPath,
-        duration,
-        logPath,
-        context,
-        templateId,
-        renderQuality
-      );
-      return outputPath;
+    const segmentPartPaths: string[] = [];
+
+    for (const [partIndex, segment] of visualSegments.entries()) {
+      const partPath = `${workDir}/${createScenePartFilename(scene.order, partIndex + 1)}`;
+      const partContext = {
+        ...context,
+        label: `scene:${scene.order}:part:${partIndex + 1}`
+      };
+
+      if (segment.kind === "base") {
+        await renderBaseVisualSegment(
+          scene,
+          projectRoot,
+          partPath,
+          segment.duration,
+          segment.sourceOffsetSeconds,
+          logPath,
+          partContext,
+          templateId,
+          renderQuality,
+          fontFile
+        );
+      } else {
+        await renderMicroclipSegment(
+          scene,
+          segment.microclip,
+          projectRoot,
+          partPath,
+          segment.duration,
+          logPath,
+          partContext,
+          templateId,
+          renderQuality,
+          fontFile
+        );
+      }
+
+      segmentPartPaths.push(partPath);
     }
 
-    if (renderAsset.type === "VIDEO") {
-      await renderVideoSegment(
-        scene,
-        absoluteInputPath,
-        outputPath,
-        duration,
-        logPath,
-        context,
-        templateId,
-        renderQuality
-      );
-      return outputPath;
-    }
-
-    await appendLog(
-      logPath,
-      context,
-      `Asset type '${renderAsset.type}' is not supported in Cinematic V2 yet, using placeholder fallback.`
-    );
-    await renderPlaceholderSegment(
-      scene,
+    await concatSegments(
+      segmentPartPaths,
+      `${workDir}/${createSceneConcatFilename(scene.order)}`,
       outputPath,
-      duration,
+      jobRoot,
       logPath,
-      context,
-      templateId,
-      renderQuality,
-      fontFile
+      {
+        ...context,
+        label: `scene:${scene.order}:concat`
+      },
+      renderQuality
     );
     return outputPath;
   } catch (error) {

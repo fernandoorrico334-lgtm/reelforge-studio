@@ -7,8 +7,30 @@ import { projectRoot } from "../../../config/paths.js";
 import { NotFoundError } from "../../../shared/errors.js";
 import type { AssetRepository } from "../../assets/application/asset-repository.js";
 import type { StudioAsset } from "../../assets/domain/asset.js";
+import type { EditorialMicroclipRepository } from "../../editorial-microclips/application/editorial-microclip-repository.js";
 import type { StudioProject } from "../domain/project.js";
 import type { ProjectRepository } from "./project-repository.js";
+
+const emptyEditorialMicroclipRepository: EditorialMicroclipRepository = {
+  async listByProjectId() {
+    return [];
+  },
+  async getById() {
+    return null;
+  },
+  async create() {
+    throw new Error("Editorial microclip creation is unavailable in empty repository mode.");
+  },
+  async update() {
+    return null;
+  },
+  async delete() {
+    return false;
+  },
+  async countByProjectId() {
+    return 0;
+  }
+};
 
 interface ResolvedProjectAudioAssets {
   backgroundMusicAsset: StudioAsset | null;
@@ -110,8 +132,19 @@ export async function resolveProjectAudioAssets(
 export async function getVideoProjectAudioPlan(
   repository: ProjectRepository,
   assetRepository: AssetRepository,
-  projectId: string
+  editorialMicroclipRepositoryOrProjectId:
+    | EditorialMicroclipRepository
+    | string,
+  projectIdMaybe?: string
 ) {
+  const editorialMicroclipRepository =
+    typeof editorialMicroclipRepositoryOrProjectId === "string"
+      ? emptyEditorialMicroclipRepository
+      : editorialMicroclipRepositoryOrProjectId;
+  const projectId =
+    typeof editorialMicroclipRepositoryOrProjectId === "string"
+      ? editorialMicroclipRepositoryOrProjectId
+      : (projectIdMaybe ?? "");
   const project = await repository.getById(projectId);
 
   if (!project) {
@@ -119,7 +152,14 @@ export async function getVideoProjectAudioPlan(
   }
 
   const resolvedAssets = await resolveProjectAudioAssets(assetRepository, project);
-  const audioAssets = buildAudioAssetCatalog(resolvedAssets);
+  const editorialMicroclips =
+    await editorialMicroclipRepository.listByProjectId(projectId);
+  const audioAssets = [
+    ...buildAudioAssetCatalog(resolvedAssets),
+    ...editorialMicroclips
+      .map((microclip) => toAudioAssetInput(microclip.asset))
+      .filter((asset): asset is AudioAssetInput => asset !== null)
+  ];
 
   return buildAudioMixPlan(
     {
@@ -144,7 +184,51 @@ export async function getVideoProjectAudioPlan(
       narrationSource: scene.generatedNarrationAssetId ? "generated" : null,
       sfxAssetId: scene.sfxAssetId,
       sfxStartTime: scene.sfxStartTime,
-      sfxVolume: scene.sfxVolume
+      sfxVolume: scene.sfxVolume,
+      clipAudioInserts: editorialMicroclips
+        .filter(
+          (microclip) =>
+            microclip.sceneId === scene.id &&
+            (microclip.volumeMode === "low_original" ||
+              microclip.volumeMode === "keep_original")
+        )
+        .sort((left, right) => left.orderIndex - right.orderIndex)
+        .map((microclip, index, items) => {
+          const sceneDuration =
+            typeof scene.duration === "number" && scene.duration > 0
+              ? scene.duration
+              : 4;
+          const totalClipDuration = items.reduce(
+            (total, entry) => total + entry.durationSeconds,
+            0
+          );
+          const baseGap = Math.max(
+            (sceneDuration - totalClipDuration) / (items.length + 1),
+            0.08
+          );
+          const insertStartSeconds = Math.min(
+            baseGap * (index + 1) +
+              items
+                .slice(0, index)
+                .reduce((total, entry) => total + entry.durationSeconds, 0),
+            Math.max(sceneDuration - microclip.durationSeconds, 0)
+          );
+
+          return {
+            microclipId: microclip.id,
+            label: microclip.label,
+            assetId: microclip.assetId,
+            startTime: Math.round(insertStartSeconds * 1000) / 1000,
+            sourceStartTime: microclip.startTimeSeconds,
+            duration: microclip.durationSeconds,
+            volume: microclip.volumeMode === "keep_original" ? 0.78 : 0.34,
+            volumeMode:
+              microclip.volumeMode === "keep_original"
+                ? "keep_original"
+                : "low_original",
+            narrationOverlay: microclip.narrationOverlay
+          };
+        })
     })),
     audioAssets,
     {
@@ -159,8 +243,19 @@ export async function getVideoProjectAudioPlan(
 export async function getVideoProjectAudioPlanWithDiskCheck(
   repository: ProjectRepository,
   assetRepository: AssetRepository,
-  projectId: string
+  editorialMicroclipRepositoryOrProjectId:
+    | EditorialMicroclipRepository
+    | string,
+  projectIdMaybe?: string
 ) {
+  const editorialMicroclipRepository =
+    typeof editorialMicroclipRepositoryOrProjectId === "string"
+      ? emptyEditorialMicroclipRepository
+      : editorialMicroclipRepositoryOrProjectId;
+  const projectId =
+    typeof editorialMicroclipRepositoryOrProjectId === "string"
+      ? editorialMicroclipRepositoryOrProjectId
+      : (projectIdMaybe ?? "");
   const project = await repository.getById(projectId);
 
   if (!project) {
@@ -168,7 +263,14 @@ export async function getVideoProjectAudioPlanWithDiskCheck(
   }
 
   const resolvedAssets = await resolveProjectAudioAssets(assetRepository, project);
-  const audioAssets = buildAudioAssetCatalog(resolvedAssets);
+  const editorialMicroclips =
+    await editorialMicroclipRepository.listByProjectId(projectId);
+  const audioAssets = [
+    ...buildAudioAssetCatalog(resolvedAssets),
+    ...editorialMicroclips
+      .map((microclip) => toAudioAssetInput(microclip.asset))
+      .filter((asset): asset is AudioAssetInput => asset !== null)
+  ];
 
   return buildAudioMixPlan(
     {
@@ -193,7 +295,51 @@ export async function getVideoProjectAudioPlanWithDiskCheck(
       narrationSource: scene.generatedNarrationAssetId ? "generated" : null,
       sfxAssetId: scene.sfxAssetId,
       sfxStartTime: scene.sfxStartTime,
-      sfxVolume: scene.sfxVolume
+      sfxVolume: scene.sfxVolume,
+      clipAudioInserts: editorialMicroclips
+        .filter(
+          (microclip) =>
+            microclip.sceneId === scene.id &&
+            (microclip.volumeMode === "low_original" ||
+              microclip.volumeMode === "keep_original")
+        )
+        .sort((left, right) => left.orderIndex - right.orderIndex)
+        .map((microclip, index, items) => {
+          const sceneDuration =
+            typeof scene.duration === "number" && scene.duration > 0
+              ? scene.duration
+              : 4;
+          const totalClipDuration = items.reduce(
+            (total, entry) => total + entry.durationSeconds,
+            0
+          );
+          const baseGap = Math.max(
+            (sceneDuration - totalClipDuration) / (items.length + 1),
+            0.08
+          );
+          const insertStartSeconds = Math.min(
+            baseGap * (index + 1) +
+              items
+                .slice(0, index)
+                .reduce((total, entry) => total + entry.durationSeconds, 0),
+            Math.max(sceneDuration - microclip.durationSeconds, 0)
+          );
+
+          return {
+            microclipId: microclip.id,
+            label: microclip.label,
+            assetId: microclip.assetId,
+            startTime: Math.round(insertStartSeconds * 1000) / 1000,
+            sourceStartTime: microclip.startTimeSeconds,
+            duration: microclip.durationSeconds,
+            volume: microclip.volumeMode === "keep_original" ? 0.78 : 0.34,
+            volumeMode:
+              microclip.volumeMode === "keep_original"
+                ? "keep_original"
+                : "low_original",
+            narrationOverlay: microclip.narrationOverlay
+          };
+        })
     })),
     audioAssets,
     {

@@ -7,6 +7,7 @@ import {
   retryRenderJob
 } from "../../modules/render-jobs/application/render-job-service.js";
 import type { AssetRepository } from "../../modules/assets/application/asset-repository.js";
+import type { EditorialMicroclipRepository } from "../../modules/editorial-microclips/application/editorial-microclip-repository.js";
 import type { RenderJobRepository } from "../../modules/render-jobs/application/render-job-repository.js";
 import type { ProjectRepository } from "../../modules/projects/application/project-repository.js";
 import type { RenderStorage } from "../../modules/render-jobs/application/render-storage.js";
@@ -62,6 +63,7 @@ function parseRenderJobPath(pathname: string) {
 
 interface RenderJobRouteDependencies {
   assetRepository: AssetRepository;
+  editorialMicroclipRepository: EditorialMicroclipRepository;
   projectRepository: ProjectRepository;
   renderJobRepository: RenderJobRepository;
   renderStorage: RenderStorage;
@@ -81,6 +83,7 @@ export async function handleRenderJobRoute(
 
   const {
     assetRepository,
+    editorialMicroclipRepository,
     projectRepository,
     renderJobRepository,
     renderStorage
@@ -144,6 +147,7 @@ export async function handleRenderJobRoute(
           renderJobRepository,
           projectRepository,
           assetRepository,
+          editorialMicroclipRepository,
           renderStorage,
           match.renderJobId
         )

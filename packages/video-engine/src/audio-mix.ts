@@ -7,7 +7,7 @@ import {
   type PremiumAudioMixPlan
 } from "@reelforge/audio-engine/mastering";
 import type { RenderBlueprint } from "./index.js";
-import { getFfmpegCommand } from "./ffmpeg-runtime.js";
+import { getFfmpegCommand, getFfprobeCommand } from "./ffmpeg-runtime.js";
 import { resolveStoragePath } from "./render-paths.js";
 
 interface AudioMixLogContext {
@@ -264,6 +264,38 @@ async function loadAudioFilterSupport(
       sidechaincompress: false,
       silenceremove: false
     } satisfies AudioFilterSupport;
+  }
+}
+
+async function probeHasAudioStream(
+  logger: AudioMixLogger,
+  jobRoot: string,
+  logPath: string,
+  context: AudioMixLogContext,
+  inputPath: string
+) {
+  try {
+    const result = await logger.runCommand(
+      getFfprobeCommand(),
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=codec_type",
+        "-of",
+        "default=nokey=1:noprint_wrappers=1",
+        inputPath
+      ],
+      jobRoot,
+      logPath,
+      withLabel(context, "ffprobe-audio")
+    );
+
+    return /audio/iu.test(`${result.stdout}\n${result.stderr}`);
+  } catch {
+    return true;
   }
 }
 
@@ -719,6 +751,57 @@ export async function finalizeRenderAudio(
     inputIndex += 1;
   }
 
+  for (const [index, clipAudio] of plan.sceneClipAudio.entries()) {
+    const clipPath = resolveStoragePath(projectRoot, clipAudio.asset.path);
+
+    if (!(await fileExists(clipPath))) {
+      throw new Error(
+        `Microclip audio asset '${clipAudio.asset.path}' is missing on disk for scene '${clipAudio.sceneTitle}'.`
+      );
+    }
+
+    if (
+      clipAudio.asset.type === "VIDEO" &&
+      !(await probeHasAudioStream(
+        logger,
+        jobRoot,
+        logPath,
+        context,
+        clipPath
+      ))
+    ) {
+      warnings.push(
+        `Microclip '${clipAudio.label}' has no detectable audio stream and was skipped in the final mix.`
+      );
+      continue;
+    }
+
+    const remainingDuration = Math.max(totalDuration - clipAudio.startTime, 0.05);
+    const clipDuration = Math.max(
+      Math.min(
+        remainingDuration,
+        clipAudio.duration,
+        (clipAudio.asset.duration ?? clipAudio.duration) - clipAudio.sourceStartTime
+      ),
+      0.05
+    );
+    const delayMs = Math.max(Math.round(clipAudio.startTime * 1000), 0);
+    const outputLabel = `amicro${index}`;
+
+    trackInputs.push("-i", clipPath);
+    filterChains.push(
+      `[${inputIndex}:a]atrim=${clipAudio.sourceStartTime.toFixed(
+        3
+      )}:${(clipAudio.sourceStartTime + clipDuration).toFixed(
+        3
+      )},asetpts=N/SR/TB,volume=${roundToThreeDecimals(
+        clipAudio.volume * sfxGainScalar
+      ).toFixed(3)},adelay=${delayMs}|${delayMs}[${outputLabel}]`
+    );
+    mixLabels.push(`[${outputLabel}]`);
+    inputIndex += 1;
+  }
+
   if (mixLabels.length === 0 && !musicOutputLabel) {
     warnings.push("Audio plan was configured but no valid audio tracks were resolved.");
     await logger.appendLog(
@@ -806,7 +889,7 @@ export async function finalizeRenderAudio(
   await logger.appendLog(
     logPath,
     labelContext,
-    `Background music asset: ${plan.backgroundMusic?.asset.path ?? "none"} | voiceover asset: ${plan.voiceover?.asset.path ?? "none"} | scene narrations: ${plan.sceneNarrations.length} | scene SFX count: ${plan.sceneSfx.length} | preset=${premiumPlan.masteringPresetId} | ducking=${duckingMode}`
+    `Background music asset: ${plan.backgroundMusic?.asset.path ?? "none"} | voiceover asset: ${plan.voiceover?.asset.path ?? "none"} | scene narrations: ${plan.sceneNarrations.length} | scene SFX count: ${plan.sceneSfx.length} | microclip audio count: ${plan.sceneClipAudio.length} | preset=${premiumPlan.masteringPresetId} | ducking=${duckingMode}`
   );
 
   await logger.runCommand(

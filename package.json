@@ -42,6 +42,8 @@
     "smoke:audio-mastering-presets": "node scripts/smoke-audio-mastering-presets.mjs",
     "smoke:render-with-narration": "node scripts/smoke-render-with-narration.mjs",
     "smoke:premium-audio-render": "node scripts/smoke-premium-audio-render.mjs",
+    "smoke:editorial-microclips": "node scripts/smoke-editorial-microclips.mjs",
+    "smoke:render-with-microclips": "node scripts/smoke-render-with-microclips.mjs",
     "smoke:narration-windows-sapi:local": "node scripts/smoke-narration-windows-sapi-local.mjs"
   },
   "prisma": {

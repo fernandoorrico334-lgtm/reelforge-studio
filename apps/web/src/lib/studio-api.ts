@@ -44,6 +44,8 @@ import type {
   CreateRenderJobPayload,
   DashboardSnapshot,
   DataSource,
+  EditorialMicroclip,
+  EditorialMicroclipPayload,
   GenerateMissingVisualsPayload,
   GenerateMissingVisualsResponse,
   GeneratedAudioGalleryItem,
@@ -2177,6 +2179,40 @@ export async function useGeneratedImageForSceneRequest(
       body: JSON.stringify({})
     }
   );
+}
+
+export async function getEditorialMicroclipsForProjectRequest(projectId: string) {
+  return requestJson<EditorialMicroclip[]>(
+    `/editorial-microclips/project/${encodeURIComponent(projectId)}`
+  );
+}
+
+export async function createEditorialMicroclipRequest(
+  payload: EditorialMicroclipPayload
+) {
+  return requestJson<EditorialMicroclip>("/editorial-microclips", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateEditorialMicroclipRequest(
+  microclipId: string,
+  payload: Partial<EditorialMicroclipPayload>
+) {
+  return requestJson<EditorialMicroclip>(
+    `/editorial-microclips/${encodeURIComponent(microclipId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function deleteEditorialMicroclipRequest(microclipId: string) {
+  await requestJson<void>(`/editorial-microclips/${encodeURIComponent(microclipId)}`, {
+    method: "DELETE"
+  });
 }
 
 export async function createRenderJobRequest(

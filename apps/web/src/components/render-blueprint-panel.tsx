@@ -154,6 +154,17 @@ export function RenderBlueprintPanel({
                 {narrationReadyCount}
               </p>
             </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Editorial microclips
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {blueprint.microclipCount}
+              </p>
+              <p className="mt-2 text-xs text-mist/55">
+                total {formatDuration(blueprint.totalMicroclipDurationSeconds)}
+              </p>
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4 xl:grid-cols-3">
@@ -205,6 +216,10 @@ export function RenderBlueprintPanel({
                 {blueprint.audio.sceneSfx.length} / music{" "}
                 {blueprint.audio.backgroundMusic ? "on" : "off"} / voiceover{" "}
                 {blueprint.audio.voiceover ? "on" : "off"}
+              </p>
+              <p className="mt-2 text-xs text-mist/55">
+                editorial microclips {blueprint.microclipCount} / hasEditorialMicroclips{" "}
+                {blueprint.hasEditorialMicroclips ? "yes" : "no"}
               </p>
               {audioMasteringPreview ? (
                 <div className="mt-4 rounded-[1.05rem] border border-white/10 bg-white/[0.03] p-3 text-sm text-mist/68">
@@ -294,6 +309,48 @@ export function RenderBlueprintPanel({
                   resolucao {scene.effectiveAsset?.width ?? "?"}x
                   {scene.effectiveAsset?.height ?? "?"}
                 </p>
+                {scene.editorialMicroclips.length > 0 ? (
+                  <div className="mt-4 rounded-[1.05rem] border border-white/10 bg-white/[0.03] p-3">
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                      Editorial Microclips
+                    </p>
+                    <p className="mt-2 text-sm text-white">
+                      {scene.editorialMicroclips.length} insert(s) / total{" "}
+                      {formatDuration(
+                        scene.editorialMicroclips.reduce(
+                          (total, microclip) =>
+                            total + microclip.durationSeconds,
+                          0
+                        )
+                      )}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {scene.editorialMicroclips.map((microclip) => (
+                        <div
+                          key={microclip.microclipId}
+                          className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-mist/68"
+                        >
+                          <p className="text-white">
+                            {microclip.label} - {microclip.usageMode}
+                          </p>
+                          <p className="mt-1">
+                            clip {formatDuration(microclip.startTimeSeconds)} →{" "}
+                            {formatDuration(microclip.endTimeSeconds)} / insert{" "}
+                            {formatDuration(microclip.insertStartSeconds)} →{" "}
+                            {formatDuration(microclip.insertEndSeconds)}
+                          </p>
+                          <p className="mt-1">
+                            volume {microclip.volumeMode} / transitions{" "}
+                            {microclip.transitionIn} → {microclip.transitionOut}
+                          </p>
+                          <p className="mt-1">
+                            assetPath {microclip.assetPath ?? "n/a"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

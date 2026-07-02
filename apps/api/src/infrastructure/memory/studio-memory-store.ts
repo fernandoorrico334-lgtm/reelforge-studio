@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { EmotionTag, StudioAsset } from "../../modules/assets/domain/asset.js";
 import type { StudioChannel } from "../../modules/channels/domain/channel.js";
 import type {
+  EditorialMicroclipCalloutStyle,
+  EditorialMicroclipSourceType,
+  EditorialMicroclipTransition,
+  EditorialMicroclipUsageMode,
+  EditorialMicroclipVolumeMode
+} from "../../modules/editorial-microclips/domain/editorial-microclip.js";
+import type {
   MediaCandidate,
   MediaCollection
 } from "../../modules/intake/domain/intake.js";
@@ -101,6 +108,29 @@ export interface MemoryNarrationJobRecord {
   metadata: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryEditorialMicroclipRecord {
+  id: string;
+  projectId: string;
+  sceneId: string | null;
+  assetId: string;
+  label: string;
+  sourceType: EditorialMicroclipSourceType;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  durationSeconds: number;
+  usageMode: EditorialMicroclipUsageMode;
+  narrationOverlay: boolean;
+  textOverlay: string | null;
+  calloutStyle: EditorialMicroclipCalloutStyle;
+  transitionIn: EditorialMicroclipTransition;
+  transitionOut: EditorialMicroclipTransition;
+  volumeMode: EditorialMicroclipVolumeMode;
+  orderIndex: number;
+  metadata: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -276,6 +306,7 @@ interface MemoryStudioState {
   renderJobs: MemoryRenderJobRecord[];
   visualGenerationJobs: any[];
   narrationJobs: MemoryNarrationJobRecord[];
+  editorialMicroclips: MemoryEditorialMicroclipRecord[];
 }
 
 function createInitialState(): MemoryStudioState {
@@ -888,7 +919,8 @@ function createInitialState(): MemoryStudioState {
     ],
     renderJobs: [],
     visualGenerationJobs: [],
-    narrationJobs: []
+    narrationJobs: [],
+    editorialMicroclips: []
   };
 }
 

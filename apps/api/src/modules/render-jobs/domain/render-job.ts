@@ -95,6 +95,9 @@ export interface StudioRenderJob extends RenderJobMediaLinks {
 export interface RenderJobMetadata {
   audioMasteringPresetId: AudioMasteringPresetId;
   audioQualityReport?: AudioQualityReport | null;
+  hasEditorialMicroclips?: boolean;
+  microclipCount?: number;
+  totalMicroclipDurationSeconds?: number;
 }
 
 export interface CreateRenderJobInput {

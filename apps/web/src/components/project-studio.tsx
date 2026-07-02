@@ -22,20 +22,24 @@ import { RenderBlueprintPanel } from "./render-blueprint-panel";
 import { RenderJobsPanel } from "./render-jobs-panel";
 import { StoryEnginePanel } from "./story-engine-panel";
 import {
+  createEditorialMicroclipRequest,
   createSceneRequest,
+  deleteEditorialMicroclipRequest,
   deleteSceneRequest,
   generateSceneNarrationRequest,
   generateSceneVisualRequest,
-  getSceneNarrationsRequest,
+  getEditorialMicroclipsForProjectRequest,
   getProjectCaptionAnalysisSnapshot,
   getProjectProductionChecklistSnapshot,
   getProjectRenderBlueprintSnapshot,
   getSceneGeneratedImagesRequest,
+  getSceneNarrationsRequest,
   markVisualGenerationJobReviewedRequest,
   regenerateVisualGenerationJobRequest,
   reorderScenesRequest,
   useSceneNarrationRequest,
   useGeneratedImageForSceneRequest,
+  updateEditorialMicroclipRequest,
   updateProjectRequest,
   updateSceneRequest
 } from "../lib/studio-api";
@@ -51,6 +55,13 @@ import type {
   CaptionStyleId,
   ComfyWorkflowPack,
   DataSource,
+  EditorialMicroclip,
+  EditorialMicroclipCalloutStyle,
+  EditorialMicroclipPayload,
+  EditorialMicroclipSourceType,
+  EditorialMicroclipTransition,
+  EditorialMicroclipUsageMode,
+  EditorialMicroclipVolumeMode,
   EmotionTag,
   GeneratedAudioGalleryItem,
   GeneratedImageGalleryItem,
@@ -70,7 +81,16 @@ import type {
   StudioProject,
   VisualGenerationJob
 } from "../lib/studio-types";
-import { captionPositions, emotionTags, projectStatuses } from "../lib/studio-types";
+import {
+  captionPositions,
+  editorialMicroclipCalloutStyles,
+  editorialMicroclipSourceTypes,
+  editorialMicroclipTransitions,
+  editorialMicroclipUsageModes,
+  editorialMicroclipVolumeModes,
+  emotionTags,
+  projectStatuses
+} from "../lib/studio-types";
 import {
   getSceneEffectiveAssetId,
   getSceneEffectiveAssetLabel,
@@ -126,6 +146,23 @@ interface SceneFormState {
   captionPosition: CaptionPosition | "";
   captionEmphasisWords: string;
   energyLevel: string;
+}
+
+interface EditorialMicroclipFormState {
+  sceneId: string;
+  assetId: string;
+  label: string;
+  sourceType: EditorialMicroclipSourceType;
+  startTimeSeconds: string;
+  endTimeSeconds: string;
+  usageMode: EditorialMicroclipUsageMode;
+  narrationOverlay: boolean;
+  textOverlay: string;
+  calloutStyle: EditorialMicroclipCalloutStyle;
+  transitionIn: EditorialMicroclipTransition;
+  transitionOut: EditorialMicroclipTransition;
+  volumeMode: EditorialMicroclipVolumeMode;
+  orderIndex: string;
 }
 
 const captionStylesCatalog = getCaptionStyles();
@@ -294,6 +331,57 @@ function createEmptySceneForm(nextOrder: number): SceneFormState {
     captionPosition: "",
     captionEmphasisWords: "",
     energyLevel: "60"
+  };
+}
+
+function sortEditorialMicroclips(items: EditorialMicroclip[]) {
+  return [...items].sort(
+    (left, right) =>
+      left.orderIndex - right.orderIndex ||
+      left.createdAt.localeCompare(right.createdAt)
+  );
+}
+
+function createEmptyEditorialMicroclipForm(
+  sceneId: string,
+  orderIndex: number
+): EditorialMicroclipFormState {
+  return {
+    sceneId,
+    assetId: "",
+    label: "",
+    sourceType: "library_clip",
+    startTimeSeconds: "0",
+    endTimeSeconds: "1.2",
+    usageMode: "supporting_evidence",
+    narrationOverlay: true,
+    textOverlay: "",
+    calloutStyle: "none",
+    transitionIn: "cut",
+    transitionOut: "cut",
+    volumeMode: "mute_original",
+    orderIndex: String(orderIndex)
+  };
+}
+
+function toEditorialMicroclipFormState(
+  microclip: EditorialMicroclip
+): EditorialMicroclipFormState {
+  return {
+    sceneId: microclip.sceneId ?? "",
+    assetId: microclip.assetId,
+    label: microclip.label,
+    sourceType: microclip.sourceType,
+    startTimeSeconds: String(microclip.startTimeSeconds),
+    endTimeSeconds: String(microclip.endTimeSeconds),
+    usageMode: microclip.usageMode,
+    narrationOverlay: microclip.narrationOverlay,
+    textOverlay: microclip.textOverlay ?? "",
+    calloutStyle: microclip.calloutStyle,
+    transitionIn: microclip.transitionIn,
+    transitionOut: microclip.transitionOut,
+    volumeMode: microclip.volumeMode,
+    orderIndex: String(microclip.orderIndex)
   };
 }
 
@@ -639,6 +727,29 @@ function buildGeneratedImageGalleryItem(
   };
 }
 
+function buildEditorialMicroclipPayload(
+  projectId: string,
+  form: EditorialMicroclipFormState
+): EditorialMicroclipPayload {
+  return {
+    projectId,
+    sceneId: form.sceneId || null,
+    assetId: form.assetId,
+    label: form.label.trim(),
+    sourceType: form.sourceType,
+    startTimeSeconds: Number(form.startTimeSeconds),
+    endTimeSeconds: Number(form.endTimeSeconds),
+    usageMode: form.usageMode,
+    narrationOverlay: form.narrationOverlay,
+    textOverlay: toNullableString(form.textOverlay),
+    calloutStyle: form.calloutStyle,
+    transitionIn: form.transitionIn,
+    transitionOut: form.transitionOut,
+    volumeMode: form.volumeMode,
+    orderIndex: Math.max(1, Number(form.orderIndex) || 1)
+  };
+}
+
 function buildGeneratedNarrationItem(
   project: StudioProject,
   scene: ProjectScene,
@@ -783,6 +894,18 @@ export function ProjectStudio({
   const [generatedNarrationsSource, setGeneratedNarrationsSource] = useState<DataSource>(
     initialGeneratedNarrationsSource
   );
+  const [editorialMicroclips, setEditorialMicroclips] = useState<
+    EditorialMicroclip[]
+  >([]);
+  const [editorialMicroclipsSource, setEditorialMicroclipsSource] =
+    useState<DataSource>(initialSource === "api" ? "api" : "mock");
+  const [editingMicroclipId, setEditingMicroclipId] = useState<string | null>(
+    null
+  );
+  const [editorialMicroclipForm, setEditorialMicroclipForm] =
+    useState<EditorialMicroclipFormState>(
+      createEmptyEditorialMicroclipForm(initialProject.scenes[0]?.id ?? "", 1)
+    );
   const [audioMasteringPresetId, setAudioMasteringPresetId] =
     useState<AudioMasteringPresetId>(
       (audioMasteringPresetsCatalog.find(
@@ -793,6 +916,7 @@ export function ProjectStudio({
     );
 
   const orderedScenes = sortScenes(project.scenes);
+  const videoAssets = assets.filter((asset) => asset.type === "VIDEO");
   const selectedVisualScene =
     orderedScenes.find((scene) => scene.id === visualSceneId) ?? orderedScenes[0] ?? null;
   const selectedVisualSceneEffectiveAssetId = selectedVisualScene
@@ -813,6 +937,17 @@ export function ProjectStudio({
   const sceneNarrations = selectedVisualScene
     ? generatedNarrations.filter((item) => item.scene?.id === selectedVisualScene.id)
     : [];
+  const selectedSceneMicroclips = selectedVisualScene
+    ? sortEditorialMicroclips(
+        editorialMicroclips.filter(
+          (microclip) => microclip.sceneId === selectedVisualScene.id
+        )
+      )
+    : [];
+  const totalMicroclipDuration = editorialMicroclips.reduce(
+    (total, microclip) => total + microclip.durationSeconds,
+    0
+  );
   const currentSceneNarration =
     sceneNarrations.find((item) => item.isCurrentSceneNarration) ??
     sceneNarrations[0] ??
@@ -926,6 +1061,11 @@ export function ProjectStudio({
     orderedScenes.length - narrationReadyCount,
     0
   );
+  const microclipHeavyScenes = new Set(
+    editorialMicroclips
+      .map((microclip) => microclip.sceneId)
+      .filter((sceneId): sceneId is string => Boolean(sceneId))
+  );
   const qualityAlerts = [
     ...new Set(
       [
@@ -976,13 +1116,73 @@ export function ProjectStudio({
       selectedVisualScene.narrationText ??
         selectedVisualScene.captionText ??
         project.script ??
-        ""
+      ""
     );
   }, [project.script, selectedVisualScene]);
+
+  useEffect(() => {
+    const nextSceneId = selectedVisualScene?.id ?? "";
+
+    if (editingMicroclipId) {
+      return;
+    }
+
+    setEditorialMicroclipForm((current) => ({
+      ...current,
+      sceneId: nextSceneId,
+      orderIndex: String(selectedSceneMicroclips.length + 1)
+    }));
+  }, [editingMicroclipId, selectedSceneMicroclips.length, selectedVisualScene?.id]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadEditorialMicroclips() {
+      try {
+        const items = await getEditorialMicroclipsForProjectRequest(project.id);
+
+        if (!active) {
+          return;
+        }
+
+        setEditorialMicroclips(sortEditorialMicroclips(items));
+        setEditorialMicroclipsSource("api");
+      } catch {
+        if (!active) {
+          return;
+        }
+
+        setEditorialMicroclips([]);
+        setEditorialMicroclipsSource("mock");
+      }
+    }
+
+    void loadEditorialMicroclips();
+
+    return () => {
+      active = false;
+    };
+  }, [project.id]);
 
   function resetSceneComposer(nextOrder?: number) {
     setEditingSceneId(null);
     setSceneForm(createEmptySceneForm(nextOrder ?? project.scenes.length + 1));
+  }
+
+  function resetEditorialMicroclipComposer(nextSceneId?: string) {
+    setEditingMicroclipId(null);
+    setEditorialMicroclipForm(
+      createEmptyEditorialMicroclipForm(
+        nextSceneId ?? selectedVisualScene?.id ?? "",
+        selectedSceneMicroclips.length + 1
+      )
+    );
+  }
+
+  function startEditorialMicroclipEditing(microclip: EditorialMicroclip) {
+    setEditingMicroclipId(microclip.id);
+    setVisualSceneId(microclip.sceneId ?? selectedVisualScene?.id ?? "");
+    setEditorialMicroclipForm(toEditorialMicroclipFormState(microclip));
   }
 
   async function handleProjectSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1106,6 +1306,73 @@ export function ProjectStudio({
     setGeneratedNarrations((current) => mergeSceneNarrations(current, sceneId, nextItems));
     setGeneratedNarrationsSource("api");
     return nextItems;
+  }
+
+  async function handleEditorialMicroclipSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    try {
+      const payload = buildEditorialMicroclipPayload(
+        project.id,
+        editorialMicroclipForm
+      );
+
+      if (!payload.sceneId) {
+        setStatusMessage("Selecione uma cena antes de salvar o microclip.");
+        return;
+      }
+
+      if (!payload.assetId) {
+        setStatusMessage("Selecione um asset de video para o microclip.");
+        return;
+      }
+
+      if (!Number.isFinite(payload.startTimeSeconds) || !Number.isFinite(payload.endTimeSeconds)) {
+        setStatusMessage("Informe tempos validos para o microclip.");
+        return;
+      }
+
+      const saved = editingMicroclipId
+        ? await updateEditorialMicroclipRequest(editingMicroclipId, payload)
+        : await createEditorialMicroclipRequest(payload);
+
+      setEditorialMicroclips((current) =>
+        sortEditorialMicroclips(
+          editingMicroclipId
+            ? current.map((item) => (item.id === saved.id ? saved : item))
+            : [...current, saved]
+        )
+      );
+      setEditorialMicroclipsSource("api");
+      await loadBlueprintFor(project);
+      resetEditorialMicroclipComposer(payload.sceneId);
+      setStatusMessage(
+        editingMicroclipId
+          ? "Microclip editorial atualizado na API local."
+          : "Microclip editorial criado na API local."
+      );
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
+  }
+
+  async function handleEditorialMicroclipDelete(microclipId: string) {
+    try {
+      await deleteEditorialMicroclipRequest(microclipId);
+      setEditorialMicroclips((current) =>
+        current.filter((microclip) => microclip.id !== microclipId)
+      );
+      setEditorialMicroclipsSource("api");
+      if (editingMicroclipId === microclipId) {
+        resetEditorialMicroclipComposer();
+      }
+      await loadBlueprintFor(project);
+      setStatusMessage("Microclip editorial removido da API local.");
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
   }
 
   async function handleGenerateNarration() {
@@ -1571,6 +1838,15 @@ export function ProjectStudio({
                 blueprintScene?.narrationDurationSeconds ??
                 scene.generatedNarrationAsset?.duration ??
                 null;
+              const sceneMicroclips = sortEditorialMicroclips(
+                editorialMicroclips.filter(
+                  (microclip) => microclip.sceneId === scene.id
+                )
+              );
+              const sceneMicroclipDuration = sceneMicroclips.reduce(
+                (total, microclip) => total + microclip.durationSeconds,
+                0
+              );
 
               return (
                 <article
@@ -1593,6 +1869,11 @@ export function ProjectStudio({
                         <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-mist/70">
                           {presetPreview.effective.id}
                         </span>
+                        {sceneMicroclips.length > 0 ? (
+                          <span className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-[#fff0cb]">
+                            microclip {sceneMicroclips.length}
+                          </span>
+                        ) : null}
                       </div>
                       <h3 className="mt-3 text-2xl font-semibold text-white">
                         {scene.title}
@@ -1666,6 +1947,12 @@ export function ProjectStudio({
                       <p className="mt-2 text-xs text-mist/55">
                         source {formatEffectiveVisualSourceLabel(sceneEffectiveSource)}
                       </p>
+                      {sceneMicroclips.length > 0 ? (
+                        <p className="mt-2 text-xs text-mist/55">
+                          {sceneMicroclips.length} insert(s) / total{" "}
+                          {formatDuration(sceneMicroclipDuration)}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
                       <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
@@ -1720,7 +2007,7 @@ export function ProjectStudio({
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                  <div className="mt-4 grid gap-4 xl:grid-cols-4">
                     <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
                       <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
                         Legenda
@@ -1754,6 +2041,21 @@ export function ProjectStudio({
                       <p className="mt-2 text-sm leading-7 text-mist/68">
                         {sceneInsight?.reason ??
                           "Papel narrativo sera refinado conforme a timeline cresce."}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                        Editorial Microclips
+                      </p>
+                      <p className="mt-3 text-sm font-medium text-white">
+                        {sceneMicroclips.length > 0
+                          ? `${sceneMicroclips.length} insert(s)`
+                          : "Sem microclips"}
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-mist/68">
+                        {sceneMicroclips.length > 0
+                          ? `Duracao total ${formatDuration(sceneMicroclipDuration)} com prioridade editorial controlada.`
+                          : "Use apenas inserts curtos para impacto ou evidencia, sem virar compilado."}
                       </p>
                     </div>
                   </div>
@@ -1816,7 +2118,12 @@ export function ProjectStudio({
                 legenda pendente {storyAnalysis.analysis.missingCaptions} / generated
                 ativos {generatedVisualCount} / narracoes prontas {narrationReadyCount} /
                 generated {generatedNarrationCount} / manual {manualNarrationCount} /
-                sem narracao {missingNarrationCount} / fonte {productionChecklistSource}
+                sem narracao {missingNarrationCount} / microclips {editorialMicroclips.length} /
+                cenas com microclip {microclipHeavyScenes.size} / fonte {productionChecklistSource}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/60">
+                duracao editorial total {formatDuration(totalMicroclipDuration)} / feed{" "}
+                {editorialMicroclipsSource}
               </p>
             </div>
           </div>
@@ -2398,6 +2705,370 @@ export function ProjectStudio({
               {editingSceneId ? "Salvar cena" : "Adicionar cena"}
             </button>
           </form>
+        </article>
+
+        <article className="rounded-[1.9rem] border border-[#ffcf70]/20 bg-[#ffcf70]/8 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                Editorial Microclips
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">
+                Inserts curtos de apoio visual
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                Use no maximo dois microclips por projeto para prova visual,
+                impacto ou referencia rapida sem transformar a timeline em
+                compilado.
+              </p>
+            </div>
+            <div className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-mist/70">
+              {editorialMicroclips.length}/2 microclips - {formatDuration(totalMicroclipDuration)}
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Cena</span>
+              <select
+                value={editorialMicroclipForm.sceneId}
+                onChange={(event) => {
+                  setVisualSceneId(event.target.value);
+                  setEditorialMicroclipForm((current) => ({
+                    ...current,
+                    sceneId: event.target.value
+                  }));
+                }}
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Selecione uma cena</option>
+                {orderedScenes.map((scene) => (
+                  <option key={scene.id} value={scene.id}>
+                    {scene.order}. {scene.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Video asset</span>
+              <select
+                value={editorialMicroclipForm.assetId}
+                onChange={(event) =>
+                  setEditorialMicroclipForm((current) => ({
+                    ...current,
+                    assetId: event.target.value
+                  }))
+                }
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Selecione um video</option>
+                {videoAssets.map((asset) => (
+                  <option key={asset.id} value={asset.id}>
+                    {asset.filename}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Uso</span>
+              <select
+                value={editorialMicroclipForm.usageMode}
+                onChange={(event) =>
+                  setEditorialMicroclipForm((current) => ({
+                    ...current,
+                    usageMode: event.target.value as EditorialMicroclipUsageMode
+                  }))
+                }
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {editorialMicroclipUsageModes.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {formatTagLabel(mode)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-mist/65">Source</span>
+              <select
+                value={editorialMicroclipForm.sourceType}
+                onChange={(event) =>
+                  setEditorialMicroclipForm((current) => ({
+                    ...current,
+                    sourceType: event.target.value as EditorialMicroclipSourceType
+                  }))
+                }
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                {editorialMicroclipSourceTypes.map((sourceType) => (
+                  <option key={sourceType} value={sourceType}>
+                    {formatTagLabel(sourceType)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <form onSubmit={handleEditorialMicroclipSubmit} className="mt-4 space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Label</span>
+                <input
+                  value={editorialMicroclipForm.label}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      label: event.target.value
+                    }))
+                  }
+                  placeholder="finalizacao curta, close de impacto, prova visual"
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Text overlay</span>
+                <input
+                  value={editorialMicroclipForm.textOverlay}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      textOverlay: event.target.value
+                    }))
+                  }
+                  placeholder="finalizacao em um toque"
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-5">
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Start</span>
+                <input
+                  value={editorialMicroclipForm.startTimeSeconds}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      startTimeSeconds: event.target.value
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">End</span>
+                <input
+                  value={editorialMicroclipForm.endTimeSeconds}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      endTimeSeconds: event.target.value
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Callout</span>
+                <select
+                  value={editorialMicroclipForm.calloutStyle}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      calloutStyle: event.target.value as EditorialMicroclipCalloutStyle
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                >
+                  {editorialMicroclipCalloutStyles.map((style) => (
+                    <option key={style} value={style}>
+                      {style}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">In</span>
+                <select
+                  value={editorialMicroclipForm.transitionIn}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      transitionIn: event.target.value as EditorialMicroclipTransition
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                >
+                  {editorialMicroclipTransitions.map((transition) => (
+                    <option key={transition} value={transition}>
+                      {transition}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Out</span>
+                <select
+                  value={editorialMicroclipForm.transitionOut}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      transitionOut: event.target.value as EditorialMicroclipTransition
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                >
+                  {editorialMicroclipTransitions.map((transition) => (
+                    <option key={transition} value={transition}>
+                      {transition}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Volume mode</span>
+                <select
+                  value={editorialMicroclipForm.volumeMode}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      volumeMode: event.target.value as EditorialMicroclipVolumeMode
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                >
+                  {editorialMicroclipVolumeModes.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {formatTagLabel(mode)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Order</span>
+                <input
+                  value={editorialMicroclipForm.orderIndex}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      orderIndex: event.target.value
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                />
+              </label>
+              <label className="flex items-center gap-3 rounded-[1.2rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <input
+                  type="checkbox"
+                  checked={editorialMicroclipForm.narrationOverlay}
+                  onChange={(event) =>
+                    setEditorialMicroclipForm((current) => ({
+                      ...current,
+                      narrationOverlay: event.target.checked
+                    }))
+                  }
+                  className="accent-[#63ffe1]"
+                />
+                Manter narração por cima do microclip
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                className="rounded-full bg-[#ffcf70] px-5 py-3 text-sm font-semibold text-[#1c1607] transition hover:bg-[#ffd98e]"
+              >
+                {editingMicroclipId ? "Salvar microclip" : "Adicionar microclip"}
+              </button>
+              <button
+                type="button"
+                onClick={() => resetEditorialMicroclipComposer()}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-3 text-sm text-mist/75"
+              >
+                Limpar
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-5 rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Cena selecionada
+            </p>
+            <p className="mt-2 text-sm text-white">
+              {selectedVisualScene
+                ? `${selectedVisualScene.order}. ${selectedVisualScene.title}`
+                : "Nenhuma cena selecionada"}
+            </p>
+            <p className="mt-2 text-xs leading-6 text-mist/60">
+              {selectedSceneMicroclips.length} insert(s) / total{" "}
+              {formatDuration(
+                selectedSceneMicroclips.reduce(
+                  (total, microclip) => total + microclip.durationSeconds,
+                  0
+                )
+              )}{" "}
+              / fonte {editorialMicroclipsSource}
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {selectedSceneMicroclips.length > 0 ? (
+              selectedSceneMicroclips.map((microclip) => (
+                <div
+                  key={microclip.id}
+                  className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4"
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-1 text-[11px] text-[#fff0cb]">
+                      {microclip.usageMode}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-mist/70">
+                      {microclip.volumeMode}
+                    </span>
+                  </div>
+                  <p className="mt-4 text-sm font-medium text-white">
+                    {microclip.label}
+                  </p>
+                  <p className="mt-2 text-xs leading-6 text-mist/65">
+                    {microclip.asset?.filename ?? microclip.assetId} / clip{" "}
+                    {formatDuration(microclip.startTimeSeconds)} →{" "}
+                    {formatDuration(microclip.endTimeSeconds)} / total{" "}
+                    {formatDuration(microclip.durationSeconds)}
+                  </p>
+                  <p className="mt-2 text-xs leading-6 text-mist/65">
+                    overlay {microclip.textOverlay ?? "sem texto"} / narration{" "}
+                    {microclip.narrationOverlay ? "on" : "off"}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEditorialMicroclipEditing(microclip)}
+                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-mist/75"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleEditorialMicroclipDelete(microclip.id);
+                      }}
+                      className="rounded-full border border-[#ff8b8b]/20 bg-[#ff8b8b]/10 px-3 py-2 text-xs text-[#ffd4d4]"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-6 text-sm text-mist/55 md:col-span-2">
+                Nenhum editorial microclip nesta cena ainda. Prefira inserts
+                curtos de apoio, impacto ou referencia rapida.
+              </div>
+            )}
+          </div>
         </article>
 
         <article className="rounded-[1.9rem] border border-[#92a7ff]/20 bg-[#92a7ff]/8 p-6">

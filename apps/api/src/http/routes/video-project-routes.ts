@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AssetRepository } from "../../modules/assets/application/asset-repository.js";
 import type { ChannelRepository } from "../../modules/channels/application/channel-repository.js";
+import type { EditorialMicroclipRepository } from "../../modules/editorial-microclips/application/editorial-microclip-repository.js";
 import { getVideoProjectCaptionAnalysis } from "../../modules/projects/application/project-caption-analysis-service.js";
 import {
   createProjectScene,
@@ -159,6 +160,7 @@ function parseVideoProjectPath(pathname: string) {
 interface VideoProjectRouteDependencies {
   assetRepository: AssetRepository;
   channelRepository: ChannelRepository;
+  editorialMicroclipRepository: EditorialMicroclipRepository;
   projectRepository: ProjectRepository;
   renderJobRepository: RenderJobRepository;
   renderStorage: RenderStorage;
@@ -179,6 +181,7 @@ export async function handleVideoProjectRoute(
   const {
     assetRepository,
     channelRepository,
+    editorialMicroclipRepository,
     projectRepository,
     renderJobRepository,
     renderStorage
@@ -283,6 +286,7 @@ export async function handleVideoProjectRoute(
           await getVideoProjectRenderBlueprint(
             projectRepository,
             assetRepository,
+            editorialMicroclipRepository,
             match.projectId
           )
         );
@@ -301,6 +305,7 @@ export async function handleVideoProjectRoute(
           await getVideoProjectAudioPlan(
             projectRepository,
             assetRepository,
+            editorialMicroclipRepository,
             match.projectId
           )
         );
@@ -390,6 +395,7 @@ export async function handleVideoProjectRoute(
             renderJobRepository,
             projectRepository,
             assetRepository,
+            editorialMicroclipRepository,
             renderStorage,
             match.projectId,
             validateCreateRenderJobRequestInput(payload)

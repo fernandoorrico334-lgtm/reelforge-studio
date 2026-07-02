@@ -224,6 +224,36 @@ enum NarrationJobStatus {
   cancelled
 }
 
+enum EditorialMicroclipSourceType {
+  local_clip
+  uploaded_clip
+  library_clip
+}
+
+enum EditorialMicroclipUsageMode {
+  supporting_evidence
+  impact_moment
+  quick_reference
+}
+
+enum EditorialMicroclipCalloutStyle {
+  none
+  minimal
+  bold
+}
+
+enum EditorialMicroclipTransition {
+  cut
+  flash
+  whoosh
+}
+
+enum EditorialMicroclipVolumeMode {
+  mute_original
+  low_original
+  keep_original
+}
+
 enum CharacterReferenceType {
   face
   full_body
@@ -301,6 +331,7 @@ model Asset {
   generatedResearchRequirements ResearchAssetRequirement[]   @relation("ResearchRequirementGeneratedAsset")
   visualGenerationJobs          VisualGenerationJob[]        @relation("VisualJobGeneratedAsset")
   narrationJobs                 NarrationJob[]               @relation("NarrationJobGeneratedAsset")
+  editorialMicroclips           EditorialMicroclip[]
 
   @@index([type, category])
   @@index([franchise, character])
@@ -580,6 +611,7 @@ model VideoProject {
   renderJobs            RenderJob[]
   visualGenerationJobs  VisualGenerationJob[]
   narrationJobs         NarrationJob[]
+  editorialMicroclips   EditorialMicroclip[]
 
   @@index([channelId, status])
 }
@@ -626,6 +658,7 @@ model Scene {
   sfxAsset             Asset?                  @relation("SceneSfxAsset", fields: [sfxAssetId], references: [id], onDelete: SetNull)
   visualGenerationJobs VisualGenerationJob[]   @relation("SceneVisualJobs")
   narrationJobs        NarrationJob[]          @relation("SceneNarrationJobs")
+  editorialMicroclips  EditorialMicroclip[]
 
   @@unique([videoProjectId, order])
   @@index([assetId])
@@ -633,6 +666,36 @@ model Scene {
   @@index([generatedNarrationAssetId])
   @@index([characterProfileId])
   @@index([sfxAssetId])
+}
+
+model EditorialMicroclip {
+  id                String                           @id @default(cuid())
+  projectId         String
+  sceneId           String?
+  assetId           String
+  label             String
+  sourceType        EditorialMicroclipSourceType
+  startTimeSeconds  Float
+  endTimeSeconds    Float
+  durationSeconds   Float
+  usageMode         EditorialMicroclipUsageMode
+  narrationOverlay  Boolean                          @default(true)
+  textOverlay       String?
+  calloutStyle      EditorialMicroclipCalloutStyle   @default(none)
+  transitionIn      EditorialMicroclipTransition     @default(cut)
+  transitionOut     EditorialMicroclipTransition     @default(cut)
+  volumeMode        EditorialMicroclipVolumeMode     @default(mute_original)
+  orderIndex        Int                              @default(1)
+  metadata          String?
+  createdAt         DateTime                         @default(now())
+  updatedAt         DateTime                         @updatedAt
+  project           VideoProject                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scene             Scene?                           @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  asset             Asset                            @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, orderIndex])
+  @@index([sceneId, orderIndex])
+  @@index([assetId])
 }
 
 model RenderJob {

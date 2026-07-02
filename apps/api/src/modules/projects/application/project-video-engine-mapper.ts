@@ -1,9 +1,11 @@
 import type {
   BlueprintAssetInput,
+  BlueprintEditorialMicroclipInput,
   BlueprintProjectInput,
   BlueprintSceneInput
 } from "@reelforge/video-engine";
 import type { StudioAsset } from "../../assets/domain/asset.js";
+import type { EditorialMicroclip } from "../../editorial-microclips/domain/editorial-microclip.js";
 import type { ProjectScene, StudioProject } from "../domain/project.js";
 
 interface ProjectAudioAssetMap {
@@ -64,14 +66,60 @@ function mapScene(scene: ProjectScene): BlueprintSceneInput {
     captionStyle: scene.captionStyle,
     captionPosition: scene.captionPosition,
     captionEmphasisWords: [...scene.captionEmphasisWords],
-    energyLevel: scene.energyLevel
+    energyLevel: scene.energyLevel,
+    editorialMicroclips: []
+  };
+}
+
+function mapEditorialMicroclip(
+  microclip: EditorialMicroclip
+): BlueprintEditorialMicroclipInput {
+  return {
+    id: microclip.id,
+    projectId: microclip.projectId,
+    sceneId: microclip.sceneId,
+    assetId: microclip.assetId,
+    asset: mapAsset(microclip.asset),
+    label: microclip.label,
+    sourceType: microclip.sourceType,
+    startTimeSeconds: microclip.startTimeSeconds,
+    endTimeSeconds: microclip.endTimeSeconds,
+    durationSeconds: microclip.durationSeconds,
+    usageMode: microclip.usageMode,
+    narrationOverlay: microclip.narrationOverlay,
+    textOverlay: microclip.textOverlay,
+    calloutStyle: microclip.calloutStyle,
+    transitionIn: microclip.transitionIn,
+    transitionOut: microclip.transitionOut,
+    volumeMode: microclip.volumeMode,
+    orderIndex: microclip.orderIndex,
+    metadata: microclip.metadata
   };
 }
 
 export function mapProjectToBlueprintInput(
   project: StudioProject,
-  audioAssets?: ProjectAudioAssetMap
+  audioAssets?: ProjectAudioAssetMap,
+  editorialMicroclips: EditorialMicroclip[] = []
 ): BlueprintProjectInput {
+  const microclipsByScene = editorialMicroclips.reduce<
+    Record<string, BlueprintEditorialMicroclipInput[]>
+  >((accumulator, microclip) => {
+    if (!microclip.sceneId) {
+      return accumulator;
+    }
+
+    if (!accumulator[microclip.sceneId]) {
+      accumulator[microclip.sceneId] = [];
+    }
+
+    accumulator[microclip.sceneId]?.push(mapEditorialMicroclip(microclip));
+    accumulator[microclip.sceneId]?.sort(
+      (left, right) => left.orderIndex - right.orderIndex
+    );
+    return accumulator;
+  }, {});
+
   return {
     id: project.id,
     title: project.title,
@@ -121,7 +169,8 @@ export function mapProjectToBlueprintInput(
         sfxAsset: mapAsset(audioAssets?.sceneSfxAssets[scene.id] ?? null),
         generatedNarrationAsset: mapAsset(
           audioAssets?.sceneNarrationAssets[scene.id] ?? null
-        )
+        ),
+        editorialMicroclips: microclipsByScene[scene.id] ?? []
       }))
   };
 }

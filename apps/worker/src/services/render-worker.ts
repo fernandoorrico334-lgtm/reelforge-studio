@@ -527,6 +527,7 @@ async function processRenderJob(renderJobId: string) {
     initialJob.videoProjectId,
     `Runtime binaries: ffmpeg='${getFfmpegCommand()}' | ffprobe='${getFfprobeCommand()}'. masteringPreset='${audioMasteringPresetId ?? "shorts_clean_voice"}'.`
   );
+  let blueprint: RenderBlueprint | null = null;
 
   try {
     await throwIfJobCancelled(
@@ -535,7 +536,7 @@ async function processRenderJob(renderJobId: string) {
       initialJob.videoProjectId,
       "reading_blueprint"
     );
-    const blueprint = await readBlueprintForJob(initialJob.blueprintPath);
+    blueprint = await readBlueprintForJob(initialJob.blueprintPath);
 
     await updateRenderJob(renderJobId, {
       currentStep: "reading_blueprint",
@@ -658,6 +659,10 @@ async function processRenderJob(renderJobId: string) {
         ...initialMetadata,
         audioMasteringPresetId:
           audioMasteringPresetId ?? "shorts_clean_voice",
+        hasEditorialMicroclips: blueprint.hasEditorialMicroclips,
+        microclipCount: blueprint.microclipCount,
+        totalMicroclipDurationSeconds:
+          blueprint.totalMicroclipDurationSeconds,
         audioQualityReport: artifacts.audioQualityReport
           ? {
               ...artifacts.audioQualityReport,
@@ -754,7 +759,11 @@ async function processRenderJob(renderJobId: string) {
       metadata: JSON.stringify({
         ...initialMetadata,
         audioMasteringPresetId:
-          audioMasteringPresetId ?? "shorts_clean_voice"
+          audioMasteringPresetId ?? "shorts_clean_voice",
+        hasEditorialMicroclips: blueprint?.hasEditorialMicroclips ?? false,
+        microclipCount: blueprint?.microclipCount ?? 0,
+        totalMicroclipDurationSeconds:
+          blueprint?.totalMicroclipDurationSeconds ?? 0
       }),
       status: "failed",
       errorMessage: message,

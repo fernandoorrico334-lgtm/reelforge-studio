@@ -4,6 +4,7 @@ import { resolveAssetRepository } from "./modules/assets/infrastructure/asset-re
 import { createLocalAssetStorage } from "./modules/assets/infrastructure/local-asset-storage.js";
 import { resolveCharacterRepository } from "./modules/characters/infrastructure/character-repository-factory.js";
 import { resolveChannelRepository } from "./modules/channels/infrastructure/channel-repository-factory.js";
+import { resolveEditorialMicroclipRepository } from "./modules/editorial-microclips/infrastructure/editorial-microclip-repository-factory.js";
 import { resolveVisualGenerationJobRepository } from "./modules/hybrid-visual/infrastructure/visual-generation-job-repository-factory.js";
 import { resolveIntakeRepository } from "./modules/intake/infrastructure/intake-repository-factory.js";
 import { resolveNarrationJobRepository } from "./modules/narration/infrastructure/narration-job-repository-factory.js";
@@ -20,6 +21,7 @@ const [
   assetBinding,
   characterBinding,
   intakeBinding,
+  editorialMicroclipBinding,
   narrationJobBinding,
   researchBinding,
   renderJobBinding,
@@ -30,6 +32,7 @@ const [
   resolveAssetRepository(dataBackend),
   resolveCharacterRepository(dataBackend),
   resolveIntakeRepository(dataBackend),
+  resolveEditorialMicroclipRepository(dataBackend),
   resolveNarrationJobRepository(dataBackend),
   resolveResearchRepository(dataBackend),
   resolveRenderJobRepository(dataBackend),
@@ -41,7 +44,8 @@ const repositoryMode =
   channelBinding.backend === assetBinding.backend &&
   assetBinding.backend === characterBinding.backend &&
   characterBinding.backend === intakeBinding.backend &&
-  intakeBinding.backend === narrationJobBinding.backend &&
+  intakeBinding.backend === editorialMicroclipBinding.backend &&
+  editorialMicroclipBinding.backend === narrationJobBinding.backend &&
   narrationJobBinding.backend === researchBinding.backend &&
   researchBinding.backend === renderJobBinding.backend &&
   renderJobBinding.backend === visualGenerationJobBinding.backend
@@ -57,6 +61,7 @@ const app = createApp({
   channelRepository: channelBinding.repository,
   assetRepository: assetBinding.repository,
   characterRepository: characterBinding.repository,
+  editorialMicroclipRepository: editorialMicroclipBinding.repository,
   intakeRepository: intakeBinding.repository,
   narrationJobRepository: narrationJobBinding.repository,
   renderJobRepository: renderJobBinding.repository,
@@ -66,7 +71,7 @@ const app = createApp({
 
 app.listen(port, () => {
   console.log(
-    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, narration=${narrationJobBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
+    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, editorialMicroclips=${editorialMicroclipBinding.label}, narration=${narrationJobBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
   );
 });
 

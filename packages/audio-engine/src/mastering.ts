@@ -307,7 +307,9 @@ export function buildPremiumAudioMixPlan(
     input.audioPlan.voiceover || input.audioPlan.sceneNarrations.length > 0
   );
   const musicIncluded = Boolean(input.audioPlan.backgroundMusic);
-  const sfxIncluded = input.audioPlan.sceneSfx.length > 0;
+  const sfxIncluded =
+    input.audioPlan.sceneSfx.length > 0 ||
+    input.audioPlan.sceneClipAudio.length > 0;
   const duckingEnabled =
     preset.duckingEnabled && musicIncluded && narrationIncluded;
   const duckingMode: AudioDuckingMode = duckingEnabled

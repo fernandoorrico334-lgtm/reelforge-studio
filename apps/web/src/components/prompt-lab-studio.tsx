@@ -158,6 +158,8 @@ export function PromptLabStudio({
       narrationVoicePacks[0]?.id ??
       ""
   );
+  const [editorialMicroclipSuggestion, setEditorialMicroclipSuggestion] =
+    useState("");
   const [narrationPreviewText, setNarrationPreviewText] = useState(
     projects[0]?.scenes[0]?.narrationText ??
       projects[0]?.scenes[0]?.captionText ??
@@ -873,6 +875,20 @@ export function PromptLabStudio({
             </label>
           </div>
 
+          <label className="block">
+            <span className="mb-2 block text-sm text-mist/65">
+              Microclip editorial sugerido
+            </span>
+            <input
+              value={editorialMicroclipSuggestion}
+              onChange={(event) =>
+                setEditorialMicroclipSuggestion(event.target.value)
+              }
+              placeholder="ex.: chute forte, arrancada, comemoracao, close da evidencia"
+              className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+            />
+          </label>
+
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
@@ -899,6 +915,18 @@ export function PromptLabStudio({
               <p className="mt-2 text-xs text-mist/60">
                 workflow pack {selectedWorkflowPack?.id ?? "auto"} / quality{" "}
                 {selectedQualityPreset?.id ?? "standard"}
+              </p>
+            </div>
+            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                Planejamento editorial
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {editorialMicroclipSuggestion.trim() || "Sem sugestao de microclip"}
+              </p>
+              <p className="mt-2 text-xs text-mist/60">
+                Campo apenas organizacional para lembrar inserts curtos locais no
+                projeto editorial.
               </p>
             </div>
             <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
