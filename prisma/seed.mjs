@@ -3,6 +3,8 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  await prisma.editingReferencePreset.deleteMany();
+  await prisma.editingReference.deleteMany();
   await prisma.renderJob.deleteMany();
   await prisma.mediaCandidate.deleteMany();
   await prisma.mediaCollection.deleteMany();
@@ -141,7 +143,7 @@ async function main() {
     }
   });
 
-  await prisma.asset.create({
+  const shadowRealmClip = await prisma.asset.create({
     data: {
       filename: "batman-cover-issue-01.jpg",
       originalName: "batman-cover-issue-01.jpg",
@@ -414,6 +416,135 @@ async function main() {
     ]
   });
 
+  const auroraReference = await prisma.editingReference.create({
+    data: {
+      title: "Aurora Case Editorial Cut",
+      description:
+        "Referencia local para documentario sombrio com cortes curtos, captions limpas e narrativa investigativa.",
+      assetId: shadowRealmClip.id,
+      localPath: "storage/references/true-crime/aurora-case-cut.mp4",
+      sourceType: "asset_library",
+      category: "true_crime",
+      status: "preset_ready",
+      durationSeconds: 24.6,
+      averageCutPaceSeconds: 2.8,
+      beatIntensity: "medium",
+      pacing: "fast",
+      zoomStyle: "subtle",
+      flashStyle: "low",
+      transitionStyle: "mixed",
+      captionStyle: "lower_clean",
+      narrationStyle: "documentary",
+      musicStyle: "dark",
+      sfxStyle: "medium",
+      hookStyle: "warning",
+      ctaStyle: "subtle",
+      microclipPlacement: "middle",
+      visualStyleNotes: "Arquivos, close lento e luz fria.",
+      audioStyleNotes: "Trilha baixa com ducking controlado e hits discretos.",
+      editingStyleNotes:
+        "Alterna contexto com inserts curtos e deixa perguntas abertas no final.",
+      analysisWarnings: JSON.stringify([
+        "Referencia cadastrada manualmente para seed. Video real nao acompanha o repositorio."
+      ])
+    }
+  });
+
+  const footballReference = await prisma.editingReference.create({
+    data: {
+      title: "Stadium Pressure Short",
+      description:
+        "Referencia esportiva local para cortes ritmados, flashes pontuais e microclips de impacto.",
+      localPath: "storage/references/football/stadium-pressure-short.mp4",
+      sourceType: "local_file",
+      category: "football",
+      status: "analyzed",
+      durationSeconds: 19.2,
+      averageCutPaceSeconds: 1.7,
+      beatIntensity: "high",
+      pacing: "hyper",
+      zoomStyle: "aggressive",
+      flashStyle: "medium",
+      transitionStyle: "flash_cut",
+      captionStyle: "center_bold",
+      narrationStyle: "hype",
+      musicStyle: "hype",
+      sfxStyle: "high",
+      hookStyle: "explosive",
+      ctaStyle: "strong",
+      microclipPlacement: "climax",
+      visualStyleNotes: "Punch-ins rapidos, freeze-frame e crowd overlays.",
+      audioStyleNotes: "Phonk alta energia com hits e whooshes curtos.",
+      editingStyleNotes:
+        "Mantem bloco de pressao crescente e guarda o microclip principal para a reta final.",
+      analysisWarnings: JSON.stringify([
+        "BPM e cortes representam uma estimativa curada manualmente para desenvolvimento local."
+      ])
+    }
+  });
+
+  await prisma.editingReferencePreset.createMany({
+    data: [
+      {
+        referenceId: auroraReference.id,
+        name: "True Crime Casefile",
+        slug: "true-crime-casefile",
+        description:
+          "Preset editorial para dossies, casos e narrativas documentais sombrias com progressao controlada.",
+        useCase: "true_crime",
+        cutPace: 2.8,
+        pacing: "fast",
+        zoomStyle: "subtle",
+        flashStyle: "low",
+        transitionStyle: "mixed",
+        captionStyle: "lower_clean",
+        narrationStyle: "documentary",
+        musicStyle: "dark",
+        sfxStyle: "medium",
+        hookStyle: "warning",
+        ctaStyle: "subtle",
+        microclipPlacement: "middle",
+        recommendedTemplates: JSON.stringify(["true_crime", "mystery_doc", "history_dark"]),
+        recommendedMusicPresetId: "true_crime_dark",
+        recommendedAudioMasteringPresetId: "true_crime_dark",
+        recommendedNarrationVoicePackId: "true_crime_dark_ptbr",
+        defaultShotDurationSeconds: 2.8,
+        notes: "Equilibra contexto, inserts curtos e fechamento investigativo."
+      },
+      {
+        referenceId: footballReference.id,
+        name: "Football Flash Pressure",
+        slug: "football-flash-pressure",
+        description:
+          "Preset premium para reels esportivos com microclips curtos, flash-cut e captions centrais de alto impacto.",
+        useCase: "football",
+        cutPace: 1.7,
+        pacing: "hyper",
+        zoomStyle: "aggressive",
+        flashStyle: "medium",
+        transitionStyle: "flash_cut",
+        captionStyle: "center_bold",
+        narrationStyle: "hype",
+        musicStyle: "hype",
+        sfxStyle: "high",
+        hookStyle: "explosive",
+        ctaStyle: "strong",
+        microclipPlacement: "climax",
+        recommendedTemplates: JSON.stringify([
+          "sports_hype",
+          "player_threat_analysis",
+          "rivalry_hype",
+          "match_preview"
+        ]),
+        recommendedMusicPresetId: "football_hype",
+        recommendedAudioMasteringPresetId: "football_hype",
+        recommendedNarrationVoicePackId: "sports_hype_ptbr",
+        defaultShotDurationSeconds: 1.7,
+        notes: "Empurra energia desde o hook e guarda a imagem de maior impacto para o terco final."
+      }
+    ]
+  });
+
   await prisma.videoProject.create({
     data: {
       title: "A queda do cla Uchiha em 3 atos",
@@ -424,6 +555,29 @@ async function main() {
       durationTarget: 30,
       format: "9:16",
       templateId: "anime_dark",
+      editingReferencePresetId: "editing-preset-true-crime-casefile",
+      editingStyleSummary: JSON.stringify({
+        presetId: "editing-preset-true-crime-casefile",
+        presetName: "True Crime Casefile",
+        useCase: "true_crime",
+        pacing: "fast",
+        cutPace: 2.8,
+        zoomStyle: "subtle",
+        flashStyle: "low",
+        transitionStyle: "mixed",
+        captionStyle: "lower_clean",
+        narrationStyle: "documentary",
+        musicStyle: "dark",
+        sfxStyle: "medium",
+        hookStyle: "warning",
+        ctaStyle: "subtle",
+        microclipPlacement: "middle",
+        defaultShotDurationSeconds: 2.8,
+        recommendedMusicPresetId: "true_crime_dark",
+        recommendedAudioMasteringPresetId: "true_crime_dark",
+        recommendedNarrationVoicePackId: "true_crime_dark_ptbr",
+        notes: "Equilibra contexto, inserts curtos e fechamento investigativo."
+      }),
       defaultCaptionStyle: "anime_punch",
       backgroundMusicAssetId: ambientTrack.id,
       musicPresetId: "true_crime_dark",

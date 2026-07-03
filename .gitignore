@@ -54,6 +54,12 @@ storage/comfyui/*
 storage/comfyui/workflows/*
 !storage/comfyui/workflows/.gitkeep
 
+storage/references/*
+!storage/references/.gitkeep
+!storage/references/**/
+storage/references/**/*
+!storage/references/**/.gitkeep
+
 prisma/dev.db
 prisma/dev.db-journal
 

@@ -15,6 +15,7 @@ Estado atual:
 - gestao de canais em `/channels`;
 - biblioteca local de assets em `/assets`;
 - biblioteca musical em `/music-library`;
+- biblioteca editorial de referencias em `/editing-references`;
 - galeria de audio gerado em `/generated-audio`;
 - CRUD de projetos em `/projects`;
 - timeline inicial e editor de cenas em `/projects/[id]`;
@@ -140,6 +141,14 @@ Na Etapa 11F, `apps/web` ganhou tambem:
 - badges de `music`, `sfx`, BPM e licenca em `/assets`;
 - sugestao de music preset em `/prompt-lab`.
 
+Na Etapa 11G, `apps/web` ganhou tambem:
+
+- pagina `/editing-references` para cadastrar reels locais de referencia;
+- criacao, edicao, analise e derivacao de presets reutilizaveis;
+- sugestoes de presets editoriais por template em `/projects/[id]`;
+- link operacional para a biblioteca de referencias no dashboard e na barra
+  lateral.
+
 ## apps/api
 
 Responsavel por expor os contratos HTTP e orquestrar os casos de uso.
@@ -149,6 +158,8 @@ Estado atual:
 - modulo `channels` com CRUD completo;
 - modulo `assets` com CRUD manual, upload real e preview por `assetId`;
 - modulo `audio-library` com perfis de musica/SFX, auto-select e beat sync;
+- modulo `editing-references` com referencias locais, presets derivados e
+  sugestoes por template;
 - modulo `characters` com perfis, referencias e prompt-base;
 - modulo `hybrid-visual` com relatorio, jobs e geracao mock local;
 - modulo `narration` com jobs, providers, voice packs e geracao WAV local;
@@ -251,6 +262,19 @@ Rotas atuais:
 - `PUT /audio/sfx-library/:assetId/profile`
 - `POST /audio/select-music`
 - `POST /audio/beat-sync-plan`
+- `GET /editing-references`
+- `POST /editing-references`
+- `GET /editing-references/:id`
+- `PUT /editing-references/:id`
+- `DELETE /editing-references/:id`
+- `POST /editing-references/:id/analyze`
+- `POST /editing-references/:id/build-preset`
+- `GET /editing-reference-presets`
+- `POST /editing-reference-presets`
+- `GET /editing-reference-presets/:id`
+- `PUT /editing-reference-presets/:id`
+- `DELETE /editing-reference-presets/:id`
+- `GET /editing-reference-presets/suggestions`
 - `GET /visual-source-modes`
 - `GET /visual-generation/providers`
 - `GET /visual-generation/jobs`
@@ -480,6 +504,7 @@ Estado atual:
 - `scripts/smoke-music-library.mjs`
 - `scripts/smoke-music-render-plan.mjs`
 - `scripts/smoke-render-with-music-sync.mjs`
+- `scripts/smoke-editing-reference-presets.mjs`
 
 Comandos novos relevantes da Etapa 10B:
 
@@ -601,6 +626,28 @@ Proximos passos:
 - cache local opcional de resultados de busca;
 - matching mais forte entre assets importados e requirements cumpridos.
 
+## packages/editing-reference-engine
+
+Camada local de referencias editoriais.
+
+Estado atual:
+
+- categorias `football`, `documentary`, `true_crime`, `cinematic`, `viral` e
+  `generic`;
+- analise opcional via FFmpeg/ffprobe para duracao, cortes aproximados,
+  `averageCutPaceSeconds` e energia de audio;
+- builder deterministico de `EditingReferencePreset` a partir da curadoria da
+  referencia;
+- catalogo local de presets editorialmente seguros;
+- sugestoes por template para orientar ritmo, captions, narracao, musica,
+  SFX, hook, CTA e microclip placement.
+
+Proximos passos:
+
+- enriquecer heuristicas de ritmo por trechos;
+- ler melhor mudancas de intensidade por bloco;
+- ligar presets editoriais a templates customizados futuros.
+
 ## packages/cinematic-engine
 
 Regras de linguagem audiovisual.
@@ -704,6 +751,8 @@ Na etapa atual, `packages/video-engine` tambem passou a:
 Camada fisica local para os arquivos do fluxo.
 
 - `storage/assets`: destino atual do upload real local.
+- `storage/references`: reels locais usados apenas para benchmarking
+  editorial, sempre fora do Git.
 - `storage/research`: cache local de texto bruto para fontes importadas.
 - `storage/renders`: destino atual de blueprints, logs, subtitles e MP4s.
 - `storage/renders/{videoProjectId}/{renderJobId}/thumbnail.jpg`: preview

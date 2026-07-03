@@ -153,6 +153,8 @@ export function mapProjectToBlueprintInput(
     durationTarget: project.durationTarget,
     format: project.format,
     templateId: project.templateId,
+    editingReferencePresetId: project.editingReferencePresetId,
+    editingStyleSummary: project.editingStyleSummary,
     defaultCaptionStyle: project.defaultCaptionStyle,
     backgroundMusicAssetId: project.backgroundMusicAssetId,
     backgroundMusicAsset: mapAsset(audioAssets?.backgroundMusicAsset ?? null),

@@ -57,11 +57,36 @@ export interface ReelsFactoryTemplate {
   defaultTransition: string;
 }
 
+export interface ReelsFactoryEditingStyleSummary {
+  presetId: string;
+  presetName: string;
+  useCase: string;
+  pacing: string;
+  cutPace: number | null;
+  zoomStyle: string;
+  flashStyle: string;
+  transitionStyle: string;
+  captionStyle: string;
+  narrationStyle: string;
+  musicStyle: string;
+  sfxStyle: string;
+  hookStyle: string;
+  ctaStyle: string;
+  microclipPlacement: string;
+  defaultShotDurationSeconds: number | null;
+  recommendedMusicPresetId: string | null;
+  recommendedAudioMasteringPresetId: string | null;
+  recommendedNarrationVoicePackId: string | null;
+  notes: string | null;
+}
+
 export interface ReelsFactoryInput {
   topic: string;
   subject: string;
   angle: string;
   templateId: ReelsFactoryTemplateId;
+  editingReferencePresetId?: string | null;
+  editingStyleSummary?: ReelsFactoryEditingStyleSummary | null;
   tone: string;
   durationSeconds: number;
   language: string;
@@ -97,6 +122,8 @@ export interface ReelsFactoryPreview {
   shortDescription: string;
   hook: string;
   templateId: ReelsFactoryTemplateId;
+  editingReferencePresetId?: string | null;
+  editingStyleSummary?: ReelsFactoryEditingStyleSummary | null;
   tone: string;
   language: string;
   durationSeconds: number;
@@ -419,11 +446,67 @@ function sanitizeInput(input: Partial<ReelsFactoryInput>) {
     subject: String(input.subject ?? input.topic ?? "").trim(),
     angle: String(input.angle ?? "").trim(),
     templateId: input.templateId ?? "player_threat_analysis",
+    editingReferencePresetId:
+      typeof input.editingReferencePresetId === "string" &&
+      input.editingReferencePresetId.trim().length > 0
+        ? input.editingReferencePresetId.trim()
+        : null,
+    editingStyleSummary: input.editingStyleSummary ?? null,
     tone: String(input.tone ?? "hype").trim() || "hype",
     durationSeconds: Number(input.durationSeconds ?? 35),
     language: String(input.language ?? "pt-BR").trim() || "pt-BR",
     includeMicroclip: Boolean(input.includeMicroclip)
   };
+}
+
+function normalizeEditingTransitionStyle(
+  style: string | null | undefined,
+  fallback: string
+) {
+  switch ((style ?? "").trim().toLowerCase()) {
+    case "flash_cut":
+      return "flash";
+    case "fast_cut":
+      return "whip-cut";
+    case "smooth":
+      return "soft-dissolve";
+    case "mixed":
+      return "cut";
+    case "cut":
+      return "cut";
+    default:
+      return fallback;
+  }
+}
+
+function resolveSceneTransition(
+  template: ReelsFactoryTemplate,
+  editingStyleSummary: ReelsFactoryEditingStyleSummary | null
+) {
+  return normalizeEditingTransitionStyle(
+    editingStyleSummary?.transitionStyle,
+    template.defaultTransition
+  );
+}
+
+function resolveRecommendedVoicePackId(
+  template: ReelsFactoryTemplate,
+  editingStyleSummary: ReelsFactoryEditingStyleSummary | null
+) {
+  return (
+    editingStyleSummary?.recommendedNarrationVoicePackId ??
+    template.recommendedVoicePackId
+  );
+}
+
+function resolveRecommendedAudioMasteringPresetId(
+  template: ReelsFactoryTemplate,
+  editingStyleSummary: ReelsFactoryEditingStyleSummary | null
+) {
+  return (
+    editingStyleSummary?.recommendedAudioMasteringPresetId ??
+    template.recommendedAudioMasteringPresetId
+  );
 }
 
 function resolveSceneRoles(sceneCount: number): ReelsFactorySceneRole[] {
@@ -592,11 +675,19 @@ function buildVisualPrompt(
 function buildMicroclipSlot(
   includeMicroclip: boolean,
   template: ReelsFactoryTemplate,
+  editingStyleSummary: ReelsFactoryEditingStyleSummary | null,
   role: ReelsFactorySceneRole,
   subject: string,
   angle: string
 ): ReelsFactorySceneMicroclipSlot | null {
-  if (!includeMicroclip || !template.allowsMicroclip || role !== "impactMoment") {
+  const targetPlacement = editingStyleSummary?.microclipPlacement ?? "climax";
+  const shouldAttachForRole =
+    role === "impactMoment" ||
+    (targetPlacement === "intro" && role === "hook") ||
+    (targetPlacement === "middle" && role === "development") ||
+    (targetPlacement === "outro" && role === "conclusion");
+
+  if (!includeMicroclip || !template.allowsMicroclip || !shouldAttachForRole) {
     return null;
   }
 
@@ -755,16 +846,22 @@ export function generateReelsFactoryPreview(
       template
     ),
     suggestedWorkflowPackId: template.recommendedWorkflowPackId,
-    suggestedVoicePackId: template.recommendedVoicePackId,
-    suggestedAudioMasteringPresetId:
-      template.recommendedAudioMasteringPresetId,
+    suggestedVoicePackId: resolveRecommendedVoicePackId(
+      template,
+      input.editingStyleSummary
+    ),
+    suggestedAudioMasteringPresetId: resolveRecommendedAudioMasteringPresetId(
+      template,
+      input.editingStyleSummary
+    ),
     suggestedVisualPresetId: template.defaultVisualPresetId,
     captionStyleId: template.defaultCaptionStyleId,
-    transition: template.defaultTransition,
+    transition: resolveSceneTransition(template, input.editingStyleSummary),
     energyLevel: sceneEnergyByRole[role],
     microclipSlot: buildMicroclipSlot(
       input.includeMicroclip,
       template,
+      input.editingStyleSummary,
       role,
       input.subject,
       input.angle
@@ -789,9 +886,11 @@ export function generateReelsFactoryPreview(
 
   return {
     title: previewTitle,
-    shortDescription: `${template.description} Tema: ${input.topic}. Angulo: ${input.angle}.`,
+    shortDescription: `${template.description} Tema: ${input.topic}. Angulo: ${input.angle}.${input.editingStyleSummary ? ` Preset editorial: ${input.editingStyleSummary.presetName}.` : ""}`,
     hook: hookText,
     templateId: template.id,
+    editingReferencePresetId: input.editingReferencePresetId,
+    editingStyleSummary: input.editingStyleSummary,
     tone: input.tone,
     language: input.language,
     durationSeconds,

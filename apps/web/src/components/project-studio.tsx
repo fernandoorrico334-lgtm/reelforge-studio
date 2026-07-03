@@ -31,6 +31,7 @@ import {
   createSceneRequest,
   deleteEditorialMicroclipRequest,
   deleteSceneRequest,
+  getEditingReferencePresetSuggestionsSnapshot,
   generateSceneNarrationRequest,
   generateSceneVisualRequest,
   getEditorialMicroclipsForProjectRequest,
@@ -71,6 +72,7 @@ import type {
   EditorialMicroclipUsageMode,
   EditorialMicroclipVolumeMode,
   EmotionTag,
+  EditingReferenceSuggestion,
   GeneratedAudioGalleryItem,
   GeneratedImageGalleryItem,
   NarrationProviderDescriptor,
@@ -128,6 +130,8 @@ interface ProjectStudioProps {
   narrationVoicePacksSource: DataSource;
   initialGeneratedNarrations: GeneratedAudioGalleryItem[];
   initialGeneratedNarrationsSource: DataSource;
+  initialEditingReferenceSuggestions: EditingReferenceSuggestion[];
+  initialEditingReferenceSuggestionsSource: DataSource;
 }
 
 interface ProjectFormState {
@@ -980,7 +984,9 @@ export function ProjectStudio({
   narrationVoicePacks,
   narrationVoicePacksSource,
   initialGeneratedNarrations,
-  initialGeneratedNarrationsSource
+  initialGeneratedNarrationsSource,
+  initialEditingReferenceSuggestions,
+  initialEditingReferenceSuggestionsSource
 }: ProjectStudioProps) {
   const [project, setProject] = useState<StudioProject>({
     ...initialProject,
@@ -1059,6 +1065,11 @@ export function ProjectStudio({
   const [generatedNarrationsSource, setGeneratedNarrationsSource] = useState<DataSource>(
     initialGeneratedNarrationsSource
   );
+  const [editingReferenceSuggestions, setEditingReferenceSuggestions] = useState<
+    EditingReferenceSuggestion[]
+  >(initialEditingReferenceSuggestions);
+  const [editingReferenceSuggestionsSource, setEditingReferenceSuggestionsSource] =
+    useState<DataSource>(initialEditingReferenceSuggestionsSource);
   const [editorialMicroclips, setEditorialMicroclips] = useState<
     EditorialMicroclip[]
   >([]);
@@ -1168,6 +1179,16 @@ export function ProjectStudio({
     });
   const activeTemplateId =
     projectForm.templateId || project.templateId || effectiveTemplate.id;
+  const leadingEditingReferenceSuggestion =
+    editingReferenceSuggestions[0] ?? null;
+  const appliedEditingStyleSummary =
+    blueprint?.editingStyleSummary ?? project.editingStyleSummary ?? null;
+  const appliedEditingReferencePresetId =
+    blueprint?.editingReferencePresetId ?? project.editingReferencePresetId ?? null;
+  const appliedEditingReferencePresetName =
+    blueprint?.editingReferencePresetName ??
+    appliedEditingStyleSummary?.presetName ??
+    null;
   const suggestedMusicPresetId = inferMusicUseCase(
     selectedChannel,
     activeTemplateId
@@ -1461,6 +1482,29 @@ export function ProjectStudio({
     projectForm.musicPresetId,
     totalDuration
   ]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadEditingReferenceSuggestions() {
+      const snapshot = await getEditingReferencePresetSuggestionsSnapshot(
+        activeTemplateId
+      );
+
+      if (!active) {
+        return;
+      }
+
+      setEditingReferenceSuggestions(snapshot.items);
+      setEditingReferenceSuggestionsSource(snapshot.source);
+    }
+
+    void loadEditingReferenceSuggestions();
+
+    return () => {
+      active = false;
+    };
+  }, [activeTemplateId]);
 
   function resetSceneComposer(nextOrder?: number) {
     setEditingSceneId(null);
@@ -4161,6 +4205,223 @@ export function ProjectStudio({
               <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-6 text-sm text-mist/55 md:col-span-2">
                 Nenhuma narracao gerada ainda para esta cena. Gere um WAV mock
                 para validar o pipeline local.
+              </div>
+            )}
+          </div>
+        </article>
+
+        <article className="rounded-[1.9rem] border border-[#f4c67a]/20 bg-[#f4c67a]/8 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                Editing Reference Presets
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">
+                Direcao editorial guiada por referencias locais
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                Use reels de referencia locais apenas para extrair padroes de
+                ritmo, transicao, captions, narracao e energia sem copiar o
+                conteudo original.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-mist/65">
+                template {activeTemplateId}
+              </span>
+              <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-mist/65">
+                source {editingReferenceSuggestionsSource}
+              </span>
+              <a
+                href="/editing-references"
+                className="rounded-full border border-[#f4c67a]/30 bg-[#f4c67a]/12 px-4 py-2 text-xs text-[#ffefc8]"
+              >
+                Abrir biblioteca de referencias
+              </a>
+            </div>
+          </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-[1.35rem] border border-white/10 bg-black/20 p-5">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Preset aplicado
+                </p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {appliedEditingReferencePresetName ??
+                    leadingEditingReferenceSuggestion?.preset.name ??
+                    "Sem preset editorial aplicado"}
+                </p>
+                <p className="mt-2 text-sm leading-7 text-mist/68">
+                  {appliedEditingStyleSummary
+                    ? "O projeto ja carrega um preset editorial persistido e o blueprint usa esse resumo para ritmo, caption, narracao, audio e microclip."
+                    : leadingEditingReferenceSuggestion?.preset.description ??
+                      "Cadastre uma referencia local e gere um preset para orientar cortes, captions e audio do projeto."}
+                </p>
+                {appliedEditingStyleSummary ? (
+                  <>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-emerald-100">
+                        applied
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        presetId {appliedEditingReferencePresetId ?? "n/a"}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        useCase {appliedEditingStyleSummary.useCase}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        pace {formatDuration(appliedEditingStyleSummary.cutPace)}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        zoom {appliedEditingStyleSummary.zoomStyle}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        caption {appliedEditingStyleSummary.captionStyle}
+                      </span>
+                    </div>
+                    <p className="mt-4 text-xs leading-6 text-mist/60">
+                      transicao {appliedEditingStyleSummary.transitionStyle} / flash{" "}
+                      {appliedEditingStyleSummary.flashStyle} / hook{" "}
+                      {appliedEditingStyleSummary.hookStyle} / notes{" "}
+                      {appliedEditingStyleSummary.notes ?? "n/d"}
+                    </p>
+                  </>
+                ) : leadingEditingReferenceSuggestion ? (
+                  <>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <span className="rounded-full border border-[#f4c67a]/25 bg-[#f4c67a]/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#ffefc8]">
+                        {leadingEditingReferenceSuggestion.origin}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        useCase {leadingEditingReferenceSuggestion.preset.useCase}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        pace {formatDuration(leadingEditingReferenceSuggestion.preset.cutPace)}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        zoom {leadingEditingReferenceSuggestion.preset.zoomStyle}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                        caption {leadingEditingReferenceSuggestion.preset.captionStyle}
+                      </span>
+                    </div>
+                    <p className="mt-4 text-xs leading-6 text-mist/60">
+                      {leadingEditingReferenceSuggestion.reason}
+                    </p>
+                  </>
+                ) : null}
+              </div>
+
+              <div className="rounded-[1.35rem] border border-white/10 bg-black/20 p-5">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Aplicacao ativa
+                </p>
+                <div className="mt-3 space-y-3 text-sm text-mist/72">
+                  <p>
+                    Narracao:{" "}
+                    <span className="text-white">
+                      {appliedEditingStyleSummary?.narrationStyle ??
+                        leadingEditingReferenceSuggestion?.preset.narrationStyle ??
+                        "n/d"}
+                    </span>
+                  </p>
+                  <p>
+                    Musica:{" "}
+                    <span className="text-white">
+                      {appliedEditingStyleSummary?.musicStyle ??
+                        leadingEditingReferenceSuggestion?.preset.musicStyle ??
+                        "n/d"}
+                    </span>
+                  </p>
+                  <p>
+                    SFX:{" "}
+                    <span className="text-white">
+                      {appliedEditingStyleSummary?.sfxStyle ??
+                        leadingEditingReferenceSuggestion?.preset.sfxStyle ??
+                        "n/d"}
+                    </span>
+                  </p>
+                  <p>
+                    Microclip:{" "}
+                    <span className="text-white">
+                      {appliedEditingStyleSummary?.microclipPlacement ??
+                        leadingEditingReferenceSuggestion?.preset.microclipPlacement ??
+                        "n/d"}
+                    </span>
+                  </p>
+                  <p>
+                    Audio mastering:{" "}
+                    <span className="text-white">
+                      {appliedEditingStyleSummary?.recommendedAudioMasteringPresetId ??
+                        leadingEditingReferenceSuggestion?.preset.recommendedAudioMasteringPresetId ??
+                        "n/d"}
+                    </span>
+                  </p>
+                  <p>
+                    Voice pack:{" "}
+                    <span className="text-white">
+                      {appliedEditingStyleSummary?.recommendedNarrationVoicePackId ??
+                        leadingEditingReferenceSuggestion?.preset.recommendedNarrationVoicePackId ??
+                        "n/d"}
+                    </span>
+                  </p>
+                  <p>
+                    Shot target:{" "}
+                    <span className="text-white">
+                      {formatDuration(
+                        appliedEditingStyleSummary?.defaultShotDurationSeconds ??
+                          leadingEditingReferenceSuggestion?.preset.defaultShotDurationSeconds ??
+                          null
+                      )}
+                    </span>
+                  </p>
+                  <p>
+                    CTA / hook:{" "}
+                    <span className="text-white">
+                      {(appliedEditingStyleSummary?.hookStyle ??
+                        leadingEditingReferenceSuggestion?.preset.hookStyle ??
+                        "n/d") +
+                        " / " +
+                        (appliedEditingStyleSummary?.ctaStyle ??
+                          leadingEditingReferenceSuggestion?.preset.ctaStyle ??
+                          "n/d")}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              {editingReferenceSuggestions.length > 0 ? (
+                editingReferenceSuggestions.slice(0, 3).map((suggestion) => (
+                  <div
+                    key={`${suggestion.origin}-${suggestion.preset.slug}`}
+                    className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-white">
+                        {suggestion.preset.name}
+                      </p>
+                      {appliedEditingReferencePresetId === suggestion.preset.id ? (
+                        <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-100">
+                          current
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-xs leading-6 text-mist/65">
+                      {suggestion.preset.transitionStyle} / {suggestion.preset.flashStyle} /{" "}
+                      {suggestion.preset.hookStyle} / CTA {suggestion.preset.ctaStyle}
+                    </p>
+                  <p className="mt-3 text-xs leading-6 text-mist/60">
+                    templates {suggestion.preset.recommendedTemplates.join(", ") || "n/d"}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-6 text-sm text-mist/55 md:col-span-3">
+                Nenhum preset editorial sugerido para o template atual. Cadastre
+                uma referencia local em `/editing-references` para criar um
+                preset reutilizavel do seu nicho.
               </div>
             )}
           </div>

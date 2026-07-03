@@ -9,6 +9,7 @@ import {
 } from "../lib/studio-api";
 import type {
   DataSource,
+  EditingReferencePreset,
   ReelsFactoryBatchPayload,
   ReelsFactoryBatchResponse,
   ReelsFactoryCreateProjectResponse,
@@ -23,11 +24,14 @@ interface ReelsFactoryStudioProps {
   channelsSource: DataSource;
   templates: ReelsFactoryTemplate[];
   templatesSource: DataSource;
+  editingReferencePresets: EditingReferencePreset[];
+  editingReferencePresetsSource: DataSource;
 }
 
 interface FactoryFormState {
   channelId: string;
   templateId: string;
+  editingReferencePresetId: string;
   topic: string;
   subject: string;
   angle: string;
@@ -69,6 +73,7 @@ function toPayload(form: FactoryFormState): ReelsFactoryPreviewPayload {
   return {
     channelId: form.channelId || null,
     templateId: form.templateId as ReelsFactoryPreviewPayload["templateId"],
+    editingReferencePresetId: form.editingReferencePresetId || null,
     topic: form.topic.trim(),
     subject: form.subject.trim(),
     angle: form.angle.trim(),
@@ -83,13 +88,17 @@ export function ReelsFactoryStudio({
   channels,
   channelsSource,
   templates,
-  templatesSource
+  templatesSource,
+  editingReferencePresets,
+  editingReferencePresetsSource
 }: ReelsFactoryStudioProps) {
   const initialTemplate = templates[0]?.id ?? "player_threat_analysis";
   const initialChannel = channels[0]?.id ?? "";
+  const initialEditingReferencePresetId = editingReferencePresets[0]?.id ?? "";
   const [form, setForm] = useState<FactoryFormState>({
     channelId: initialChannel,
     templateId: initialTemplate,
+    editingReferencePresetId: initialEditingReferencePresetId,
     topic: "Haaland contra o Brasil",
     subject: "Haaland",
     angle: "por que ele pode ser o maior perigo",
@@ -114,6 +123,13 @@ export function ReelsFactoryStudio({
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === form.templateId) ?? null,
     [form.templateId, templates]
+  );
+  const selectedEditingReferencePreset = useMemo(
+    () =>
+      editingReferencePresets.find(
+        (preset) => preset.id === form.editingReferencePresetId
+      ) ?? null,
+    [editingReferencePresets, form.editingReferencePresetId]
   );
 
   async function handlePreview(event: FormEvent<HTMLFormElement>) {
@@ -163,6 +179,7 @@ export function ReelsFactoryStudio({
       const payload: ReelsFactoryBatchPayload = {
         channelId: form.channelId || null,
         templateId: form.templateId as ReelsFactoryBatchPayload["templateId"],
+        editingReferencePresetId: form.editingReferencePresetId || null,
         tone: form.tone.trim() || "hype",
         durationSeconds: Number(form.durationSeconds),
         language: form.language.trim() || "pt-BR",
@@ -224,7 +241,8 @@ export function ReelsFactoryStudio({
               </p>
               <p className="mt-2 text-sm font-medium text-white">
                 templates {formatSourceLabel(templatesSource)} / canais{" "}
-                {formatSourceLabel(channelsSource)}
+                {formatSourceLabel(channelsSource)} / presets{" "}
+                {formatSourceLabel(editingReferencePresetsSource)}
               </p>
             </div>
           </div>
@@ -281,6 +299,28 @@ export function ReelsFactoryStudio({
                 {templates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block md:col-span-2">
+              <span className="mb-2 block text-sm text-mist/65">
+                Editing Reference Preset
+              </span>
+              <select
+                value={form.editingReferencePresetId}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    editingReferencePresetId: event.target.value
+                  }))
+                }
+                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              >
+                <option value="">Sem preset editorial</option>
+                {editingReferencePresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name} - {preset.useCase}
                   </option>
                 ))}
               </select>
@@ -380,6 +420,15 @@ export function ReelsFactoryStudio({
                 {selectedTemplate.recommendedVoicePackId} / mastering{" "}
                 {selectedTemplate.recommendedAudioMasteringPresetId}
               </p>
+              {selectedEditingReferencePreset ? (
+                <div className="mt-4 rounded-[1rem] border border-[#f4c67a]/20 bg-[#f4c67a]/10 p-3 text-xs leading-6 text-[#ffefc8]">
+                  preset {selectedEditingReferencePreset.name} / pace{" "}
+                  {selectedEditingReferencePreset.cutPace?.toFixed(1) ?? "n/d"}s / zoom{" "}
+                  {selectedEditingReferencePreset.zoomStyle} / flash{" "}
+                  {selectedEditingReferencePreset.flashStyle} / microclip{" "}
+                  {selectedEditingReferencePreset.microclipPlacement}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -426,6 +475,14 @@ export function ReelsFactoryStudio({
                 <h4 className="mt-2 text-xl font-semibold text-white">{preview.title}</h4>
                 <p className="mt-3 text-sm leading-7 text-mist/68">{preview.shortDescription}</p>
                 <p className="mt-3 text-sm font-medium text-white">Hook: {preview.hook}</p>
+                {preview.editingStyleSummary ? (
+                  <p className="mt-3 text-xs leading-6 text-mist/60">
+                    preset {preview.editingStyleSummary.presetName} / narration{" "}
+                    {preview.editingStyleSummary.narrationStyle} / music{" "}
+                    {preview.editingStyleSummary.musicStyle} / CTA{" "}
+                    {preview.editingStyleSummary.ctaStyle}
+                  </p>
+                ) : null}
               </div>
 
               <div className="grid gap-4">
@@ -591,6 +648,13 @@ export function ReelsFactoryStudio({
               <p className="mt-2 text-sm text-mist/72">
                 {createdProject.scenesCreated} cenas prontas para narracao, visual e render.
               </p>
+              {createdProject.project.editingStyleSummary ? (
+                <p className="mt-2 text-xs text-mist/60">
+                  preset {createdProject.project.editingStyleSummary.presetName} / cut pace{" "}
+                  {createdProject.project.editingStyleSummary.cutPace?.toFixed(1) ?? "n/d"}s / microclip{" "}
+                  {createdProject.project.editingStyleSummary.microclipPlacement}
+                </p>
+              ) : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 {createdProject.recommendedNextActions.map((action) => (
                   <span

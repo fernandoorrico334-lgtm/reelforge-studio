@@ -3,6 +3,7 @@ import { DashboardCard } from "../components/dashboard-card";
 import {
   getCharactersSnapshot,
   getDashboardSnapshot,
+  getEditingReferencesSnapshot,
   getGeneratedAudioGallerySnapshot,
   getGeneratedImagesGallerySnapshot,
   getMediaCollectionsSnapshot,
@@ -23,6 +24,7 @@ export default async function HomePage() {
     researchSnapshot,
     mediaCollectionsSnapshot,
     charactersSnapshot,
+    editingReferencesSnapshot,
     generatedImagesSnapshot,
     generatedAudioSnapshot
   ] = await Promise.all([
@@ -30,6 +32,7 @@ export default async function HomePage() {
     getResearchDossiersSnapshot(),
     getMediaCollectionsSnapshot(),
     getCharactersSnapshot(),
+    getEditingReferencesSnapshot(),
     getGeneratedImagesGallerySnapshot(),
     getGeneratedAudioGallerySnapshot()
   ]);
@@ -185,6 +188,13 @@ export default async function HomePage() {
           value={String(snapshot.assets.length)}
           description="Catalogo local de imagens, videos, quadrinhos e referencias ja indexadas."
           accent="#ff9e66"
+        />
+        <DashboardCard
+          href="/editing-references"
+          title="Editing References"
+          value={String(editingReferencesSnapshot.items.length)}
+          description="Referencias locais com analise FFmpeg e presets editoriais reutilizaveis."
+          accent="#ff8f73"
         />
         <DashboardCard
           href="/music-library"

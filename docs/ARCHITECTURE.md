@@ -26,6 +26,7 @@ Hoje isso ja esta aplicado em:
 - `channels`;
 - `assets`;
 - `audio-library`;
+- `editing-references`;
 - `characters`;
 - `hybrid-visual`;
 - `narration`;
@@ -189,6 +190,21 @@ ritmo:
 - o studio web passou a ler o mesmo contrato para sugerir trilha e mostrar o
   plano de cortes/microclips sem depender de render real.
 
+Na Etapa 11G, a arquitetura ganhou tambem uma camada de benchmarking
+editorial local:
+
+- `packages/editing-reference-engine` concentra categorias, analise basica via
+  FFmpeg/ffprobe, catalogo de presets derivados e sugestoes por template;
+- `modules/editing-references` concentra o dominio `EditingReference` e
+  `EditingReferencePreset`, os casos de uso de analise e a persistencia
+  Prisma/in-memory;
+- `http/routes/editing-reference-routes.ts` expoe CRUD de referencias,
+  CRUD de presets, `POST /editing-references/:id/analyze`,
+  `POST /editing-references/:id/build-preset` e
+  `GET /editing-reference-presets/suggestions`;
+- o studio web usa esses presets como camada de direcao editorial sem acoplar
+  a referencia local ao render nem copiar o conteudo original.
+
 No caso de `assets`, a Etapa 4 adicionou dois blocos importantes:
 
 - `application/asset-storage.ts`: contrato para salvar e resolver arquivos;
@@ -316,6 +332,13 @@ Na Etapa 11F, a camada Prisma passou a persistir tambem:
 - `MusicAssetProfile`;
 - `SfxAssetProfile`;
 - `VideoProject.musicPresetId`.
+
+Na Etapa 11G, a camada Prisma passou a persistir tambem:
+
+- `EditingReference`;
+- `EditingReferencePreset`;
+- relacao opcional da referencia com `Asset` quando o reel local ja estiver
+  registrado na biblioteca como video.
 
 Na Etapa 10A, `Channel` virou tambem uma identidade editorial de producao:
 

@@ -41,6 +41,29 @@ import {
   type ReelTemplate
 } from "@reelforge/templates";
 
+export interface BlueprintEditingStyleSummary {
+  presetId: string;
+  presetName: string;
+  useCase: string;
+  pacing: string;
+  cutPace: number | null;
+  zoomStyle: string;
+  flashStyle: string;
+  transitionStyle: string;
+  captionStyle: string;
+  narrationStyle: string;
+  musicStyle: string;
+  sfxStyle: string;
+  hookStyle: string;
+  ctaStyle: string;
+  microclipPlacement: string;
+  defaultShotDurationSeconds: number | null;
+  recommendedMusicPresetId: string | null;
+  recommendedAudioMasteringPresetId: string | null;
+  recommendedNarrationVoicePackId: string | null;
+  notes: string | null;
+}
+
 export interface BlueprintChannelInput {
   id: string;
   name: string;
@@ -146,6 +169,8 @@ export interface BlueprintProjectInput {
   durationTarget: number | null;
   format: string;
   templateId: string | null;
+  editingReferencePresetId: string | null;
+  editingStyleSummary: BlueprintEditingStyleSummary | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
   backgroundMusicAsset: BlueprintAssetInput | null;
@@ -250,6 +275,9 @@ export interface RenderBlueprintScene {
   narrationProvider: string | null;
   narrationVoicePackId: string | null;
   visualSourceMode: string | null;
+  suggestedShotDurationSeconds: number | null;
+  suggestedMicroclipPlacement: string | null;
+  suggestedIntensity: "low" | "medium" | "high" | "extreme" | null;
   transition: string;
   visualPreset: ResolvedScenePreset;
   captionStyle: ResolvedCaptionStyle & {
@@ -319,6 +347,9 @@ export interface RenderBlueprint {
   hasEditorialMicroclips: boolean;
   microclipCount: number;
   totalMicroclipDurationSeconds: number;
+  editingReferencePresetId: string | null;
+  editingReferencePresetName: string | null;
+  editingStyleSummary: BlueprintEditingStyleSummary | null;
   selectedMusicAssetId: string | null;
   selectedMusicAssetPath: string | null;
   musicPresetId: string | null;
@@ -354,6 +385,36 @@ function normalizeVisualSourceMode(value: string | null | undefined) {
     default:
       return null;
   }
+}
+
+function resolveEditingIntensity(
+  summary: BlueprintEditingStyleSummary | null
+): "low" | "medium" | "high" | "extreme" | null {
+  if (!summary) {
+    return null;
+  }
+
+  if (
+    summary.pacing === "hyper" ||
+    summary.flashStyle === "high" ||
+    summary.sfxStyle === "high"
+  ) {
+    return "extreme";
+  }
+
+  if (
+    summary.pacing === "fast" ||
+    summary.flashStyle === "medium" ||
+    summary.sfxStyle === "medium"
+  ) {
+    return "high";
+  }
+
+  if (summary.pacing === "slow") {
+    return "low";
+  }
+
+  return "medium";
 }
 
 function resolveEffectiveAsset(
@@ -1119,6 +1180,13 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
       ...effectiveVisual,
       ...effectiveNarration,
       visualSourceMode: scene.visualSourceMode ?? null,
+      suggestedShotDurationSeconds:
+        project.editingStyleSummary?.defaultShotDurationSeconds ??
+        project.editingStyleSummary?.cutPace ??
+        null,
+      suggestedMicroclipPlacement:
+        project.editingStyleSummary?.microclipPlacement ?? null,
+      suggestedIntensity: resolveEditingIntensity(project.editingStyleSummary),
       transition,
       visualPreset: resolvedPreset,
       captionStyle: {
@@ -1182,6 +1250,10 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     hasEditorialMicroclips,
     microclipCount,
     totalMicroclipDurationSeconds,
+    editingReferencePresetId: project.editingReferencePresetId,
+    editingReferencePresetName:
+      project.editingStyleSummary?.presetName ?? null,
+    editingStyleSummary: project.editingStyleSummary,
     selectedMusicAssetId: project.backgroundMusicAssetId,
     selectedMusicAssetPath: project.backgroundMusicAsset?.path ?? null,
     musicPresetId: audio.musicPresetId,

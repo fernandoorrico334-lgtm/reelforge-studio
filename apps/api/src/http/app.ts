@@ -6,6 +6,7 @@ import type { AudioLibraryRepository } from "../modules/audio-library/applicatio
 import type { CharacterRepository } from "../modules/characters/application/character-repository.js";
 import type { ChannelRepository } from "../modules/channels/application/channel-repository.js";
 import type { EditorialMicroclipRepository } from "../modules/editorial-microclips/application/editorial-microclip-repository.js";
+import type { EditingReferenceRepository } from "../modules/editing-references/application/editing-reference-repository.js";
 import type { VisualGenerationJobRepository } from "../modules/hybrid-visual/application/visual-generation-job-repository.js";
 import type { IntakeRepository } from "../modules/intake/application/intake-repository.js";
 import type { NarrationJobRepository } from "../modules/narration/application/narration-job-repository.js";
@@ -24,6 +25,7 @@ import { handleCaptionStyleRoute } from "./routes/caption-style-routes.js";
 import { handleCharacterRoute } from "./routes/characters-routes.js";
 import { handleChannelRoute } from "./routes/channels-routes.js";
 import { handleEditorialMicroclipRoute } from "./routes/editorial-microclip-routes.js";
+import { handleEditingReferenceRoute } from "./routes/editing-reference-routes.js";
 import { handleHybridVisualRoute } from "./routes/hybrid-visual-routes.js";
 import { handleIntakeRoute } from "./routes/intake-routes.js";
 import { handleMediaCollectorRoute } from "./routes/media-collector-routes.js";
@@ -52,6 +54,7 @@ interface AppDependencies {
   characterRepository: CharacterRepository;
   channelRepository: ChannelRepository;
   editorialMicroclipRepository: EditorialMicroclipRepository;
+  editingReferenceRepository: EditingReferenceRepository;
   intakeRepository: IntakeRepository;
   narrationJobRepository: NarrationJobRepository;
   repositoryMode: RepositoryMode;
@@ -70,6 +73,7 @@ export function createApp({
   characterRepository,
   channelRepository,
   editorialMicroclipRepository,
+  editingReferenceRepository,
   intakeRepository,
   narrationJobRepository,
   repositoryMode,
@@ -132,6 +136,20 @@ export function createApp({
     }
 
     if (
+      await handleEditingReferenceRoute(
+        request,
+        response,
+        url,
+        {
+          assetRepository,
+          editingReferenceRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
       await handleNarrationRoute(
         request,
         response,
@@ -169,6 +187,7 @@ export function createApp({
         url.pathname,
         {
           channelRepository,
+          editingReferenceRepository,
           projectRepository
         }
       )
@@ -450,6 +469,13 @@ export function createApp({
         "/audio/sfx-library/:assetId/profile",
         "/audio/select-music",
         "/audio/beat-sync-plan",
+        "/editing-references",
+        "/editing-references/:id",
+        "/editing-references/:id/analyze",
+        "/editing-references/:id/build-preset",
+        "/editing-reference-presets",
+        "/editing-reference-presets/:id",
+        "/editing-reference-presets/suggestions",
         "/editorial-microclips/project/:projectId",
         "/editorial-microclips/:id",
         "/caption-styles",

@@ -1,6 +1,7 @@
 import { ReelsFactoryStudio } from "../../components/reels-factory-studio";
 import {
   getChannelsSnapshot,
+  getEditingReferencePresetsSnapshot,
   getReelsFactoryTemplatesSnapshot
 } from "../../lib/studio-api";
 
@@ -9,9 +10,11 @@ function formatSourceLabel(value: string) {
 }
 
 export default async function ReelsFactoryPage() {
-  const [channelsSnapshot, templatesSnapshot] = await Promise.all([
+  const [channelsSnapshot, templatesSnapshot, editingReferencePresetsSnapshot] =
+    await Promise.all([
     getChannelsSnapshot(),
-    getReelsFactoryTemplatesSnapshot()
+    getReelsFactoryTemplatesSnapshot(),
+    getEditingReferencePresetsSnapshot()
   ]);
 
   return (
@@ -59,6 +62,8 @@ export default async function ReelsFactoryPage() {
         channelsSource={channelsSnapshot.source}
         templates={templatesSnapshot.items}
         templatesSource={templatesSnapshot.source}
+        editingReferencePresets={editingReferencePresetsSnapshot.items}
+        editingReferencePresetsSource={editingReferencePresetsSnapshot.source}
       />
     </div>
   );

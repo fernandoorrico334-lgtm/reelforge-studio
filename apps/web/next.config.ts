@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     "@reelforge/audio-engine",
     "@reelforge/caption-engine",
     "@reelforge/cinematic-engine",
+    "@reelforge/editing-reference-engine",
     "@reelforge/hybrid-visual-engine",
     "@reelforge/media-collector",
     "@reelforge/research-collector",

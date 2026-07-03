@@ -21,6 +21,7 @@ import type {
   CharacterProfile,
   ComfyWorkflowPack,
   DataSource,
+  EditingReferencePreset,
   GeneratedAudioGalleryItem,
   GeneratedImageGalleryItem,
   ImageQualityPreset,
@@ -61,6 +62,8 @@ interface PromptLabStudioProps {
   workflowPacksSource: DataSource;
   qualityPresets: ImageQualityPreset[];
   qualityPresetsSource: DataSource;
+  editingReferencePresets: EditingReferencePreset[];
+  editingReferencePresetsSource: DataSource;
   researchRequirements: PromptLabRequirementOption[];
   researchRequirementsSource: DataSource;
   visualGenerationProviders: VisualGenerationProviderDescriptor[];
@@ -106,6 +109,8 @@ export function PromptLabStudio({
   workflowPacksSource,
   qualityPresets,
   qualityPresetsSource,
+  editingReferencePresets,
+  editingReferencePresetsSource,
   researchRequirements,
   researchRequirementsSource,
   visualGenerationProviders,
@@ -140,6 +145,8 @@ export function PromptLabStudio({
   const [selectedWorkflowPackId, setSelectedWorkflowPackId] = useState(
     workflowPacks[0]?.id ?? "cinematic_story"
   );
+  const [selectedEditingReferencePresetId, setSelectedEditingReferencePresetId] =
+    useState(editingReferencePresets[0]?.id ?? "");
   const [selectedQualityPresetId, setSelectedQualityPresetId] = useState<string>(
     qualityPresets.find((preset) => preset.id === "standard")?.id ??
       qualityPresets[0]?.id ??
@@ -219,6 +226,10 @@ export function PromptLabStudio({
     qualityPresets.find((preset) => preset.id === "standard") ??
     qualityPresets[0] ??
     null;
+  const selectedEditingReferencePreset =
+    editingReferencePresets.find(
+      (preset) => preset.id === selectedEditingReferencePresetId
+    ) ?? null;
   const suggestedMusicPreset = suggestMusicPresetByContext({
     templateId: effectiveTemplateId || null,
     tone:
@@ -821,7 +832,7 @@ export function PromptLabStudio({
             </label>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-5">
             <label className="block">
               <span className="mb-2 block text-sm text-mist/65">
                 Workflow pack
@@ -860,11 +871,30 @@ export function PromptLabStudio({
                     {preset.name}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm text-mist/65">Workflow</span>
-              <input
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">
+                  Editing preset
+                </span>
+                <select
+                  value={selectedEditingReferencePresetId}
+                  onChange={(event) =>
+                    setSelectedEditingReferencePresetId(event.target.value)
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                >
+                  <option value="">Sem preset editorial</option>
+                  {editingReferencePresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">Workflow</span>
+                <input
                 value={selectedWorkflowId}
                 onChange={(event) => setSelectedWorkflowId(event.target.value)}
                 className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
@@ -900,10 +930,10 @@ export function PromptLabStudio({
             />
           </label>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
-                Channel / template
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                  Channel / template
               </p>
               <p className="mt-2 text-sm text-white">
                 {effectiveChannel?.name ?? "sem canal"}
@@ -923,14 +953,31 @@ export function PromptLabStudio({
                 workflow {preview.promptPack.recommendedWorkflow} | provider{" "}
                 {preview.promptPack.recommendedProvider}
               </p>
-              <p className="mt-2 text-xs text-mist/60">
-                workflow pack {selectedWorkflowPack?.id ?? "auto"} / quality{" "}
-                {selectedQualityPreset?.id ?? "standard"}
-              </p>
-            </div>
-            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
-                Planejamento editorial
+                <p className="mt-2 text-xs text-mist/60">
+                  workflow pack {selectedWorkflowPack?.id ?? "auto"} / quality{" "}
+                  {selectedQualityPreset?.id ?? "standard"}
+                </p>
+              </div>
+              <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                  Preset editorial
+                </p>
+                <p className="mt-2 text-sm text-white">
+                  {selectedEditingReferencePreset?.name ?? "Sem preset editorial"}
+                </p>
+                <p className="mt-2 text-xs text-mist/60">
+                  {selectedEditingReferencePreset
+                    ? `pace ${selectedEditingReferencePreset.pacing} / transicao ${selectedEditingReferencePreset.transitionStyle} / hook ${selectedEditingReferencePreset.hookStyle}`
+                    : "Escolha um preset para alinhar ritmo, hook, caption e microclip."}
+                </p>
+                <p className="mt-2 text-xs text-mist/60">
+                  source {formatSourceLabel(editingReferencePresetsSource)} / music{" "}
+                  {selectedEditingReferencePreset?.recommendedMusicPresetId ?? "auto"}
+                </p>
+              </div>
+              <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                  Planejamento editorial
               </p>
               <p className="mt-2 text-sm text-white">
                 {editorialMicroclipSuggestion.trim() || "Sem sugestao de microclip"}
@@ -940,9 +987,9 @@ export function PromptLabStudio({
                 projeto editorial.
               </p>
             </div>
-            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
-                Requirement extra
+              <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                  Requirement extra
               </p>
               <p className="mt-2 text-sm text-white">
                 {selectedRequirement?.description ?? "sem requirement"}
@@ -951,13 +998,29 @@ export function PromptLabStudio({
                 prompt packs {formatSourceLabel(promptPacksSource)} | negative packs{" "}
                 {formatSourceLabel(negativePromptPacksSource)}
               </p>
-              <p className="mt-2 text-xs text-mist/60">
-                workflow packs {formatSourceLabel(workflowPacksSource)} | quality{" "}
-                {formatSourceLabel(qualityPresetsSource)}
-              </p>
+                <p className="mt-2 text-xs text-mist/60">
+                  workflow packs {formatSourceLabel(workflowPacksSource)} | quality{" "}
+                  {formatSourceLabel(qualityPresetsSource)}
+                </p>
+              </div>
+              <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                  Influencia editorial
+                </p>
+                <p className="mt-2 text-sm text-white">
+                  {selectedEditingReferencePreset
+                    ? `${selectedEditingReferencePreset.captionStyle} / ${selectedEditingReferencePreset.narrationStyle} / ${selectedEditingReferencePreset.musicStyle}`
+                    : "Use o preset para direcionar caption, narracao e musica."}
+                </p>
+                <p className="mt-2 text-xs text-mist/60">
+                  microclip{" "}
+                  {selectedEditingReferencePreset?.microclipPlacement ?? "auto"} / CTA{" "}
+                  {selectedEditingReferencePreset?.ctaStyle ?? "auto"} / notes{" "}
+                  {selectedEditingReferencePreset?.notes ?? "n/d"}
+                </p>
+              </div>
             </div>
-          </div>
-        </article>
+          </article>
 
         <article className="space-y-6 rounded-[1.9rem] border border-white/10 bg-white/[0.04] p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -999,9 +1062,9 @@ export function PromptLabStudio({
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
                 Prompt plan
               </p>
               <p className="mt-2 text-sm text-white">{preview.promptPlanSummary}</p>
@@ -1016,19 +1079,84 @@ export function PromptLabStudio({
                   : "Nenhuma falta critica"}
               </p>
             </div>
-            <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
-                Sugestao principal
+              <div className="rounded-[1rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                  Sugestao principal
               </p>
               <p className="mt-2 text-sm text-white">
                 {preview.qualityAnalysis.suggestions[0] ??
                   "Prompt equilibrado para gerar visual premium."}
-              </p>
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-[1.35rem] border border-[#7be0ff]/20 bg-[#7be0ff]/8 p-4">
-            <div className="flex flex-wrap gap-3">
+            {selectedEditingReferencePreset ? (
+              <div className="rounded-[1.35rem] border border-[#f4c67a]/20 bg-[#f4c67a]/8 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                      Editing Reference Influence
+                    </p>
+                    <h3 className="mt-2 text-xl font-semibold text-white">
+                      {selectedEditingReferencePreset.name}
+                    </h3>
+                    <p className="mt-2 text-sm leading-7 text-mist/68">
+                      {selectedEditingReferencePreset.description}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[#f4c67a]/25 bg-[#f4c67a]/10 px-3 py-1 text-xs text-[#ffefc8]">
+                    {selectedEditingReferencePreset.useCase}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-[1rem] border border-white/10 bg-black/20 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                      Corte e energia
+                    </p>
+                    <p className="mt-2 text-sm text-white">
+                      {selectedEditingReferencePreset.pacing} / pace{" "}
+                      {selectedEditingReferencePreset.cutPace
+                        ? `${selectedEditingReferencePreset.cutPace.toFixed(1)}s`
+                        : "n/d"}
+                    </p>
+                    <p className="mt-2 text-xs text-mist/60">
+                      zoom {selectedEditingReferencePreset.zoomStyle} / flash{" "}
+                      {selectedEditingReferencePreset.flashStyle}
+                    </p>
+                  </div>
+                  <div className="rounded-[1rem] border border-white/10 bg-black/20 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                      Narrativa
+                    </p>
+                    <p className="mt-2 text-sm text-white">
+                      hook {selectedEditingReferencePreset.hookStyle} / CTA{" "}
+                      {selectedEditingReferencePreset.ctaStyle}
+                    </p>
+                    <p className="mt-2 text-xs text-mist/60">
+                      narracao {selectedEditingReferencePreset.narrationStyle} / caption{" "}
+                      {selectedEditingReferencePreset.captionStyle}
+                    </p>
+                  </div>
+                  <div className="rounded-[1rem] border border-white/10 bg-black/20 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-mist/45">
+                      Audio e inserts
+                    </p>
+                    <p className="mt-2 text-sm text-white">
+                      musica {selectedEditingReferencePreset.musicStyle} / SFX{" "}
+                      {selectedEditingReferencePreset.sfxStyle}
+                    </p>
+                    <p className="mt-2 text-xs text-mist/60">
+                      microclip {selectedEditingReferencePreset.microclipPlacement} / voice{" "}
+                      {selectedEditingReferencePreset.recommendedNarrationVoicePackId ?? "auto"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-[1.35rem] border border-[#7be0ff]/20 bg-[#7be0ff]/8 p-4">
+              <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 onClick={() => {

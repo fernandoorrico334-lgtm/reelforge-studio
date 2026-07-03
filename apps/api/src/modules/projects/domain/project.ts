@@ -7,6 +7,20 @@ import {
   getAudioMoodPresetById,
   getMusicPresetById
 } from "@reelforge/audio-engine";
+import type {
+  EditingReferenceCategory,
+  EditingReferenceCaptionStyle,
+  EditingReferenceCtaStyle,
+  EditingReferenceFlashStyle,
+  EditingReferenceHookStyle,
+  EditingReferenceMicroclipPlacement,
+  EditingReferenceMusicStyle,
+  EditingReferenceNarrationStyle,
+  EditingReferencePacing,
+  EditingReferenceSfxStyle,
+  EditingReferenceTransitionStyle,
+  EditingReferenceZoomStyle
+} from "@reelforge/editing-reference-engine";
 import { getTemplateById } from "@reelforge/templates";
 import {
   normalizeOptionalEmotionTagValue,
@@ -81,6 +95,29 @@ export const narrationStatuses = [
 
 export type NarrationStatus = (typeof narrationStatuses)[number];
 
+export interface EditingStyleSummary {
+  presetId: string;
+  presetName: string;
+  useCase: EditingReferenceCategory;
+  pacing: EditingReferencePacing;
+  cutPace: number | null;
+  zoomStyle: EditingReferenceZoomStyle;
+  flashStyle: EditingReferenceFlashStyle;
+  transitionStyle: EditingReferenceTransitionStyle;
+  captionStyle: EditingReferenceCaptionStyle;
+  narrationStyle: EditingReferenceNarrationStyle;
+  musicStyle: EditingReferenceMusicStyle;
+  sfxStyle: EditingReferenceSfxStyle;
+  hookStyle: EditingReferenceHookStyle;
+  ctaStyle: EditingReferenceCtaStyle;
+  microclipPlacement: EditingReferenceMicroclipPlacement;
+  defaultShotDurationSeconds: number | null;
+  recommendedMusicPresetId: string | null;
+  recommendedAudioMasteringPresetId: string | null;
+  recommendedNarrationVoicePackId: string | null;
+  notes: string | null;
+}
+
 export interface ProjectScene {
   id: string;
   order: number;
@@ -129,6 +166,8 @@ export interface StudioProject {
   durationTarget: number | null;
   format: string;
   templateId: string | null;
+  editingReferencePresetId: string | null;
+  editingStyleSummary: EditingStyleSummary | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
   musicPresetId?: string | null;
@@ -152,6 +191,8 @@ export interface CreateProjectInput {
   durationTarget: number | null;
   format: string;
   templateId: string | null;
+  editingReferencePresetId?: string | null;
+  editingStyleSummary?: EditingStyleSummary | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
   musicPresetId?: string | null;
@@ -355,6 +396,115 @@ function normalizeOptionalMusicPresetId(
   }
 
   return resolvedPreset.id;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeOptionalEditingStyleSummary(
+  value: unknown,
+  fieldName = "editingStyleSummary"
+): EditingStyleSummary | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (!isRecord(value)) {
+    throw new ValidationError(`${fieldName} must be an object or null.`);
+  }
+
+  const presetId = ensureRequiredString(value.presetId, `${fieldName}.presetId`);
+  const presetName = ensureRequiredString(
+    value.presetName,
+    `${fieldName}.presetName`
+  );
+  const useCase = ensureRequiredString(value.useCase, `${fieldName}.useCase`);
+  const pacing = ensureRequiredString(value.pacing, `${fieldName}.pacing`);
+  const zoomStyle = ensureRequiredString(
+    value.zoomStyle,
+    `${fieldName}.zoomStyle`
+  );
+  const flashStyle = ensureRequiredString(
+    value.flashStyle,
+    `${fieldName}.flashStyle`
+  );
+  const transitionStyle = ensureRequiredString(
+    value.transitionStyle,
+    `${fieldName}.transitionStyle`
+  );
+  const captionStyle = ensureRequiredString(
+    value.captionStyle,
+    `${fieldName}.captionStyle`
+  );
+  const narrationStyle = ensureRequiredString(
+    value.narrationStyle,
+    `${fieldName}.narrationStyle`
+  );
+  const musicStyle = ensureRequiredString(
+    value.musicStyle,
+    `${fieldName}.musicStyle`
+  );
+  const sfxStyle = ensureRequiredString(value.sfxStyle, `${fieldName}.sfxStyle`);
+  const hookStyle = ensureRequiredString(
+    value.hookStyle,
+    `${fieldName}.hookStyle`
+  );
+  const ctaStyle = ensureRequiredString(value.ctaStyle, `${fieldName}.ctaStyle`);
+  const microclipPlacement = ensureRequiredString(
+    value.microclipPlacement,
+    `${fieldName}.microclipPlacement`
+  );
+  const cutPace =
+    normalizeOptionalNumber(value.cutPace, `${fieldName}.cutPace`) ?? null;
+  const defaultShotDurationSeconds =
+    normalizeOptionalNumber(
+      value.defaultShotDurationSeconds,
+      `${fieldName}.defaultShotDurationSeconds`
+    ) ?? null;
+
+  return {
+    presetId,
+    presetName,
+    useCase: useCase as EditingStyleSummary["useCase"],
+    pacing: pacing as EditingStyleSummary["pacing"],
+    cutPace,
+    zoomStyle: zoomStyle as EditingStyleSummary["zoomStyle"],
+    flashStyle: flashStyle as EditingStyleSummary["flashStyle"],
+    transitionStyle:
+      transitionStyle as EditingStyleSummary["transitionStyle"],
+    captionStyle: captionStyle as EditingStyleSummary["captionStyle"],
+    narrationStyle:
+      narrationStyle as EditingStyleSummary["narrationStyle"],
+    musicStyle: musicStyle as EditingStyleSummary["musicStyle"],
+    sfxStyle: sfxStyle as EditingStyleSummary["sfxStyle"],
+    hookStyle: hookStyle as EditingStyleSummary["hookStyle"],
+    ctaStyle: ctaStyle as EditingStyleSummary["ctaStyle"],
+    microclipPlacement:
+      microclipPlacement as EditingStyleSummary["microclipPlacement"],
+    defaultShotDurationSeconds,
+    recommendedMusicPresetId:
+      normalizeOptionalString(
+        value.recommendedMusicPresetId,
+        `${fieldName}.recommendedMusicPresetId`
+      ) ?? null,
+    recommendedAudioMasteringPresetId:
+      normalizeOptionalString(
+        value.recommendedAudioMasteringPresetId,
+        `${fieldName}.recommendedAudioMasteringPresetId`
+      ) ?? null,
+    recommendedNarrationVoicePackId:
+      normalizeOptionalString(
+        value.recommendedNarrationVoicePackId,
+        `${fieldName}.recommendedNarrationVoicePackId`
+      ) ?? null,
+    notes:
+      normalizeOptionalString(value.notes, `${fieldName}.notes`) ?? null
+  };
 }
 
 function normalizeOptionalCaptionStyleId(
@@ -712,6 +862,10 @@ export function validateCreateProjectInput(
     durationTarget: readOptionalNumber(record, "durationTarget") ?? null,
     format: readOptionalString(record, "format") ?? "9:16",
     templateId: normalizeOptionalTemplateId(record.templateId) ?? null,
+    editingReferencePresetId:
+      readOptionalString(record, "editingReferencePresetId") ?? null,
+    editingStyleSummary:
+      normalizeOptionalEditingStyleSummary(record.editingStyleSummary) ?? null,
     defaultCaptionStyle:
       normalizeOptionalCaptionStyleId(
         record.defaultCaptionStyle,
@@ -763,6 +917,16 @@ export function validateUpdateProjectInput(
 
   if ("templateId" in record) {
     update.templateId = normalizeOptionalTemplateId(record.templateId) ?? null;
+  }
+
+  if ("editingReferencePresetId" in record) {
+    update.editingReferencePresetId =
+      readOptionalString(record, "editingReferencePresetId") ?? null;
+  }
+
+  if ("editingStyleSummary" in record) {
+    update.editingStyleSummary =
+      normalizeOptionalEditingStyleSummary(record.editingStyleSummary) ?? null;
   }
 
   if ("defaultCaptionStyle" in record) {

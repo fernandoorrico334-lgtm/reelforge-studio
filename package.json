@@ -48,7 +48,9 @@
     "smoke:reels-factory": "node scripts/smoke-reels-factory.mjs",
     "smoke:narration-windows-sapi:local": "node scripts/smoke-narration-windows-sapi-local.mjs",
     "smoke:music-library": "node scripts/smoke-music-library.mjs",
-    "smoke:music-render-plan": "node scripts/smoke-music-render-plan.mjs"
+    "smoke:music-render-plan": "node scripts/smoke-music-render-plan.mjs",
+    "smoke:editing-reference-presets": "node scripts/smoke-editing-reference-presets.mjs",
+    "smoke:editing-reference-project-flow": "node scripts/smoke-editing-reference-project-flow.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

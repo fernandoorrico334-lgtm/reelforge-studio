@@ -15,6 +15,7 @@ export interface ReelsFactoryPreviewInput {
   subject: string;
   angle: string;
   templateId: ReelsFactoryTemplateId;
+  editingReferencePresetId?: string | null;
   tone: string;
   durationSeconds: number;
   language: string;
@@ -31,6 +32,7 @@ export interface ReelsFactoryBatchInput {
   channelId?: string | null;
   items: ReelsFactoryBatchItemInput[];
   templateId: ReelsFactoryTemplateId;
+  editingReferencePresetId?: string | null;
   tone: string;
   durationSeconds: number;
   language: string;
@@ -167,6 +169,8 @@ export function validateReelsFactoryPreviewInput(
     subject: readRequiredString(record, "subject"),
     angle: readRequiredString(record, "angle"),
     templateId: readTemplateId(record, "templateId"),
+    editingReferencePresetId:
+      readOptionalString(record, "editingReferencePresetId") ?? null,
     tone: readRequiredString(record, "tone"),
     durationSeconds: readRequiredDuration(record, "durationSeconds"),
     language: readRequiredString(record, "language"),
@@ -183,6 +187,8 @@ export function validateReelsFactoryBatchInput(
     channelId: readOptionalString(record, "channelId") ?? null,
     items: readBatchItems(record),
     templateId: readTemplateId(record, "templateId"),
+    editingReferencePresetId:
+      readOptionalString(record, "editingReferencePresetId") ?? null,
     tone: readRequiredString(record, "tone"),
     durationSeconds: readRequiredDuration(record, "durationSeconds"),
     language: readRequiredString(record, "language"),

@@ -319,6 +319,8 @@ function mapProject(project: {
   durationTarget: number | null;
   format: string;
   templateId: string | null;
+  editingReferencePresetId: string | null;
+  editingStyleSummary: string | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
   musicPresetId: string | null;
@@ -344,6 +346,8 @@ function mapProject(project: {
     durationTarget: project.durationTarget,
     format: project.format,
     templateId: project.templateId,
+    editingReferencePresetId: project.editingReferencePresetId,
+    editingStyleSummary: parseJsonValue(project.editingStyleSummary ?? "null", null),
     defaultCaptionStyle: project.defaultCaptionStyle,
     backgroundMusicAssetId: project.backgroundMusicAssetId,
     musicPresetId: project.musicPresetId,
@@ -371,6 +375,10 @@ function serializeCreateProjectInput(
     durationTarget: input.durationTarget,
     format: input.format,
     templateId: input.templateId,
+    editingReferencePresetId: input.editingReferencePresetId ?? null,
+    editingStyleSummary: input.editingStyleSummary
+      ? JSON.stringify(input.editingStyleSummary)
+      : null,
     defaultCaptionStyle: input.defaultCaptionStyle,
     backgroundMusicAssetId: input.backgroundMusicAssetId,
     musicPresetId: input.musicPresetId ?? null,
@@ -396,6 +404,14 @@ function serializeUpdateProjectInput(
   if ("durationTarget" in input) data.durationTarget = input.durationTarget;
   if ("format" in input) data.format = input.format;
   if ("templateId" in input) data.templateId = input.templateId;
+  if ("editingReferencePresetId" in input) {
+    data.editingReferencePresetId = input.editingReferencePresetId;
+  }
+  if ("editingStyleSummary" in input) {
+    data.editingStyleSummary = input.editingStyleSummary
+      ? JSON.stringify(input.editingStyleSummary)
+      : null;
+  }
   if ("defaultCaptionStyle" in input) data.defaultCaptionStyle = input.defaultCaptionStyle;
   if ("backgroundMusicAssetId" in input) {
     data.backgroundMusicAssetId = input.backgroundMusicAssetId;

@@ -167,7 +167,7 @@ export function RenderBlueprintPanel({
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-3">
+          <div className="mt-6 grid gap-4 xl:grid-cols-4">
             <div className="rounded-[1.3rem] border border-white/10 bg-black/20 p-4">
               <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
                 Template
@@ -196,6 +196,27 @@ export function RenderBlueprintPanel({
               </p>
               <p className="mt-3 text-sm text-mist/68">
                 subtitle preview pronto em SRT e ASS para a etapa de render.
+              </p>
+            </div>
+
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Editing style
+              </p>
+              <p className="mt-2 text-sm text-white">
+                {blueprint.editingReferencePresetName ?? "Sem preset editorial aplicado"}
+              </p>
+              <p className="mt-2 text-xs text-mist/55">
+                presetId {blueprint.editingReferencePresetId ?? "n/a"} / pace{" "}
+                {formatDuration(blueprint.editingStyleSummary?.cutPace)}
+              </p>
+              <p className="mt-2 text-xs text-mist/55">
+                transition {blueprint.editingStyleSummary?.transitionStyle ?? "n/a"} / caption{" "}
+                {blueprint.editingStyleSummary?.captionStyle ?? "n/a"}
+              </p>
+              <p className="mt-2 text-xs text-mist/55">
+                music {blueprint.editingStyleSummary?.musicStyle ?? "n/a"} / microclip{" "}
+                {blueprint.editingStyleSummary?.microclipPlacement ?? "n/a"}
               </p>
             </div>
 
@@ -320,6 +341,11 @@ export function RenderBlueprintPanel({
                 <p className="mt-2 text-xs text-mist/55">
                   {scene.effectiveAssetReason ??
                     "Motivo do asset efetivo indisponivel nesta fonte."}
+                </p>
+                <p className="mt-2 text-xs text-mist/55">
+                  editorial shot {formatDuration(scene.suggestedShotDurationSeconds)} / placement{" "}
+                  {scene.suggestedMicroclipPlacement ?? "n/a"} / intensity{" "}
+                  {scene.suggestedIntensity ?? "n/a"}
                 </p>
                 <p className="mt-2 text-xs text-mist/55">
                   resolucao {scene.effectiveAsset?.width ?? "?"}x

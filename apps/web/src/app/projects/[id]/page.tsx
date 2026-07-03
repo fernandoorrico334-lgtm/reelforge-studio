@@ -4,6 +4,7 @@ import {
   getAssetsSnapshot,
   getChannelsSnapshot,
   getComfyWorkflowPacksSnapshot,
+  getEditingReferencePresetSuggestionsSnapshot,
   getGeneratedAudioGallerySnapshot,
   getGeneratedImagesGallerySnapshot,
   getImageQualityPresetsSnapshot,
@@ -52,6 +53,19 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
+  const project = projectSnapshot.item;
+
+  const selectedChannel =
+    channelsSnapshot.items.find(
+      (channel) => channel.id === project.channelId
+    ) ?? project.channel;
+  const activeTemplateId =
+    project.templateId ??
+    selectedChannel?.defaultTemplate ??
+    "cinematic_story";
+  const editingReferenceSuggestionsSnapshot =
+    await getEditingReferencePresetSuggestionsSnapshot(activeTemplateId);
+
   return (
     <div className="space-y-8">
       <section className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(99,255,225,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(255,158,102,0.12),transparent_24%),rgba(255,255,255,0.04)] p-6 md:p-8">
@@ -61,7 +75,7 @@ export default async function ProjectDetailPage({
               Editing Desk
             </p>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white">
-              Projeto {projectSnapshot.item.title}
+              Projeto {project.title}
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-8 text-mist/72">
               Monte a narrativa cena por cena, vincule assets locais e acompanhe
@@ -103,7 +117,7 @@ export default async function ProjectDetailPage({
         assetsSource={assetsSnapshot.source}
         channels={channelsSnapshot.items}
         channelsSource={channelsSnapshot.source}
-        initialProject={projectSnapshot.item}
+        initialProject={project}
         initialSource={projectSnapshot.source}
         workflowPacks={workflowPacksSnapshot.items}
         workflowPacksSource={workflowPacksSnapshot.source}
@@ -117,6 +131,12 @@ export default async function ProjectDetailPage({
         narrationVoicePacksSource={narrationVoicePacksSnapshot.source}
         initialGeneratedNarrations={generatedNarrationsSnapshot.items}
         initialGeneratedNarrationsSource={generatedNarrationsSnapshot.source}
+        initialEditingReferenceSuggestions={
+          editingReferenceSuggestionsSnapshot.items
+        }
+        initialEditingReferenceSuggestionsSource={
+          editingReferenceSuggestionsSnapshot.source
+        }
       />
     </div>
   );

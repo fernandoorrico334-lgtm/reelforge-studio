@@ -4,7 +4,7 @@ ReelForge Studio e uma plataforma local em evolucao para transformar imagens,
 videos, quadrinhos, artes, screenshots, audios, musicas, efeitos e overlays em
 videos verticais 9:16 com acabamento cinematografico.
 
-Esta base agora cobre dezoito camadas do produto:
+Esta base agora cobre dezenove camadas do produto:
 
 - fundacao do monorepo;
 - persistencia local com Prisma + SQLite preparada;
@@ -39,6 +39,9 @@ Esta base agora cobre dezoito camadas do produto:
 - Music Library + Beat Sync Engine com perfis locais de musica e SFX, analise
   aproximada via FFmpeg/ffprobe quando disponiveis, selecao automatica por
   preset e plano ritmico para cortes, flashes, SFX e microclips.
+- Editing Reference Presets com cadastro de reels locais de referencia,
+  analise editorial basica via FFmpeg/ffprobe, presets reutilizaveis e
+  sugestoes por template dentro do estudio.
 
 Continuam fora do escopo nesta etapa:
 
@@ -61,8 +64,12 @@ Continuam fora do escopo nesta etapa:
   `/projects/[id]` e `/prompt-lab`.
 - `apps/web` com pagina `/music-library` e integracao de selecao automatica de
   trilha em `/projects/[id]`.
+- `apps/web` com pagina `/editing-references` e sugestoes editoriais ligadas
+  ao template em `/projects/[id]`.
 - `prisma/` com schema, seed e migrations para SQLite.
 - `storage/assets` para intake local.
+- `storage/references` para reels locais de referencia usados apenas como guia
+  editorial, nunca como material a ser versionado ou reexportado.
 - `storage/assets/generated/narrations` para WAVs gerados localmente.
 - `storage/inbox` para ingestao manual, revisao e organizacao de materiais.
 - `storage/research` para textos brutos importados de fontes publicas.
@@ -77,6 +84,8 @@ Continuam fora do escopo nesta etapa:
 - `packages/caption-engine` com catalogo de estilos, analise de leitura e
   exportacao SRT/ASS.
 - `packages/narration-engine` com providers, voice packs e geracao WAV local.
+- `packages/editing-reference-engine` com analise local de referencias,
+  catalogo editorial e builder de presets reutilizaveis.
 - `packages/templates` com templates premium por nicho.
 - `packages/video-engine` com composicao de blueprint, Render V1 e
   Cinematic V2 server-side.
@@ -87,6 +96,8 @@ Continuam fora do escopo nesta etapa:
   gerados localmente.
 - `scripts/smoke-render-audio.mjs` para validacao ponta a ponta do pipeline de
   audio local.
+- `scripts/smoke-editing-reference-presets.mjs` para validar criacao,
+  analise e derivacao de presets editoriais locais.
 - `scripts/smoke-research.mjs` para validar dossier, sources, analysis e
   create-production.
 - `scripts/smoke-hybrid-visual.mjs` para validar personagens, requirements,
@@ -113,6 +124,7 @@ reelforge-studio/
     cinematic-engine/
     caption-engine/
     narration-engine/
+    editing-reference-engine/
     templates/
     audio-engine/
   prisma/
@@ -123,6 +135,7 @@ reelforge-studio/
     assets/
       generated/
         narrations/
+    references/
     inbox/
     research/
     renders/
@@ -159,6 +172,10 @@ Se o binario nao estiver no `PATH`, defina antes de rodar os renders ou smokes:
 $env:FFMPEG_PATH="C:/ffmpeg/bin/ffmpeg.exe"
 $env:FFPROBE_PATH="C:/ffmpeg/bin/ffprobe.exe"
 ```
+
+Referencias locais editoriais devem ficar fora do Git. Use, por exemplo,
+`storage/references/` para guardar MP4s de benchmarking visual/audio e trate
+esse material apenas como guia de estilo, nunca como conteudo a ser copiado.
 
 4. Gere o Prisma Client:
 
@@ -207,6 +224,17 @@ npm run worker:once
 
 - Web: `http://localhost:3000`
 - API: `http://localhost:4000`
+
+## Smoke recomendado da Etapa 11G
+
+Para validar Editing Reference Presets localmente:
+
+```bash
+npm run db:generate
+npm run build
+npm run typecheck
+npm run smoke:editing-reference-presets
+```
 
 Observacao: o backend padrao da API continua sendo `memory` para bootstrap
 rapido, mas o fluxo de render V1 depende de `DATA_BACKEND=prisma`, porque o

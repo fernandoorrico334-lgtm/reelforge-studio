@@ -82,6 +82,8 @@ function toBlueprintProjectInput(
     durationTarget: project.durationTarget,
     format: project.format,
     templateId: project.templateId ?? null,
+    editingReferencePresetId: project.editingReferencePresetId ?? null,
+    editingStyleSummary: project.editingStyleSummary ?? null,
     defaultCaptionStyle: project.defaultCaptionStyle ?? null,
     backgroundMusicAssetId: project.backgroundMusicAssetId ?? null,
     musicPresetId: project.musicPresetId ?? null,

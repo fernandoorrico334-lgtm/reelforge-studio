@@ -3,6 +3,7 @@ import {
   getChannelsSnapshot,
   getCharactersSnapshot,
   getComfyWorkflowPacksSnapshot,
+  getEditingReferencePresetsSnapshot,
   getGeneratedAudioGallerySnapshot,
   getGeneratedImagesGallerySnapshot,
   getImageQualityPresetsSnapshot,
@@ -29,6 +30,7 @@ export default async function PromptLabPage() {
     negativePromptPacksSnapshot,
     workflowPacksSnapshot,
     qualityPresetsSnapshot,
+    editingReferencePresetsSnapshot,
     researchSnapshot,
     visualProvidersSnapshot,
     generatedImagesSnapshot,
@@ -43,6 +45,7 @@ export default async function PromptLabPage() {
     getNegativePromptPacksSnapshot(),
     getComfyWorkflowPacksSnapshot(),
     getImageQualityPresetsSnapshot(),
+    getEditingReferencePresetsSnapshot(),
     getResearchDossiersSnapshot(),
     getVisualGenerationProvidersSnapshot(),
     getGeneratedImagesGallerySnapshot(),
@@ -137,6 +140,8 @@ export default async function PromptLabPage() {
         workflowPacksSource={workflowPacksSnapshot.source}
         qualityPresets={qualityPresetsSnapshot.items}
         qualityPresetsSource={qualityPresetsSnapshot.source}
+        editingReferencePresets={editingReferencePresetsSnapshot.items}
+        editingReferencePresetsSource={editingReferencePresetsSnapshot.source}
         researchRequirements={researchRequirements}
         researchRequirementsSource={researchRequirementsSource}
         visualGenerationProviders={visualProvidersSnapshot.items}

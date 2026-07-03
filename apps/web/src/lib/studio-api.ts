@@ -7,6 +7,11 @@ import {
   selectMusicForReel
 } from "@reelforge/audio-engine";
 import {
+  buildEditingStyleSummaryFromPreset,
+  getEditingReferencePresetCatalog,
+  suggestReferencePresetsForTemplate
+} from "@reelforge/editing-reference-engine";
+import {
   getNegativePromptPacks,
   getVisualPromptPacks
 } from "@reelforge/prompt-engine";
@@ -57,6 +62,11 @@ import type {
   BuildBeatSyncPlanResponse,
   EditorialMicroclip,
   EditorialMicroclipPayload,
+  EditingReference,
+  EditingReferenceAnalysisResponse,
+  EditingReferencePreset,
+  EditingReferenceSuggestion,
+  BuildEditingReferencePresetResponse,
   GenerateMissingVisualsPayload,
   GenerateMissingVisualsResponse,
   GeneratedAudioGalleryItem,
@@ -729,6 +739,145 @@ function buildMockSfxLibraryItems(): SfxLibraryItemRecord[] {
   );
 }
 
+function buildMockEditingReferences(): EditingReference[] {
+  const darkVideo =
+    mockAssets.find((asset) => asset.id === "asset-dark-001") ??
+    mockAssets.find((asset) => asset.type === "VIDEO") ??
+    null;
+
+  return cloneValue([
+    {
+      id: "editing-reference-aurora",
+      title: "Aurora Case Editorial Cut",
+      description:
+        "Referencia local para documentario sombrio com cortes curtos, captions limpas e narrativa investigativa.",
+      assetId: darkVideo?.id ?? null,
+      asset: darkVideo,
+      localPath: "storage/references/true-crime/aurora-case-cut.mp4",
+      sourceType: "asset_library",
+      category: "true_crime",
+      status: "preset_ready",
+      durationSeconds: 24.6,
+      averageCutPaceSeconds: 2.8,
+      beatIntensity: "medium",
+      pacing: "fast",
+      zoomStyle: "subtle",
+      flashStyle: "low",
+      transitionStyle: "mixed",
+      captionStyle: "lower_clean",
+      narrationStyle: "documentary",
+      musicStyle: "dark",
+      sfxStyle: "medium",
+      hookStyle: "warning",
+      ctaStyle: "subtle",
+      microclipPlacement: "middle",
+      visualStyleNotes: "Arquivos, close lento e luz fria.",
+      audioStyleNotes: "Trilha baixa com ducking controlado e hits discretos.",
+      editingStyleNotes:
+        "Alterna contexto com inserts curtos e deixa perguntas abertas no final.",
+      analysisWarnings: [
+        "Referencia mock local. O video real nao acompanha o repositorio."
+      ],
+      createdAt: "2026-07-03T00:00:00.000Z",
+      updatedAt: "2026-07-03T00:00:00.000Z"
+    },
+    {
+      id: "editing-reference-stadium",
+      title: "Stadium Pressure Short",
+      description:
+        "Referencia esportiva local para cortes ritmados, flashes pontuais e microclips de impacto.",
+      assetId: null,
+      asset: null,
+      localPath: "storage/references/football/stadium-pressure-short.mp4",
+      sourceType: "local_file",
+      category: "football",
+      status: "analyzed",
+      durationSeconds: 19.2,
+      averageCutPaceSeconds: 1.7,
+      beatIntensity: "high",
+      pacing: "hyper",
+      zoomStyle: "aggressive",
+      flashStyle: "medium",
+      transitionStyle: "flash_cut",
+      captionStyle: "center_bold",
+      narrationStyle: "hype",
+      musicStyle: "hype",
+      sfxStyle: "high",
+      hookStyle: "explosive",
+      ctaStyle: "strong",
+      microclipPlacement: "climax",
+      visualStyleNotes: "Punch-ins rapidos, freeze-frame e crowd overlays.",
+      audioStyleNotes: "Phonk alta energia com hits e whooshes curtos.",
+      editingStyleNotes:
+        "Mantem bloco de pressao crescente e guarda o microclip principal para a reta final.",
+      analysisWarnings: [
+        "BPM e cortes representam uma estimativa curada manualmente para desenvolvimento local."
+      ],
+      createdAt: "2026-07-03T00:00:00.000Z",
+      updatedAt: "2026-07-03T00:00:00.000Z"
+    }
+  ]);
+}
+
+function buildMockEditingReferencePresets(): EditingReferencePreset[] {
+  const references = buildMockEditingReferences();
+
+  return cloneValue(
+    getEditingReferencePresetCatalog().map((preset, index) => ({
+      ...preset,
+      referenceId:
+        index === 0
+          ? "editing-reference-stadium"
+          : index === 2
+            ? "editing-reference-aurora"
+            : null,
+      reference:
+        index === 0
+          ? references.find((item) => item.id === "editing-reference-stadium") ?? null
+          : index === 2
+            ? references.find((item) => item.id === "editing-reference-aurora") ?? null
+            : null,
+      createdAt: "2026-07-03T00:00:00.000Z",
+      updatedAt: "2026-07-03T00:00:00.000Z"
+    }))
+  );
+}
+
+function buildMockEditingReferenceSuggestions(
+  templateId: string
+): EditingReferenceSuggestion[] {
+  const presets = buildMockEditingReferencePresets();
+  const presetMap = new Map(presets.map((preset) => [preset.slug, preset] as const));
+
+  return cloneValue(
+    suggestReferencePresetsForTemplate(templateId).map((suggestion) => ({
+      templateId: suggestion.templateId,
+      preset: presetMap.get(suggestion.preset.slug) ?? {
+        ...suggestion.preset,
+        reference: null,
+        createdAt: "2026-07-03T00:00:00.000Z",
+        updatedAt: "2026-07-03T00:00:00.000Z"
+      },
+      origin: "catalog" as const,
+      reason: suggestion.reason
+    }))
+  );
+}
+
+function resolveMockEditingStyleSummary(
+  presetId: string | null | undefined
+) {
+  if (!presetId) {
+    return null;
+  }
+
+  const presets = buildMockEditingReferencePresets();
+  const preset =
+    presets.find((entry) => entry.id === presetId || entry.slug === presetId) ?? null;
+
+  return preset ? buildEditingStyleSummaryFromPreset(preset) : null;
+}
+
 function applyMockSfxProfileUpdate(
   asset: StudioAsset,
   patch: Partial<SfxAssetProfile>
@@ -933,6 +1082,205 @@ export async function updateSfxLibraryProfileRequest(
       body: JSON.stringify(payload)
     }
   );
+}
+
+export async function getEditingReferencesRequest(
+  filters: {
+    category?: string;
+    status?: string;
+    sourceType?: string;
+  } = {}
+) {
+  const query = buildQueryString({
+    category: filters.category,
+    status: filters.status,
+    sourceType: filters.sourceType
+  });
+
+  return requestJson<EditingReference[]>(`/editing-references${query}`);
+}
+
+export async function getEditingReferencesSnapshot(
+  filters: Parameters<typeof getEditingReferencesRequest>[0] = {}
+): Promise<{
+  items: EditingReference[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getEditingReferencesRequest(filters);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("editing-references", error);
+    const items = buildMockEditingReferences().filter((item) => {
+      if (filters.category && item.category !== filters.category) {
+        return false;
+      }
+
+      if (filters.status && item.status !== filters.status) {
+        return false;
+      }
+
+      if (filters.sourceType && item.sourceType !== filters.sourceType) {
+        return false;
+      }
+
+      return true;
+    });
+    return { items, source: "mock" };
+  }
+}
+
+export async function createEditingReferenceRequest(payload: Record<string, unknown>) {
+  return requestJson<EditingReference>("/editing-references", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateEditingReferenceRequest(
+  referenceId: string,
+  payload: Record<string, unknown>
+) {
+  return requestJson<EditingReference>(
+    `/editing-references/${encodeURIComponent(referenceId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function deleteEditingReferenceRequest(referenceId: string) {
+  await requestJson<void>(`/editing-references/${encodeURIComponent(referenceId)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function analyzeEditingReferenceRequest(referenceId: string) {
+  return requestJson<EditingReferenceAnalysisResponse>(
+    `/editing-references/${encodeURIComponent(referenceId)}/analyze`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
+export async function buildEditingReferencePresetRequest(
+  referenceId: string,
+  payload: Record<string, unknown> = {}
+) {
+  return requestJson<BuildEditingReferencePresetResponse>(
+    `/editing-references/${encodeURIComponent(referenceId)}/build-preset`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function getEditingReferencePresetsRequest(
+  filters: {
+    useCase?: string;
+    referenceId?: string;
+    templateId?: string;
+  } = {}
+) {
+  const query = buildQueryString({
+    useCase: filters.useCase,
+    referenceId: filters.referenceId,
+    templateId: filters.templateId
+  });
+
+  return requestJson<EditingReferencePreset[]>(`/editing-reference-presets${query}`);
+}
+
+export async function getEditingReferencePresetsSnapshot(
+  filters: Parameters<typeof getEditingReferencePresetsRequest>[0] = {}
+): Promise<{
+  items: EditingReferencePreset[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getEditingReferencePresetsRequest(filters);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("editing-reference-presets", error);
+    let items = buildMockEditingReferencePresets();
+
+    if (filters.useCase) {
+      items = items.filter((item) => item.useCase === filters.useCase);
+    }
+
+    if (filters.referenceId) {
+      items = items.filter((item) => item.referenceId === filters.referenceId);
+    }
+
+    if (filters.templateId) {
+      items = items.filter((item) =>
+        item.recommendedTemplates.includes(filters.templateId!)
+      );
+    }
+
+    return { items, source: "mock" };
+  }
+}
+
+export async function createEditingReferencePresetRequest(
+  payload: Record<string, unknown>
+) {
+  return requestJson<EditingReferencePreset>("/editing-reference-presets", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateEditingReferencePresetRequest(
+  presetId: string,
+  payload: Record<string, unknown>
+) {
+  return requestJson<EditingReferencePreset>(
+    `/editing-reference-presets/${encodeURIComponent(presetId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function deleteEditingReferencePresetRequest(presetId: string) {
+  await requestJson<void>(
+    `/editing-reference-presets/${encodeURIComponent(presetId)}`,
+    {
+      method: "DELETE"
+    }
+  );
+}
+
+export async function getEditingReferencePresetSuggestionsRequest(
+  templateId: string
+) {
+  return requestJson<EditingReferenceSuggestion[]>(
+    `/editing-reference-presets/suggestions${buildQueryString({ templateId })}`
+  );
+}
+
+export async function getEditingReferencePresetSuggestionsSnapshot(
+  templateId: string
+): Promise<{
+  items: EditingReferenceSuggestion[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getEditingReferencePresetSuggestionsRequest(templateId);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback(`editing-reference-presets/suggestions:${templateId}`, error);
+    return {
+      items: buildMockEditingReferenceSuggestions(templateId),
+      source: "mock"
+    };
+  }
 }
 
 export async function selectMusicForProjectRequest(payload: {
@@ -1356,8 +1704,14 @@ export async function previewReelsFactorySnapshot(
     return { item, source: "api" };
   } catch (error) {
     logServerFallback("reels-factory/preview", error);
+    const editingStyleSummary = resolveMockEditingStyleSummary(
+      payload.editingReferencePresetId ?? null
+    );
     return {
-      item: generateReelsFactoryPreview(payload) as unknown as ReelsFactoryPreviewResponse,
+      item: generateReelsFactoryPreview({
+        ...payload,
+        editingStyleSummary
+      }) as unknown as ReelsFactoryPreviewResponse,
       source: "mock"
     };
   }

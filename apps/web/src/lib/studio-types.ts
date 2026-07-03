@@ -686,6 +686,7 @@ export interface ReelsFactoryPreviewPayload {
   subject: string;
   angle: string;
   templateId: ReelsFactoryTemplateId;
+  editingReferencePresetId?: string | null;
   tone: string;
   durationSeconds: number;
   language: string;
@@ -702,6 +703,7 @@ export interface ReelsFactoryBatchPayload {
   channelId?: string | null;
   items: ReelsFactoryBatchItemPayload[];
   templateId: ReelsFactoryTemplateId;
+  editingReferencePresetId?: string | null;
   tone: string;
   durationSeconds: number;
   language: string;
@@ -713,6 +715,8 @@ export interface ReelsFactoryPreviewResponse {
   shortDescription: string;
   hook: string;
   templateId: ReelsFactoryTemplateId;
+  editingReferencePresetId?: string | null;
+  editingStyleSummary?: EditingStyleSummary | null;
   tone: string;
   language: string;
   durationSeconds: number;
@@ -841,6 +845,281 @@ export interface SfxLibraryItemRecord {
   profile: SfxAssetProfile | null;
   status: "profiled" | "pending";
   warnings: string[];
+}
+
+export const editingReferenceSourceTypes = [
+  "local_file",
+  "asset_library"
+] as const;
+
+export type EditingReferenceSourceType =
+  (typeof editingReferenceSourceTypes)[number];
+
+export const editingReferenceCategories = [
+  "football",
+  "documentary",
+  "true_crime",
+  "cinematic",
+  "viral",
+  "generic"
+] as const;
+
+export type EditingReferenceCategory =
+  (typeof editingReferenceCategories)[number];
+
+export const editingReferenceStatuses = [
+  "draft",
+  "analyzed",
+  "preset_ready"
+] as const;
+
+export type EditingReferenceStatus =
+  (typeof editingReferenceStatuses)[number];
+
+export const editingReferenceBeatIntensities = [
+  "low",
+  "medium",
+  "high",
+  "extreme"
+] as const;
+
+export type EditingReferenceBeatIntensity =
+  (typeof editingReferenceBeatIntensities)[number];
+
+export const editingReferencePacingOptions = [
+  "slow",
+  "medium",
+  "fast",
+  "hyper"
+] as const;
+
+export type EditingReferencePacing =
+  (typeof editingReferencePacingOptions)[number];
+
+export const editingReferenceZoomStyles = [
+  "none",
+  "subtle",
+  "medium",
+  "aggressive"
+] as const;
+
+export type EditingReferenceZoomStyle =
+  (typeof editingReferenceZoomStyles)[number];
+
+export const editingReferenceFlashStyles = [
+  "none",
+  "low",
+  "medium",
+  "high"
+] as const;
+
+export type EditingReferenceFlashStyle =
+  (typeof editingReferenceFlashStyles)[number];
+
+export const editingReferenceTransitionStyles = [
+  "cut",
+  "fast_cut",
+  "flash_cut",
+  "smooth",
+  "mixed"
+] as const;
+
+export type EditingReferenceTransitionStyle =
+  (typeof editingReferenceTransitionStyles)[number];
+
+export const editingReferenceCaptionStyles = [
+  "none",
+  "center_bold",
+  "lower_clean",
+  "kinetic",
+  "dramatic"
+] as const;
+
+export type EditingReferenceCaptionStyle =
+  (typeof editingReferenceCaptionStyles)[number];
+
+export const editingReferenceNarrationStyles = [
+  "none",
+  "calm",
+  "documentary",
+  "hype",
+  "aggressive",
+  "epic"
+] as const;
+
+export type EditingReferenceNarrationStyle =
+  (typeof editingReferenceNarrationStyles)[number];
+
+export const editingReferenceMusicStyles = [
+  "none",
+  "hype",
+  "dark",
+  "epic",
+  "documentary",
+  "viral"
+] as const;
+
+export type EditingReferenceMusicStyle =
+  (typeof editingReferenceMusicStyles)[number];
+
+export const editingReferenceSfxStyles = [
+  "none",
+  "low",
+  "medium",
+  "high"
+] as const;
+
+export type EditingReferenceSfxStyle =
+  (typeof editingReferenceSfxStyles)[number];
+
+export const editingReferenceHookStyles = [
+  "question",
+  "warning",
+  "explosive",
+  "curiosity",
+  "ranking",
+  "story"
+] as const;
+
+export type EditingReferenceHookStyle =
+  (typeof editingReferenceHookStyles)[number];
+
+export const editingReferenceCtaStyles = [
+  "none",
+  "short",
+  "strong",
+  "subtle"
+] as const;
+
+export type EditingReferenceCtaStyle =
+  (typeof editingReferenceCtaStyles)[number];
+
+export const editingReferenceMicroclipPlacements = [
+  "none",
+  "intro",
+  "middle",
+  "climax",
+  "outro",
+  "multiple"
+] as const;
+
+export type EditingReferenceMicroclipPlacement =
+  (typeof editingReferenceMicroclipPlacements)[number];
+
+export interface EditingReference {
+  id: string;
+  title: string;
+  description: string | null;
+  assetId: string | null;
+  asset: StudioAsset | null;
+  localPath: string | null;
+  sourceType: EditingReferenceSourceType;
+  category: EditingReferenceCategory;
+  status: EditingReferenceStatus;
+  durationSeconds: number | null;
+  averageCutPaceSeconds: number | null;
+  beatIntensity: EditingReferenceBeatIntensity;
+  pacing: EditingReferencePacing;
+  zoomStyle: EditingReferenceZoomStyle;
+  flashStyle: EditingReferenceFlashStyle;
+  transitionStyle: EditingReferenceTransitionStyle;
+  captionStyle: EditingReferenceCaptionStyle;
+  narrationStyle: EditingReferenceNarrationStyle;
+  musicStyle: EditingReferenceMusicStyle;
+  sfxStyle: EditingReferenceSfxStyle;
+  hookStyle: EditingReferenceHookStyle;
+  ctaStyle: EditingReferenceCtaStyle;
+  microclipPlacement: EditingReferenceMicroclipPlacement;
+  visualStyleNotes: string | null;
+  audioStyleNotes: string | null;
+  editingStyleNotes: string | null;
+  analysisWarnings: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EditingReferencePreset {
+  id: string;
+  referenceId: string | null;
+  reference: EditingReference | null;
+  name: string;
+  slug: string;
+  description: string;
+  useCase: EditingReferenceCategory;
+  cutPace: number | null;
+  pacing: EditingReferencePacing;
+  zoomStyle: EditingReferenceZoomStyle;
+  flashStyle: EditingReferenceFlashStyle;
+  transitionStyle: EditingReferenceTransitionStyle;
+  captionStyle: EditingReferenceCaptionStyle;
+  narrationStyle: EditingReferenceNarrationStyle;
+  musicStyle: EditingReferenceMusicStyle;
+  sfxStyle: EditingReferenceSfxStyle;
+  hookStyle: EditingReferenceHookStyle;
+  ctaStyle: EditingReferenceCtaStyle;
+  microclipPlacement: EditingReferenceMicroclipPlacement;
+  recommendedTemplates: string[];
+  recommendedMusicPresetId: string | null;
+  recommendedAudioMasteringPresetId: string | null;
+  recommendedNarrationVoicePackId: string | null;
+  defaultShotDurationSeconds: number | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EditingStyleSummary {
+  presetId: string;
+  presetName: string;
+  useCase: EditingReferenceCategory;
+  pacing: EditingReferencePacing;
+  cutPace: number | null;
+  zoomStyle: EditingReferenceZoomStyle;
+  flashStyle: EditingReferenceFlashStyle;
+  transitionStyle: EditingReferenceTransitionStyle;
+  captionStyle: EditingReferenceCaptionStyle;
+  narrationStyle: EditingReferenceNarrationStyle;
+  musicStyle: EditingReferenceMusicStyle;
+  sfxStyle: EditingReferenceSfxStyle;
+  hookStyle: EditingReferenceHookStyle;
+  ctaStyle: EditingReferenceCtaStyle;
+  microclipPlacement: EditingReferenceMicroclipPlacement;
+  defaultShotDurationSeconds: number | null;
+  recommendedMusicPresetId: string | null;
+  recommendedAudioMasteringPresetId: string | null;
+  recommendedNarrationVoicePackId: string | null;
+  notes: string | null;
+}
+
+export interface EditingReferenceSuggestion {
+  templateId: string;
+  preset: EditingReferencePreset;
+  origin: "saved" | "catalog";
+  reason: string;
+}
+
+export interface EditingReferenceAnalysisResponse {
+  reference: EditingReference;
+  analysis: {
+    status: "completed" | "skipped";
+    referencePath: string;
+    title: string | null;
+    category: EditingReferenceCategory | null;
+    durationSeconds: number | null;
+    approximateSceneChanges: number | null;
+    averageCutPaceSeconds: number | null;
+    beatIntensity: EditingReferenceBeatIntensity;
+    pacing: EditingReferencePacing;
+    audioEnergy: number | null;
+    warnings: string[];
+    diagnostics: string[];
+  };
+  summary: string;
+}
+
+export interface BuildEditingReferencePresetResponse {
+  preset: EditingReferencePreset;
+  summary: string;
 }
 
 export interface SelectMusicResponse {
@@ -2182,6 +2461,8 @@ export interface ProjectPayload {
   durationTarget: number | null;
   format: string;
   templateId?: string | null;
+  editingReferencePresetId?: string | null;
+  editingStyleSummary?: EditingStyleSummary | null;
   defaultCaptionStyle?: string | null;
   backgroundMusicAssetId?: string | null;
   musicPresetId?: string | null;
@@ -2660,6 +2941,9 @@ export interface RenderBlueprintScene {
   effectiveAssetReason?: string | null;
   visualSourceMode?: VisualSourceMode | null;
   renderReadyVisual?: boolean;
+  suggestedShotDurationSeconds?: number | null;
+  suggestedMicroclipPlacement?: EditingReferenceMicroclipPlacement | null;
+  suggestedIntensity?: EditingReferenceBeatIntensity | null;
   transition: string;
   visualPreset: ResolvedScenePreset;
   captionStyle: ResolvedCaptionStyle & {
@@ -2729,6 +3013,9 @@ export interface RenderBlueprintResponse {
   hasEditorialMicroclips: boolean;
   microclipCount: number;
   totalMicroclipDurationSeconds: number;
+  editingReferencePresetId?: string | null;
+  editingReferencePresetName?: string | null;
+  editingStyleSummary?: EditingStyleSummary | null;
   selectedMusicAssetId?: string | null;
   selectedMusicAssetPath?: string | null;
   musicPresetId?: string | null;
@@ -2850,6 +3137,8 @@ export interface StudioProject {
   durationTarget: number | null;
   format: string;
   templateId?: string | null;
+  editingReferencePresetId?: string | null;
+  editingStyleSummary?: EditingStyleSummary | null;
   defaultCaptionStyle?: string | null;
   backgroundMusicAssetId?: string | null;
   musicPresetId?: string | null;

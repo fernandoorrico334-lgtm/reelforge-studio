@@ -26,6 +26,8 @@ Ajudar qualquer futura sessao do Codex a expandir ReelForge Studio sem quebrar a
   em vez de misturar catalogos diretamente em apps;
 - manter tambem `packages/audio-engine` como fonte unica dos perfis de musica,
   presets editoriais, auto-select e beat sync;
+- manter `packages/editing-reference-engine` como fonte unica dos catalogos,
+  heuristicas e builders de presets derivados de referencias locais;
 - ao tocar em Music Library, nao duplicar enums de mood/genre/energy/licenca no
   frontend ou na API; consumir os contratos compartilhados;
 - manter `packages/narration-engine` como fonte unica das regras de narracao
@@ -42,6 +44,8 @@ Ajudar qualquer futura sessao do Codex a expandir ReelForge Studio sem quebrar a
 - manter o FFmpeg encapsulado no worker e nos adapters server-side.
 - manter `storage/inbox` como fronteira de intake manual e nunca versionar
   arquivos reais do usuario colocados ali;
+- manter `storage/references` como area de benchmarking editorial local e nunca
+  versionar os MP4s reais usados como referencia;
 - ao tocar em `MediaCollection` e `MediaCandidate`, preservar a ideia de
   revisao humana antes da promocao para `Asset`;
 - nao mover, apagar ou sobrescrever originais do inbox sem pedido explicito;
@@ -65,6 +69,9 @@ Ajudar qualquer futura sessao do Codex a expandir ReelForge Studio sem quebrar a
   respeitar `licenseStatus` como sinal operacional;
 - ao tocar em beat sync, manter fallback claro para grid ritmico quando o BPM
   tiver baixa confianca ou quando FFmpeg/ffprobe nao puderem rodar;
+- ao tocar em editing references, usar as referencias apenas para extrair
+  padroes editoriais e nunca copiar, redistribuir ou renderizar o conteudo
+  original;
 - ao tocar no app web, manter o polling de render ativo apenas quando houver
   jobs `queued` ou `processing`.
 - ao tocar em `Channel`, tratar defaults como identidade editorial de producao,
@@ -204,6 +211,15 @@ ser:
 7. se o ambiente permitir spawn: `npm run smoke:render-with-music-sync`
 8. validar `/music-library`
 9. validar `/projects/[id]`
+
+Ao tocar em Editing Reference Presets, a sequencia minima passa a ser:
+
+1. `npm run db:generate`
+2. `npm run build`
+3. `npm run typecheck`
+4. `npm run smoke:editing-reference-presets`
+5. validar `/editing-references`
+6. validar `/projects/[id]`
 
 Ao tocar no Media Collector, a sequencia minima passa a ser:
 

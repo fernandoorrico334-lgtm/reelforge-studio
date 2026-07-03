@@ -46,6 +46,8 @@ export interface MemoryVideoProjectRecord {
   durationTarget: number | null;
   format: string;
   templateId: string | null;
+  editingReferencePresetId: string | null;
+  editingStyleSummary: string | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
   musicPresetId: string | null;
@@ -140,6 +142,78 @@ export interface MemoryEditorialMicroclipRecord {
   volumeMode: EditorialMicroclipVolumeMode;
   orderIndex: number;
   metadata: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryEditingReferenceRecord {
+  id: string;
+  title: string;
+  description: string | null;
+  assetId: string | null;
+  localPath: string | null;
+  sourceType: "local_file" | "asset_library";
+  category:
+    | "football"
+    | "documentary"
+    | "true_crime"
+    | "cinematic"
+    | "viral"
+    | "generic";
+  status: "draft" | "analyzed" | "preset_ready";
+  durationSeconds: number | null;
+  averageCutPaceSeconds: number | null;
+  beatIntensity: "low" | "medium" | "high" | "extreme";
+  pacing: "slow" | "medium" | "fast" | "hyper";
+  zoomStyle: "none" | "subtle" | "medium" | "aggressive";
+  flashStyle: "none" | "low" | "medium" | "high";
+  transitionStyle: "cut" | "fast_cut" | "flash_cut" | "smooth" | "mixed";
+  captionStyle: "none" | "center_bold" | "lower_clean" | "kinetic" | "dramatic";
+  narrationStyle: "none" | "calm" | "documentary" | "hype" | "aggressive" | "epic";
+  musicStyle: "none" | "hype" | "dark" | "epic" | "documentary" | "viral";
+  sfxStyle: "none" | "low" | "medium" | "high";
+  hookStyle: "question" | "warning" | "explosive" | "curiosity" | "ranking" | "story";
+  ctaStyle: "none" | "short" | "strong" | "subtle";
+  microclipPlacement: "none" | "intro" | "middle" | "climax" | "outro" | "multiple";
+  visualStyleNotes: string | null;
+  audioStyleNotes: string | null;
+  editingStyleNotes: string | null;
+  analysisWarnings: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryEditingReferencePresetRecord {
+  id: string;
+  referenceId: string | null;
+  name: string;
+  slug: string;
+  description: string;
+  useCase:
+    | "football"
+    | "documentary"
+    | "true_crime"
+    | "cinematic"
+    | "viral"
+    | "generic";
+  cutPace: number | null;
+  pacing: "slow" | "medium" | "fast" | "hyper";
+  zoomStyle: "none" | "subtle" | "medium" | "aggressive";
+  flashStyle: "none" | "low" | "medium" | "high";
+  transitionStyle: "cut" | "fast_cut" | "flash_cut" | "smooth" | "mixed";
+  captionStyle: "none" | "center_bold" | "lower_clean" | "kinetic" | "dramatic";
+  narrationStyle: "none" | "calm" | "documentary" | "hype" | "aggressive" | "epic";
+  musicStyle: "none" | "hype" | "dark" | "epic" | "documentary" | "viral";
+  sfxStyle: "none" | "low" | "medium" | "high";
+  hookStyle: "question" | "warning" | "explosive" | "curiosity" | "ranking" | "story";
+  ctaStyle: "none" | "short" | "strong" | "subtle";
+  microclipPlacement: "none" | "intro" | "middle" | "climax" | "outro" | "multiple";
+  recommendedTemplates: string[];
+  recommendedMusicPresetId: string | null;
+  recommendedAudioMasteringPresetId: string | null;
+  recommendedNarrationVoicePackId: string | null;
+  defaultShotDurationSeconds: number | null;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -318,6 +392,8 @@ interface MemoryStudioState {
   visualGenerationJobs: any[];
   narrationJobs: MemoryNarrationJobRecord[];
   editorialMicroclips: MemoryEditorialMicroclipRecord[];
+  editingReferences: MemoryEditingReferenceRecord[];
+  editingReferencePresets: MemoryEditingReferencePresetRecord[];
 }
 
 function createInitialState(): MemoryStudioState {
@@ -852,6 +928,29 @@ function createInitialState(): MemoryStudioState {
         durationTarget: 30,
         format: "9:16",
         templateId: "anime_dark",
+        editingReferencePresetId: "editing-preset-true-crime-casefile",
+        editingStyleSummary: JSON.stringify({
+          presetId: "editing-preset-true-crime-casefile",
+          presetName: "True Crime Casefile",
+          useCase: "true_crime",
+          pacing: "fast",
+          cutPace: 2.8,
+          zoomStyle: "subtle",
+          flashStyle: "low",
+          transitionStyle: "mixed",
+          captionStyle: "lower_clean",
+          narrationStyle: "documentary",
+          musicStyle: "dark",
+          sfxStyle: "medium",
+          hookStyle: "warning",
+          ctaStyle: "subtle",
+          microclipPlacement: "middle",
+          defaultShotDurationSeconds: 2.8,
+          recommendedMusicPresetId: "true_crime_dark",
+          recommendedAudioMasteringPresetId: "true_crime_dark",
+          recommendedNarrationVoicePackId: "true_crime_dark_ptbr",
+          notes: "Equilibra contexto, inserts curtos e fechamento investigativo."
+        }),
         defaultCaptionStyle: "anime_punch",
         backgroundMusicAssetId: "asset-music-001",
         musicPresetId: "true_crime_dark",
@@ -979,7 +1078,143 @@ function createInitialState(): MemoryStudioState {
     renderJobs: [],
     visualGenerationJobs: [],
     narrationJobs: [],
-    editorialMicroclips: []
+    editorialMicroclips: [],
+    editingReferences: [
+      {
+        id: "editing-reference-aurora",
+        title: "Aurora Case Editorial Cut",
+        description:
+          "Referencia local para documentario sombrio com cortes curtos, captions limpas e narrativa investigativa.",
+        assetId: "asset-dark-001",
+        localPath: "storage/references/true-crime/aurora-case-cut.mp4",
+        sourceType: "asset_library",
+        category: "true_crime",
+        status: "preset_ready",
+        durationSeconds: 24.6,
+        averageCutPaceSeconds: 2.8,
+        beatIntensity: "medium",
+        pacing: "fast",
+        zoomStyle: "subtle",
+        flashStyle: "low",
+        transitionStyle: "mixed",
+        captionStyle: "lower_clean",
+        narrationStyle: "documentary",
+        musicStyle: "dark",
+        sfxStyle: "medium",
+        hookStyle: "warning",
+        ctaStyle: "subtle",
+        microclipPlacement: "middle",
+        visualStyleNotes: "Arquivos, close lento e luz fria.",
+        audioStyleNotes: "Trilha baixa com ducking controlado e hits discretos.",
+        editingStyleNotes:
+          "Alterna contexto com inserts curtos e deixa perguntas abertas no final.",
+        analysisWarnings: [
+          "Referencia de seed em modo mock. O arquivo de video nao acompanha o repositorio."
+        ],
+        createdAt,
+        updatedAt: createdAt
+      },
+      {
+        id: "editing-reference-stadium",
+        title: "Stadium Pressure Short",
+        description:
+          "Referencia esportiva local para cortes ritmados, flashes pontuais e microclips de impacto.",
+        assetId: null,
+        localPath: "storage/references/football/stadium-pressure-short.mp4",
+        sourceType: "local_file",
+        category: "football",
+        status: "analyzed",
+        durationSeconds: 19.2,
+        averageCutPaceSeconds: 1.7,
+        beatIntensity: "high",
+        pacing: "hyper",
+        zoomStyle: "aggressive",
+        flashStyle: "medium",
+        transitionStyle: "flash_cut",
+        captionStyle: "center_bold",
+        narrationStyle: "hype",
+        musicStyle: "hype",
+        sfxStyle: "high",
+        hookStyle: "explosive",
+        ctaStyle: "strong",
+        microclipPlacement: "climax",
+        visualStyleNotes: "Punch-ins rapidos, freeze-frame e crowd overlays.",
+        audioStyleNotes: "Phonk alta energia com hits e whooshes curtos.",
+        editingStyleNotes:
+          "Mantem bloco de pressao crescente e guarda o microclip principal para a reta final.",
+        analysisWarnings: [
+          "BPM e cortes representam uma estimativa curada manualmente para desenvolvimento local."
+        ],
+        createdAt,
+        updatedAt: createdAt
+      }
+    ],
+    editingReferencePresets: [
+      {
+        id: "editing-preset-true-crime-casefile",
+        referenceId: "editing-reference-aurora",
+        name: "True Crime Casefile",
+        slug: "true-crime-casefile",
+        description:
+          "Preset editorial para dossies, casos e narrativas documentais sombrias com progressao controlada.",
+        useCase: "true_crime",
+        cutPace: 2.8,
+        pacing: "fast",
+        zoomStyle: "subtle",
+        flashStyle: "low",
+        transitionStyle: "mixed",
+        captionStyle: "lower_clean",
+        narrationStyle: "documentary",
+        musicStyle: "dark",
+        sfxStyle: "medium",
+        hookStyle: "warning",
+        ctaStyle: "subtle",
+        microclipPlacement: "middle",
+        recommendedTemplates: ["true_crime", "mystery_doc", "history_dark"],
+        recommendedMusicPresetId: "true_crime_dark",
+        recommendedAudioMasteringPresetId: "true_crime_dark",
+        recommendedNarrationVoicePackId: "true_crime_dark_ptbr",
+        defaultShotDurationSeconds: 2.8,
+        notes: "Equilibra contexto, inserts curtos e fechamento investigativo.",
+        createdAt,
+        updatedAt: createdAt
+      },
+      {
+        id: "editing-preset-football-flash-pressure",
+        referenceId: "editing-reference-stadium",
+        name: "Football Flash Pressure",
+        slug: "football-flash-pressure",
+        description:
+          "Preset premium para reels esportivos com microclips curtos, flash-cut e captions centrais de alto impacto.",
+        useCase: "football",
+        cutPace: 1.7,
+        pacing: "hyper",
+        zoomStyle: "aggressive",
+        flashStyle: "medium",
+        transitionStyle: "flash_cut",
+        captionStyle: "center_bold",
+        narrationStyle: "hype",
+        musicStyle: "hype",
+        sfxStyle: "high",
+        hookStyle: "explosive",
+        ctaStyle: "strong",
+        microclipPlacement: "climax",
+        recommendedTemplates: [
+          "sports_hype",
+          "player_threat_analysis",
+          "rivalry_hype",
+          "match_preview"
+        ],
+        recommendedMusicPresetId: "football_hype",
+        recommendedAudioMasteringPresetId: "football_hype",
+        recommendedNarrationVoicePackId: "sports_hype_ptbr",
+        defaultShotDurationSeconds: 1.7,
+        notes:
+          "Empurra energia desde o hook e guarda a imagem de maior impacto para o terco final.",
+        createdAt,
+        updatedAt: createdAt
+      }
+    ]
   };
 }
 

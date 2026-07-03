@@ -351,6 +351,120 @@ enum CharacterReferenceType {
   other
 }
 
+enum EditingReferenceSourceType {
+  local_file
+  asset_library
+}
+
+enum EditingReferenceCategory {
+  football
+  documentary
+  true_crime
+  cinematic
+  viral
+  generic
+}
+
+enum EditingReferenceStatus {
+  draft
+  analyzed
+  preset_ready
+}
+
+enum EditingReferenceBeatIntensity {
+  low
+  medium
+  high
+  extreme
+}
+
+enum EditingReferencePacing {
+  slow
+  medium
+  fast
+  hyper
+}
+
+enum EditingReferenceZoomStyle {
+  none
+  subtle
+  medium
+  aggressive
+}
+
+enum EditingReferenceFlashStyle {
+  none
+  low
+  medium
+  high
+}
+
+enum EditingReferenceTransitionStyle {
+  cut
+  fast_cut
+  flash_cut
+  smooth
+  mixed
+}
+
+enum EditingReferenceCaptionStyle {
+  none
+  center_bold
+  lower_clean
+  kinetic
+  dramatic
+}
+
+enum EditingReferenceNarrationStyle {
+  none
+  calm
+  documentary
+  hype
+  aggressive
+  epic
+}
+
+enum EditingReferenceMusicStyle {
+  none
+  hype
+  dark
+  epic
+  documentary
+  viral
+}
+
+enum EditingReferenceSfxStyle {
+  none
+  low
+  medium
+  high
+}
+
+enum EditingReferenceHookStyle {
+  question
+  warning
+  explosive
+  curiosity
+  ranking
+  story
+}
+
+enum EditingReferenceCtaStyle {
+  none
+  short
+  strong
+  subtle
+}
+
+enum EditingReferenceMicroclipPlacement {
+  none
+  intro
+  middle
+  climax
+  outro
+  multiple
+}
+
 model Channel {
   id                       String            @id @default(cuid())
   name                     String            @unique
@@ -421,11 +535,81 @@ model Asset {
   visualGenerationJobs          VisualGenerationJob[]        @relation("VisualJobGeneratedAsset")
   narrationJobs                 NarrationJob[]               @relation("NarrationJobGeneratedAsset")
   editorialMicroclips           EditorialMicroclip[]
+  editingReferences             EditingReference[]
 
   @@index([type, category])
   @@index([franchise, character])
   @@index([collectionId, createdAt])
   @@index([sourceProvider])
+}
+
+model EditingReference {
+  id                    String                            @id @default(cuid())
+  title                 String
+  description           String?
+  assetId               String?
+  localPath             String?
+  sourceType            EditingReferenceSourceType       @default(local_file)
+  category              EditingReferenceCategory         @default(generic)
+  status                EditingReferenceStatus           @default(draft)
+  durationSeconds       Float?
+  averageCutPaceSeconds Float?
+  beatIntensity         EditingReferenceBeatIntensity    @default(medium)
+  pacing                EditingReferencePacing           @default(medium)
+  zoomStyle             EditingReferenceZoomStyle        @default(subtle)
+  flashStyle            EditingReferenceFlashStyle       @default(none)
+  transitionStyle       EditingReferenceTransitionStyle  @default(cut)
+  captionStyle          EditingReferenceCaptionStyle     @default(lower_clean)
+  narrationStyle        EditingReferenceNarrationStyle   @default(calm)
+  musicStyle            EditingReferenceMusicStyle       @default(none)
+  sfxStyle              EditingReferenceSfxStyle         @default(none)
+  hookStyle             EditingReferenceHookStyle        @default(curiosity)
+  ctaStyle              EditingReferenceCtaStyle         @default(short)
+  microclipPlacement    EditingReferenceMicroclipPlacement @default(none)
+  visualStyleNotes      String?
+  audioStyleNotes       String?
+  editingStyleNotes     String?
+  analysisWarnings      String                            @default("[]")
+  createdAt             DateTime                          @default(now())
+  updatedAt             DateTime                          @updatedAt
+  asset                 Asset?                            @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  presets               EditingReferencePreset[]
+
+  @@index([category, status])
+  @@index([assetId])
+}
+
+model EditingReferencePreset {
+  id                                String                              @id @default(cuid())
+  referenceId                       String?
+  name                              String
+  slug                              String                              @unique
+  description                       String
+  useCase                           EditingReferenceCategory            @default(generic)
+  cutPace                           Float?
+  pacing                            EditingReferencePacing              @default(medium)
+  zoomStyle                         EditingReferenceZoomStyle           @default(subtle)
+  flashStyle                        EditingReferenceFlashStyle          @default(none)
+  transitionStyle                   EditingReferenceTransitionStyle     @default(cut)
+  captionStyle                      EditingReferenceCaptionStyle        @default(lower_clean)
+  narrationStyle                    EditingReferenceNarrationStyle      @default(calm)
+  musicStyle                        EditingReferenceMusicStyle          @default(none)
+  sfxStyle                          EditingReferenceSfxStyle            @default(none)
+  hookStyle                         EditingReferenceHookStyle           @default(curiosity)
+  ctaStyle                          EditingReferenceCtaStyle            @default(short)
+  microclipPlacement                EditingReferenceMicroclipPlacement  @default(none)
+  recommendedTemplates              String                              @default("[]")
+  recommendedMusicPresetId          String?
+  recommendedAudioMasteringPresetId String?
+  recommendedNarrationVoicePackId   String?
+  defaultShotDurationSeconds        Float?
+  notes                             String?
+  createdAt                         DateTime                            @default(now())
+  updatedAt                         DateTime                            @updatedAt
+  reference                         EditingReference?                   @relation(fields: [referenceId], references: [id], onDelete: SetNull)
+
+  @@index([referenceId])
+  @@index([useCase, slug])
 }
 
 model MusicAssetProfile {
@@ -724,6 +908,8 @@ model VideoProject {
   durationTarget        Int?
   format                String            @default("9:16")
   templateId            String?
+  editingReferencePresetId String?
+  editingStyleSummary   String?
   defaultCaptionStyle   String?
   backgroundMusicAssetId String?
   musicPresetId         String?

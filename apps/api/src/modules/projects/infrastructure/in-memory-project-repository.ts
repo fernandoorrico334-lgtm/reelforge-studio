@@ -6,11 +6,24 @@ import {
 import type { ProjectRepository } from "../application/project-repository.js";
 import type {
   CreateProjectInput,
+  EditingStyleSummary,
   ProjectScene,
   StudioProject,
   UpdateProjectInput,
   UpdateSceneInput
 } from "../domain/project.js";
+
+function parseJsonValue<T>(value: string | null, fallback: T): T {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 export function createProjectRepository(): ProjectRepository {
   const state = getMemoryStudioState();
@@ -73,6 +86,10 @@ export function createProjectRepository(): ProjectRepository {
 
     return {
       ...project,
+      editingStyleSummary: parseJsonValue<EditingStyleSummary | null>(
+        project.editingStyleSummary,
+        null
+      ),
       channel,
       scenes: listMappedScenes(project.id)
     };
@@ -112,7 +129,11 @@ export function createProjectRepository(): ProjectRepository {
         sfxVolume: input.sfxVolume ?? 0.7,
         enableAudioDucking: input.enableAudioDucking ?? false,
         duckingLevel: input.duckingLevel ?? 0.35,
-        musicPresetId: input.musicPresetId ?? null
+        musicPresetId: input.musicPresetId ?? null,
+        editingReferencePresetId: input.editingReferencePresetId ?? null,
+        editingStyleSummary: input.editingStyleSummary
+          ? JSON.stringify(input.editingStyleSummary)
+          : null
       };
 
       state.videoProjects.unshift(project);
@@ -149,6 +170,16 @@ export function createProjectRepository(): ProjectRepository {
             : existingProject.enableAudioDucking,
         duckingLevel:
           "duckingLevel" in input ? input.duckingLevel ?? 0.35 : existingProject.duckingLevel,
+        editingReferencePresetId:
+          "editingReferencePresetId" in input
+            ? input.editingReferencePresetId ?? null
+            : existingProject.editingReferencePresetId,
+        editingStyleSummary:
+          "editingStyleSummary" in input
+            ? input.editingStyleSummary
+              ? JSON.stringify(input.editingStyleSummary)
+              : null
+            : existingProject.editingStyleSummary,
         updatedAt: createTimestamp()
       };
 

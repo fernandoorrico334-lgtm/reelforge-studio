@@ -12,6 +12,7 @@
     "@reelforge/audio-engine": "file:../../packages/audio-engine",
     "@reelforge/caption-engine": "file:../../packages/caption-engine",
     "@reelforge/cinematic-engine": "file:../../packages/cinematic-engine",
+    "@reelforge/editing-reference-engine": "file:../../packages/editing-reference-engine",
     "@reelforge/narration-engine": "file:../../packages/narration-engine",
     "@reelforge/prompt-engine": "file:../../packages/prompt-engine",
     "@reelforge/hybrid-visual-engine": "file:../../packages/hybrid-visual-engine",

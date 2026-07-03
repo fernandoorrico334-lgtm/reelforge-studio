@@ -302,12 +302,36 @@ Entregue:
   `npm run smoke:music-library` e
   `npm run smoke:render-with-music-sync`.
 
+## Etapa 11G - Editing Reference Presets
+
+Entregue:
+
+- migration `editing_reference_presets`;
+- modelos `EditingReference` e `EditingReferencePreset`;
+- package `packages/editing-reference-engine`;
+- endpoints:
+  `GET /editing-references`,
+  `POST /editing-references`,
+  `GET /editing-references/:id`,
+  `PUT /editing-references/:id`,
+  `DELETE /editing-references/:id`,
+  `POST /editing-references/:id/analyze`,
+  `POST /editing-references/:id/build-preset`,
+  `GET /editing-reference-presets`,
+  `POST /editing-reference-presets`,
+  `GET /editing-reference-presets/:id`,
+  `PUT /editing-reference-presets/:id`,
+  `DELETE /editing-reference-presets/:id` e
+  `GET /editing-reference-presets/suggestions`;
+- pagina `/editing-references`;
+- sugestoes de presets editoriais por template em `/projects/[id]`;
+- uso seguro de `storage/references/` para reels locais fora do Git;
+- smoke `npm run smoke:editing-reference-presets`.
+
 ## Proxima etapa operacional sugerida
 
-- Etapa 10I concluida: Workflow Packs + Image Quality Presets para ComfyUI
-  local, com endpoints de catalogo/sugestao, UI em `/projects/[id]`,
-  `/prompt-lab`, `/characters` e `/research/[id]`, metadata em
-  `VisualGenerationJob` e smoke offline `npm run smoke:workflow-packs`.
+- aprofundar a analise editorial por blocos, nao apenas por media global;
+- conectar presets de referencia a templates customizados por canal;
 - concorrencia controlada para visual generation;
 - prioridades, backoff e limites por worker;
 - retries automaticos com politica configuravel;

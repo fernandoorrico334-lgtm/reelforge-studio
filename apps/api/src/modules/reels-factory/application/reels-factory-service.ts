@@ -5,9 +5,11 @@ import {
   getReelsFactoryTemplates,
   type ReelsFactoryPreview
 } from "@reelforge/story-engine/reels-factory";
+import { buildEditingStyleSummaryFromPreset } from "@reelforge/editing-reference-engine";
 import { getTemplateById } from "@reelforge/templates";
 import { NotFoundError } from "../../../shared/errors.js";
 import type { ChannelRepository } from "../../channels/application/channel-repository.js";
+import type { EditingReferenceRepository } from "../../editing-references/application/editing-reference-repository.js";
 import type { StudioChannel } from "../../channels/domain/channel.js";
 import type { ProjectRepository } from "../../projects/application/project-repository.js";
 import type {
@@ -109,6 +111,10 @@ function buildProjectInput(
     durationTarget: preview.durationSeconds,
     format: "9:16",
     templateId: preview.templateId,
+    editingReferencePresetId: preview.editingReferencePresetId ?? null,
+    editingStyleSummary:
+      (preview.editingStyleSummary as CreateProjectInput["editingStyleSummary"]) ??
+      null,
     defaultCaptionStyle: resolvedTemplate?.defaultCaptionStyle ?? null,
     backgroundMusicAssetId: null,
     voiceoverAssetId: null,
@@ -117,7 +123,9 @@ function buildProjectInput(
     voiceVolume: 1,
     sfxVolume: 0.7,
     enableAudioDucking: true,
-    duckingLevel: 0.35
+    duckingLevel: 0.35,
+    musicPresetId:
+      preview.editingStyleSummary?.recommendedMusicPresetId ?? null
   };
 }
 
@@ -181,18 +189,30 @@ export async function getReelsFactoryTemplate(templateId: string) {
 }
 
 export async function previewReelsFactory(
-  input: ReelsFactoryPreviewInput
+  input: ReelsFactoryPreviewInput,
+  editingReferenceRepository?: EditingReferenceRepository
 ) {
-  return generateReelsFactoryPreview(input);
+  const preset =
+    input.editingReferencePresetId && editingReferenceRepository
+      ? await editingReferenceRepository.getPresetById(
+          input.editingReferencePresetId
+        )
+      : null;
+
+  return generateReelsFactoryPreview({
+    ...input,
+    editingStyleSummary: preset ? buildEditingStyleSummaryFromPreset(preset) : null
+  });
 }
 
 export async function createReelsFactoryProject(
   projectRepository: ProjectRepository,
   channelRepository: ChannelRepository,
-  input: ReelsFactoryPreviewInput
+  input: ReelsFactoryPreviewInput,
+  editingReferenceRepository?: EditingReferenceRepository
 ): Promise<ReelsFactoryCreateProjectResponse> {
   const channel = await resolveFactoryChannel(channelRepository, input.channelId);
-  const preview = generateReelsFactoryPreview(input);
+  const preview = await previewReelsFactory(input, editingReferenceRepository);
   const createdProject = await projectRepository.create(
     buildProjectInput(channel.id, preview)
   );
@@ -225,7 +245,8 @@ export async function createReelsFactoryProject(
 export async function createReelsFactoryBatch(
   projectRepository: ProjectRepository,
   channelRepository: ChannelRepository,
-  input: ReelsFactoryBatchInput
+  input: ReelsFactoryBatchInput,
+  editingReferenceRepository?: EditingReferenceRepository
 ): Promise<ReelsFactoryBatchResponse> {
   const projects: ReelsFactoryBatchProjectResult[] = [];
   const failures: ReelsFactoryBatchResponse["failures"] = [];
@@ -241,11 +262,13 @@ export async function createReelsFactoryBatch(
           subject: item.subject,
           angle: item.angle,
           templateId: input.templateId,
+          editingReferencePresetId: input.editingReferencePresetId ?? null,
           tone: input.tone,
           durationSeconds: input.durationSeconds,
           language: input.language,
           includeMicroclip: input.includeMicroclip
-        }
+        },
+        editingReferenceRepository
       );
 
       projects.push({

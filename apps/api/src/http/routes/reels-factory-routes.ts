@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ChannelRepository } from "../../modules/channels/application/channel-repository.js";
+import type { EditingReferenceRepository } from "../../modules/editing-references/application/editing-reference-repository.js";
 import type { ProjectRepository } from "../../modules/projects/application/project-repository.js";
 import {
   createReelsFactoryBatch,
@@ -22,6 +23,7 @@ import {
 
 interface ReelsFactoryRouteDependencies {
   channelRepository: ChannelRepository;
+  editingReferenceRepository: EditingReferenceRepository;
   projectRepository: ProjectRepository;
 }
 
@@ -64,7 +66,10 @@ export async function handleReelsFactoryRoute(
       sendJson(
         response,
         200,
-        await previewReelsFactory(validateReelsFactoryPreviewInput(payload))
+        await previewReelsFactory(
+          validateReelsFactoryPreviewInput(payload),
+          dependencies.editingReferenceRepository
+        )
       );
       return true;
     }
@@ -82,7 +87,8 @@ export async function handleReelsFactoryRoute(
         await createReelsFactoryProject(
           dependencies.projectRepository,
           dependencies.channelRepository,
-          validateReelsFactoryPreviewInput(payload)
+          validateReelsFactoryPreviewInput(payload),
+          dependencies.editingReferenceRepository
         )
       );
       return true;
@@ -101,7 +107,8 @@ export async function handleReelsFactoryRoute(
         await createReelsFactoryBatch(
           dependencies.projectRepository,
           dependencies.channelRepository,
-          validateReelsFactoryBatchInput(payload)
+          validateReelsFactoryBatchInput(payload),
+          dependencies.editingReferenceRepository
         )
       );
       return true;
@@ -113,4 +120,3 @@ export async function handleReelsFactoryRoute(
     return true;
   }
 }
-

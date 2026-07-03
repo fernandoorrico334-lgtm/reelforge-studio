@@ -55,6 +55,9 @@
       "@reelforge/caption-engine": [
         "packages/caption-engine/src/index.ts"
       ],
+      "@reelforge/editing-reference-engine": [
+        "packages/editing-reference-engine/src/index.ts"
+      ],
       "@reelforge/templates": [
         "packages/templates/src/index.ts"
       ]
