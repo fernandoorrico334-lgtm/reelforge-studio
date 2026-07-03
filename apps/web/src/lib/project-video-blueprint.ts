@@ -41,7 +41,9 @@ function mapBlueprintAsset(asset: StudioAsset | null) {
     height: asset.height,
     mimeType: asset.mimeType,
     extension: asset.extension,
-    sourceProvider: asset.sourceProvider
+    sourceProvider: asset.sourceProvider,
+    musicProfile: asset.musicProfile ?? null,
+    sfxProfile: asset.sfxProfile ?? null
   };
 }
 
@@ -82,6 +84,7 @@ function toBlueprintProjectInput(
     templateId: project.templateId ?? null,
     defaultCaptionStyle: project.defaultCaptionStyle ?? null,
     backgroundMusicAssetId: project.backgroundMusicAssetId ?? null,
+    musicPresetId: project.musicPresetId ?? null,
     backgroundMusicAsset: mapBlueprintAsset(
       resolveAssetById(assetsCatalog, project.backgroundMusicAssetId ?? null)
     ),
@@ -245,6 +248,7 @@ export function buildLocalAudioPlan(
       title: project.title,
       durationTarget: project.durationTarget,
       backgroundMusicAssetId: project.backgroundMusicAssetId ?? null,
+      musicPresetId: project.musicPresetId ?? null,
       voiceoverAssetId: project.voiceoverAssetId ?? null,
       audioMood: project.audioMood ?? null,
       musicVolume: project.musicVolume ?? null,

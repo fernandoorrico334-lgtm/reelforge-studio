@@ -254,6 +254,93 @@ enum EditorialMicroclipVolumeMode {
   keep_original
 }
 
+enum MusicSourceType {
+  local_upload
+  user_owned
+  royalty_free
+  licensed_pack
+  unknown
+}
+
+enum AudioLicenseStatus {
+  owned
+  royalty_free
+  licensed
+  platform_only
+  unknown
+}
+
+enum MusicMood {
+  hype
+  dark
+  epic
+  suspense
+  emotional
+  aggressive
+  cinematic
+  calm
+  documentary
+  viral
+}
+
+enum MusicGenre {
+  phonk
+  trap
+  drill
+  cinematic
+  orchestral
+  electronic
+  ambient
+  rock
+  generic
+}
+
+enum MusicEnergy {
+  low
+  medium
+  high
+  extreme
+}
+
+enum MusicUseCase {
+  football
+  shorts
+  true_crime
+  documentary
+  cinematic
+  motivational
+  generic
+}
+
+enum SfxCategory {
+  whoosh
+  hit
+  riser
+  boom
+  crowd
+  whistle
+  impact
+  flash
+  transition
+  ambience
+}
+
+enum SfxIntensity {
+  low
+  medium
+  high
+  extreme
+}
+
+enum SfxUseCase {
+  football
+  transition
+  impact_moment
+  reveal
+  microclip
+  generic
+}
+
 enum CharacterReferenceType {
   face
   full_body
@@ -326,6 +413,8 @@ model Asset {
   generatedScenes               Scene[]                      @relation("SceneGeneratedAsset")
   generatedNarrationScenes      Scene[]                      @relation("SceneGeneratedNarrationAsset")
   sfxScenes                     Scene[]                      @relation("SceneSfxAsset")
+  musicProfile                  MusicAssetProfile?
+  sfxProfile                    SfxAssetProfile?
   characterReferences           CharacterReference[]         @relation("CharacterReferenceAsset")
   fulfilledResearchRequirements ResearchAssetRequirement[]   @relation("ResearchRequirementFulfilledAsset")
   generatedResearchRequirements ResearchAssetRequirement[]   @relation("ResearchRequirementGeneratedAsset")
@@ -337,6 +426,49 @@ model Asset {
   @@index([franchise, character])
   @@index([collectionId, createdAt])
   @@index([sourceProvider])
+}
+
+model MusicAssetProfile {
+  assetId          String             @id
+  title            String
+  artist           String?
+  sourceType       MusicSourceType    @default(unknown)
+  licenseStatus    AudioLicenseStatus @default(unknown)
+  mood             MusicMood          @default(cinematic)
+  genre            MusicGenre         @default(generic)
+  bpm              Float?
+  bpmConfidence    Float              @default(0)
+  energy           MusicEnergy        @default(medium)
+  useCase          MusicUseCase       @default(generic)
+  durationSeconds  Float?
+  loudness         Float?
+  beatMarkers      String             @default("[]")
+  energyTimeline   String             @default("[]")
+  notes            String?
+  safetyWarning    String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  asset            Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([licenseStatus, useCase, energy])
+  @@index([mood, genre, bpm])
+}
+
+model SfxAssetProfile {
+  assetId          String             @id
+  title            String
+  category         SfxCategory
+  intensity        SfxIntensity       @default(medium)
+  durationSeconds  Float?
+  useCase          SfxUseCase         @default(generic)
+  licenseStatus    AudioLicenseStatus @default(unknown)
+  notes            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  asset            Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([category, intensity])
+  @@index([licenseStatus, useCase])
 }
 
 model MediaCollection {
@@ -594,6 +726,7 @@ model VideoProject {
   templateId            String?
   defaultCaptionStyle   String?
   backgroundMusicAssetId String?
+  musicPresetId         String?
   voiceoverAssetId      String?
   audioMood             String?
   musicVolume           Float             @default(0.18)

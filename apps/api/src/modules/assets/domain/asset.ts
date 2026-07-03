@@ -1,4 +1,8 @@
 import { ValidationError } from "../../../shared/errors.js";
+import type {
+  MusicAssetProfile,
+  SfxAssetProfile
+} from "@reelforge/audio-engine";
 
 export const assetTypes = [
   "IMAGE",
@@ -80,6 +84,8 @@ export interface StudioAsset {
   downloadedAt: string | null;
   collectionId: string | null;
   usageNotes: string | null;
+  musicProfile?: MusicAssetProfile | null;
+  sfxProfile?: SfxAssetProfile | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -7,9 +7,21 @@ import {
   type StudioAsset,
   type UpdateAssetInput
 } from "../domain/asset.js";
+import type {
+  MusicAssetProfile,
+  SfxAssetProfile
+} from "@reelforge/audio-engine";
 
 interface PrismaAssetRepositoryOptions {
   prismaClient?: typeof defaultPrisma;
+}
+
+function parseJsonValue<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function mapAsset(asset: {
@@ -40,6 +52,39 @@ function mapAsset(asset: {
   downloadedAt: Date | null;
   collectionId: string | null;
   usageNotes: string | null;
+  musicProfile?: {
+    assetId: string;
+    title: string;
+    artist: string | null;
+    sourceType: MusicAssetProfile["sourceType"];
+    licenseStatus: MusicAssetProfile["licenseStatus"];
+    mood: MusicAssetProfile["mood"];
+    genre: MusicAssetProfile["genre"];
+    bpm: number | null;
+    bpmConfidence: number;
+    energy: MusicAssetProfile["energy"];
+    useCase: MusicAssetProfile["useCase"];
+    durationSeconds: number | null;
+    loudness: number | null;
+    beatMarkers: string;
+    energyTimeline: string;
+    notes: string | null;
+    safetyWarning: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
+  sfxProfile?: {
+    assetId: string;
+    title: string;
+    category: SfxAssetProfile["category"];
+    intensity: SfxAssetProfile["intensity"];
+    durationSeconds: number | null;
+    useCase: SfxAssetProfile["useCase"];
+    licenseStatus: SfxAssetProfile["licenseStatus"];
+    notes: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }): StudioAsset {
@@ -71,6 +116,43 @@ function mapAsset(asset: {
     downloadedAt: asset.downloadedAt?.toISOString() ?? null,
     collectionId: asset.collectionId,
     usageNotes: asset.usageNotes,
+    musicProfile: asset.musicProfile
+      ? {
+          assetId: asset.musicProfile.assetId,
+          title: asset.musicProfile.title,
+          artist: asset.musicProfile.artist,
+          sourceType: asset.musicProfile.sourceType,
+          licenseStatus: asset.musicProfile.licenseStatus,
+          mood: asset.musicProfile.mood,
+          genre: asset.musicProfile.genre,
+          bpm: asset.musicProfile.bpm,
+          bpmConfidence: asset.musicProfile.bpmConfidence,
+          energy: asset.musicProfile.energy,
+          useCase: asset.musicProfile.useCase,
+          durationSeconds: asset.musicProfile.durationSeconds,
+          loudness: asset.musicProfile.loudness,
+          beatMarkers: parseJsonValue(asset.musicProfile.beatMarkers, []),
+          energyTimeline: parseJsonValue(asset.musicProfile.energyTimeline, []),
+          notes: asset.musicProfile.notes,
+          safetyWarning: asset.musicProfile.safetyWarning,
+          createdAt: asset.musicProfile.createdAt.toISOString(),
+          updatedAt: asset.musicProfile.updatedAt.toISOString()
+        }
+      : null,
+    sfxProfile: asset.sfxProfile
+      ? {
+          assetId: asset.sfxProfile.assetId,
+          title: asset.sfxProfile.title,
+          category: asset.sfxProfile.category,
+          intensity: asset.sfxProfile.intensity,
+          durationSeconds: asset.sfxProfile.durationSeconds,
+          useCase: asset.sfxProfile.useCase,
+          licenseStatus: asset.sfxProfile.licenseStatus,
+          notes: asset.sfxProfile.notes,
+          createdAt: asset.sfxProfile.createdAt.toISOString(),
+          updatedAt: asset.sfxProfile.updatedAt.toISOString()
+        }
+      : null,
     createdAt: asset.createdAt.toISOString(),
     updatedAt: asset.updatedAt.toISOString()
   };
@@ -117,6 +199,10 @@ export function createPrismaAssetRepository({
         },
         orderBy: {
           createdAt: "desc"
+        },
+        include: {
+          musicProfile: true,
+          sfxProfile: true
         }
       });
 
@@ -124,7 +210,11 @@ export function createPrismaAssetRepository({
     },
     async getById(id) {
       const asset = await prismaClient.asset.findUnique({
-        where: { id }
+        where: { id },
+        include: {
+          musicProfile: true,
+          sfxProfile: true
+        }
       });
 
       return asset ? mapAsset(asset) : null;
@@ -134,6 +224,10 @@ export function createPrismaAssetRepository({
         data: {
           ...input,
           tags: JSON.stringify(input.tags)
+        },
+        include: {
+          musicProfile: true,
+          sfxProfile: true
         }
       });
 
@@ -150,7 +244,11 @@ export function createPrismaAssetRepository({
 
       const asset = await prismaClient.asset.update({
         where: { id },
-        data: serializeUpdateAssetInput(input)
+        data: serializeUpdateAssetInput(input),
+        include: {
+          musicProfile: true,
+          sfxProfile: true
+        }
       });
 
       return mapAsset(asset);

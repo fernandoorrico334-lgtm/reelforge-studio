@@ -25,6 +25,7 @@ Hoje isso ja esta aplicado em:
 - `projects`;
 - `channels`;
 - `assets`;
+- `audio-library`;
 - `characters`;
 - `hybrid-visual`;
 - `narration`;
@@ -173,6 +174,21 @@ Na Etapa 11A, a arquitetura ganhou tambem narracao local por cena:
 - `project-audio-plan-service.ts` ja resolve narrações geradas como assets de
   audio validos dentro do catalogo do projeto, sem quebrar o audio plan atual.
 
+Na Etapa 11F, a arquitetura ganhou tambem uma camada editorial de trilha e
+ritmo:
+
+- `modules/audio-library` concentra perfis de musica/SFX, selecao automatica,
+  analise local via FFmpeg/ffprobe quando disponiveis e construcao do
+  `BeatSyncPlan`;
+- `http/routes/audio-library-routes.ts` expoe catalogos de presets, biblioteca,
+  analise, update de perfil, auto-select e plano ritmico;
+- `project-video-engine-mapper.ts` e `packages/video-engine` passaram a incluir
+  `selectedMusicAssetId`, `selectedMusicAssetPath`, `musicPresetId`,
+  `musicLicenseStatus`, `beatSyncPlan`, `sfxCueCount` e `musicWarnings` no
+  blueprint;
+- o studio web passou a ler o mesmo contrato para sugerir trilha e mostrar o
+  plano de cortes/microclips sem depender de render real.
+
 No caso de `assets`, a Etapa 4 adicionou dois blocos importantes:
 
 - `application/asset-storage.ts`: contrato para salvar e resolver arquivos;
@@ -294,6 +310,12 @@ Na Etapa 11C, `RenderJob` passou a persistir tambem:
 - `metadata` como JSON string;
 - `audioMasteringPresetId` dentro da metadata do job;
 - `audioQualityReport` com loudness, ducking, compressor, limiter e codec final.
+
+Na Etapa 11F, a camada Prisma passou a persistir tambem:
+
+- `MusicAssetProfile`;
+- `SfxAssetProfile`;
+- `VideoProject.musicPresetId`.
 
 Na Etapa 10A, `Channel` virou tambem uma identidade editorial de producao:
 
@@ -619,6 +641,15 @@ Estado atual:
 - presets locais:
   `dark_suspense`, `epic_rise`, `horror_tension`, `documentary_bed`,
   `sports_hype`, `calm_story`, `action_pulse`, `emotional_piano`;
+- perfis persistidos de trilha e SFX via `MusicAssetProfile` e
+  `SfxAssetProfile`;
+- presets musicais:
+  `football_hype`, `viral_fast_cut`, `cinematic_epic`,
+  `true_crime_dark`, `documentary_clean`, `shorts_clean_voice`;
+- analise local opcional com `analyzeAudioAsset`, `detectApproxBpm`,
+  `detectBeatMarkers`, `detectEnergyTimeline` e `detectLoudness`;
+- selecao automatica com `selectMusicForReel`;
+- plano ritmico com `buildBeatSyncPlan`;
 - plano deterministico de mixagem a partir de projeto, cenas e assets;
 - validacao de warnings e erros antes da renderizacao;
 - resumo operacional do mix para a API e para o painel web.
@@ -722,6 +753,15 @@ em um endpoint publico.
 - `GET /media/renders/:renderJobId/thumbnail`
 - `GET /audio-moods`
 - `GET /audio-moods/:id`
+- `GET /audio/music-presets`
+- `GET /audio/music-presets/:id`
+- `GET /audio/music-library`
+- `POST /audio/music-library/analyze/:assetId`
+- `PUT /audio/music-library/:assetId/profile`
+- `GET /audio/sfx-library`
+- `PUT /audio/sfx-library/:assetId/profile`
+- `POST /audio/select-music`
+- `POST /audio/beat-sync-plan`
 - `GET /templates`
 - `GET /templates/:id`
 - `GET /caption-styles`
@@ -832,6 +872,7 @@ Bootstrap rapido:
 13. `npm run smoke:production`
 14. `npm run smoke:research`
 15. `npm run smoke:media-collector`
+16. `npm run smoke:music-render-plan`
 
 Persistencia real com Prisma:
 
@@ -845,6 +886,7 @@ Persistencia real com Prisma:
 8. `npm run smoke:render:audio`
 9. `npm run smoke:production`
 10. `npm run smoke:research`
+11. `npm run smoke:music-render-plan`
 
 ## Etapa 10I - Workflow Packs e Quality Presets
 

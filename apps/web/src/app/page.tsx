@@ -187,6 +187,13 @@ export default async function HomePage() {
           accent="#ff9e66"
         />
         <DashboardCard
+          href="/music-library"
+          title="Music Library"
+          value="Beat Sync"
+          description="Perfis locais de musica e SFX com BPM, energia, licenca e analise FFmpeg."
+          accent="#7be0ff"
+        />
+        <DashboardCard
           href="/generated-images"
           title="Imagens Geradas"
           value={String(generatedImagesSnapshot.items.length)}

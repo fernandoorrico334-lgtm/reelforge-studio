@@ -2,6 +2,7 @@ import type { AssetStorage } from "../modules/assets/application/asset-storage.j
 import { createServer } from "node:http";
 import type { AppEnv } from "../config/env.js";
 import type { AssetRepository } from "../modules/assets/application/asset-repository.js";
+import type { AudioLibraryRepository } from "../modules/audio-library/application/audio-library-repository.js";
 import type { CharacterRepository } from "../modules/characters/application/character-repository.js";
 import type { ChannelRepository } from "../modules/channels/application/channel-repository.js";
 import type { EditorialMicroclipRepository } from "../modules/editorial-microclips/application/editorial-microclip-repository.js";
@@ -15,6 +16,7 @@ import type { RenderJobRepository } from "../modules/render-jobs/application/ren
 import type { RenderStorage } from "../modules/render-jobs/application/render-storage.js";
 import { handleAssetMediaRoute } from "./routes/asset-media-routes.js";
 import { handleAssetRoute } from "./routes/assets-routes.js";
+import { handleAudioLibraryRoute } from "./routes/audio-library-routes.js";
 import { handleAudioMasteringRoute } from "./routes/audio-mastering-routes.js";
 import { handleAudioMoodRoute } from "./routes/audio-mood-routes.js";
 import { handleCandidateMediaRoute } from "./routes/candidate-media-routes.js";
@@ -46,6 +48,7 @@ interface AppDependencies {
   appEnv: AppEnv;
   assetStorage: AssetStorage;
   assetRepository: AssetRepository;
+  audioLibraryRepository: AudioLibraryRepository;
   characterRepository: CharacterRepository;
   channelRepository: ChannelRepository;
   editorialMicroclipRepository: EditorialMicroclipRepository;
@@ -63,6 +66,7 @@ export function createApp({
   appEnv,
   assetStorage,
   assetRepository,
+  audioLibraryRepository,
   characterRepository,
   channelRepository,
   editorialMicroclipRepository,
@@ -211,6 +215,22 @@ export function createApp({
     }
 
     if (await handleAudioMasteringRoute(request, response, url.pathname)) {
+      return;
+    }
+
+    if (
+      await handleAudioLibraryRoute(
+        request,
+        response,
+        url,
+        {
+          assetRepository,
+          audioLibraryRepository,
+          editorialMicroclipRepository,
+          projectRepository
+        }
+      )
+    ) {
       return;
     }
 
@@ -421,6 +441,15 @@ export function createApp({
         "/templates/:id",
         "/audio-moods",
         "/audio-moods/:id",
+        "/audio/music-presets",
+        "/audio/music-presets/:id",
+        "/audio/music-library",
+        "/audio/music-library/analyze/:assetId",
+        "/audio/music-library/:assetId/profile",
+        "/audio/sfx-library",
+        "/audio/sfx-library/:assetId/profile",
+        "/audio/select-music",
+        "/audio/beat-sync-plan",
         "/editorial-microclips/project/:projectId",
         "/editorial-microclips/:id",
         "/caption-styles",

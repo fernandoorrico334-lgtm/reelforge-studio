@@ -1,6 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "../../../infrastructure/database/prisma-client.js";
 import { parseSerializedTags, type StudioAsset } from "../../assets/domain/asset.js";
+import type {
+  MusicAssetProfile,
+  SfxAssetProfile
+} from "@reelforge/audio-engine";
 import type { StudioChannel } from "../../channels/domain/channel.js";
 import type { ProjectRepository } from "../application/project-repository.js";
 import type {
@@ -20,6 +24,14 @@ type PrismaProjectExecutor = Pick<typeof defaultPrisma, "scene" | "videoProject"
 
 function toIsoString(value: Date): string {
   return value.toISOString();
+}
+
+function parseJsonValue<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeCaptionPosition(value: string | null) {
@@ -112,6 +124,39 @@ function mapAsset(asset: {
   downloadedAt: Date | null;
   collectionId: string | null;
   usageNotes: string | null;
+  musicProfile?: {
+    assetId: string;
+    title: string;
+    artist: string | null;
+    sourceType: MusicAssetProfile["sourceType"];
+    licenseStatus: MusicAssetProfile["licenseStatus"];
+    mood: MusicAssetProfile["mood"];
+    genre: MusicAssetProfile["genre"];
+    bpm: number | null;
+    bpmConfidence: number;
+    energy: MusicAssetProfile["energy"];
+    useCase: MusicAssetProfile["useCase"];
+    durationSeconds: number | null;
+    loudness: number | null;
+    beatMarkers: string;
+    energyTimeline: string;
+    notes: string | null;
+    safetyWarning: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
+  sfxProfile?: {
+    assetId: string;
+    title: string;
+    category: SfxAssetProfile["category"];
+    intensity: SfxAssetProfile["intensity"];
+    durationSeconds: number | null;
+    useCase: SfxAssetProfile["useCase"];
+    licenseStatus: SfxAssetProfile["licenseStatus"];
+    notes: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }): StudioAsset {
@@ -143,6 +188,43 @@ function mapAsset(asset: {
     downloadedAt: asset.downloadedAt ? toIsoString(asset.downloadedAt) : null,
     collectionId: asset.collectionId,
     usageNotes: asset.usageNotes,
+    musicProfile: asset.musicProfile
+      ? {
+          assetId: asset.musicProfile.assetId,
+          title: asset.musicProfile.title,
+          artist: asset.musicProfile.artist,
+          sourceType: asset.musicProfile.sourceType,
+          licenseStatus: asset.musicProfile.licenseStatus,
+          mood: asset.musicProfile.mood,
+          genre: asset.musicProfile.genre,
+          bpm: asset.musicProfile.bpm,
+          bpmConfidence: asset.musicProfile.bpmConfidence,
+          energy: asset.musicProfile.energy,
+          useCase: asset.musicProfile.useCase,
+          durationSeconds: asset.musicProfile.durationSeconds,
+          loudness: asset.musicProfile.loudness,
+          beatMarkers: parseJsonValue(asset.musicProfile.beatMarkers, []),
+          energyTimeline: parseJsonValue(asset.musicProfile.energyTimeline, []),
+          notes: asset.musicProfile.notes,
+          safetyWarning: asset.musicProfile.safetyWarning,
+          createdAt: toIsoString(asset.musicProfile.createdAt),
+          updatedAt: toIsoString(asset.musicProfile.updatedAt)
+        }
+      : null,
+    sfxProfile: asset.sfxProfile
+      ? {
+          assetId: asset.sfxProfile.assetId,
+          title: asset.sfxProfile.title,
+          category: asset.sfxProfile.category,
+          intensity: asset.sfxProfile.intensity,
+          durationSeconds: asset.sfxProfile.durationSeconds,
+          useCase: asset.sfxProfile.useCase,
+          licenseStatus: asset.sfxProfile.licenseStatus,
+          notes: asset.sfxProfile.notes,
+          createdAt: toIsoString(asset.sfxProfile.createdAt),
+          updatedAt: toIsoString(asset.sfxProfile.updatedAt)
+        }
+      : null,
     createdAt: toIsoString(asset.createdAt),
     updatedAt: toIsoString(asset.updatedAt)
   };
@@ -239,6 +321,7 @@ function mapProject(project: {
   templateId: string | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
+  musicPresetId: string | null;
   voiceoverAssetId: string | null;
   audioMood: string | null;
   musicVolume: number;
@@ -263,6 +346,7 @@ function mapProject(project: {
     templateId: project.templateId,
     defaultCaptionStyle: project.defaultCaptionStyle,
     backgroundMusicAssetId: project.backgroundMusicAssetId,
+    musicPresetId: project.musicPresetId,
     voiceoverAssetId: project.voiceoverAssetId,
     audioMood: project.audioMood,
     musicVolume: project.musicVolume,
@@ -289,6 +373,7 @@ function serializeCreateProjectInput(
     templateId: input.templateId,
     defaultCaptionStyle: input.defaultCaptionStyle,
     backgroundMusicAssetId: input.backgroundMusicAssetId,
+    musicPresetId: input.musicPresetId ?? null,
     voiceoverAssetId: input.voiceoverAssetId,
     audioMood: input.audioMood,
     musicVolume: input.musicVolume ?? 0.18,
@@ -314,6 +399,9 @@ function serializeUpdateProjectInput(
   if ("defaultCaptionStyle" in input) data.defaultCaptionStyle = input.defaultCaptionStyle;
   if ("backgroundMusicAssetId" in input) {
     data.backgroundMusicAssetId = input.backgroundMusicAssetId;
+  }
+  if ("musicPresetId" in input) {
+    data.musicPresetId = input.musicPresetId ?? null;
   }
   if ("voiceoverAssetId" in input) {
     data.voiceoverAssetId = input.voiceoverAssetId;
@@ -495,17 +583,47 @@ const projectInclude = {
       order: "asc" as const
     },
     include: {
-      asset: true,
-      generatedAsset: true,
-      generatedNarrationAsset: true
+      asset: {
+        include: {
+          musicProfile: true,
+          sfxProfile: true
+        }
+      },
+      generatedAsset: {
+        include: {
+          musicProfile: true,
+          sfxProfile: true
+        }
+      },
+      generatedNarrationAsset: {
+        include: {
+          musicProfile: true,
+          sfxProfile: true
+        }
+      }
     }
   }
 } as const;
 
 const sceneInclude = {
-  asset: true,
-  generatedAsset: true,
-  generatedNarrationAsset: true
+  asset: {
+    include: {
+      musicProfile: true,
+      sfxProfile: true
+    }
+  },
+  generatedAsset: {
+    include: {
+      musicProfile: true,
+      sfxProfile: true
+    }
+  },
+  generatedNarrationAsset: {
+    include: {
+      musicProfile: true,
+      sfxProfile: true
+    }
+  }
 } as const;
 
 async function applySceneOrder(

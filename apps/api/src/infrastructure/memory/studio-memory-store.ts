@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import type {
+  MusicAssetProfile,
+  SfxAssetProfile
+} from "@reelforge/audio-engine";
 import type { EmotionTag, StudioAsset } from "../../modules/assets/domain/asset.js";
 import type { StudioChannel } from "../../modules/channels/domain/channel.js";
 import type {
@@ -44,6 +48,7 @@ export interface MemoryVideoProjectRecord {
   templateId: string | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
+  musicPresetId: string | null;
   voiceoverAssetId: string | null;
   audioMood: string | null;
   musicVolume: number;
@@ -111,6 +116,10 @@ export interface MemoryNarrationJobRecord {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface MemoryMusicAssetProfileRecord extends MusicAssetProfile {}
+
+export interface MemorySfxAssetProfileRecord extends SfxAssetProfile {}
 
 export interface MemoryEditorialMicroclipRecord {
   id: string;
@@ -290,6 +299,8 @@ export interface MemoryResearchOutlineSceneRecord {
 interface MemoryStudioState {
   channels: StudioChannel[];
   assets: StudioAsset[];
+  musicAssetProfiles: MemoryMusicAssetProfileRecord[];
+  sfxAssetProfiles: MemorySfxAssetProfileRecord[];
   characterProfiles: any[];
   characterReferences: any[];
   mediaCollections: MediaCollection[];
@@ -600,6 +611,53 @@ function createInitialState(): MemoryStudioState {
         updatedAt: createdAt
       }
     ],
+    musicAssetProfiles: [
+      {
+        assetId: "asset-music-001",
+        title: "Ambient Dark Bed",
+        artist: null,
+        sourceType: "user_owned",
+        licenseStatus: "owned",
+        mood: "dark",
+        genre: "ambient",
+        bpm: 92,
+        bpmConfidence: 0.52,
+        energy: "medium",
+        useCase: "true_crime",
+        durationSeconds: 18,
+        loudness: -18.4,
+        beatMarkers: [
+          { timeSeconds: 0, strength: 0.82, confidence: 0.52 },
+          { timeSeconds: 0.652, strength: 0.64, confidence: 0.52 },
+          { timeSeconds: 1.304, strength: 0.76, confidence: 0.52 },
+          { timeSeconds: 1.956, strength: 0.68, confidence: 0.52 }
+        ],
+        energyTimeline: [
+          { timeSeconds: 0, energy: 0.34 },
+          { timeSeconds: 4, energy: 0.38 },
+          { timeSeconds: 8, energy: 0.41 },
+          { timeSeconds: 12, energy: 0.37 }
+        ],
+        notes: "Mock profile for local dark bed selection.",
+        safetyWarning: null,
+        createdAt,
+        updatedAt: createdAt
+      }
+    ],
+    sfxAssetProfiles: [
+      {
+        assetId: "asset-sfx-001",
+        title: "Impact Hit",
+        category: "impact",
+        intensity: "high",
+        durationSeconds: 0.6,
+        useCase: "impact_moment",
+        licenseStatus: "owned",
+        notes: "Mock impact hit for editorial transitions.",
+        createdAt,
+        updatedAt: createdAt
+      }
+    ],
     characterProfiles: [],
     characterReferences: [],
     mediaCollections: [],
@@ -796,6 +854,7 @@ function createInitialState(): MemoryStudioState {
         templateId: "anime_dark",
         defaultCaptionStyle: "anime_punch",
         backgroundMusicAssetId: "asset-music-001",
+        musicPresetId: "true_crime_dark",
         voiceoverAssetId: "asset-voice-001",
         audioMood: "dark_suspense",
         musicVolume: 0.16,

@@ -1,5 +1,6 @@
 "use client";
 
+import { getMusicPresetById, getMusicPresets } from "@reelforge/audio-engine";
 import {
   buildPremiumAudioMixPlan,
   getAudioMasteringPresets
@@ -33,6 +34,7 @@ import {
   generateSceneNarrationRequest,
   generateSceneVisualRequest,
   getEditorialMicroclipsForProjectRequest,
+  getProjectBeatSyncPlanSnapshot,
   getProjectCaptionAnalysisSnapshot,
   getProjectProductionChecklistSnapshot,
   getProjectRenderBlueprintSnapshot,
@@ -41,6 +43,7 @@ import {
   markVisualGenerationJobReviewedRequest,
   regenerateVisualGenerationJobRequest,
   reorderScenesRequest,
+  selectMusicForProjectSnapshot,
   useSceneNarrationRequest,
   useGeneratedImageForSceneRequest,
   updateEditorialMicroclipRequest,
@@ -55,6 +58,7 @@ import {
 import type {
   AudioMasteringPreview,
   AudioMasteringPresetId,
+  BuildBeatSyncPlanResponse,
   CaptionPosition,
   CaptionStyleId,
   ComfyWorkflowPack,
@@ -135,6 +139,7 @@ interface ProjectFormState {
   format: string;
   templateId: string;
   defaultCaptionStyle: string;
+  musicPresetId: string;
 }
 
 interface SceneFormState {
@@ -173,6 +178,7 @@ interface EditorialMicroclipFormState {
 const captionStylesCatalog = getCaptionStyles();
 const templateCatalog = getTemplates();
 const audioMasteringPresetsCatalog = getAudioMasteringPresets();
+const musicPresetsCatalog = getMusicPresets();
 
 function createLocalId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -224,6 +230,49 @@ function formatEffectiveVisualSourceLabel(value: "base" | "generated" | "fallbac
     default:
       return "missing";
   }
+}
+
+function inferMusicUseCase(channel: StudioChannel, templateId: string | null) {
+  const haystack = [
+    channel.name,
+    channel.niche,
+    channel.narrativeTone ?? "",
+    templateId ?? ""
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (haystack.includes("football") || haystack.includes("futebol")) {
+    return "football";
+  }
+
+  if (
+    haystack.includes("crime") ||
+    haystack.includes("sombr") ||
+    haystack.includes("mister")
+  ) {
+    return "true_crime";
+  }
+
+  if (
+    haystack.includes("doc") ||
+    haystack.includes("explic") ||
+    haystack.includes("analit")
+  ) {
+    return "documentary";
+  }
+
+  if (haystack.includes("epic") || haystack.includes("cinematic")) {
+    return "cinematic";
+  }
+
+  return "shorts";
+}
+
+function inferMusicTone(channel: StudioChannel, templateId: string | null) {
+  return [channel.narrativeTone ?? "", channel.visualStyle ?? "", templateId ?? ""]
+    .join(" ")
+    .trim();
 }
 
 function extractErrorMessage(error: unknown) {
@@ -422,7 +471,8 @@ function toProjectFormState(project: StudioProject): ProjectFormState {
     durationTarget: project.durationTarget?.toString() ?? "",
     format: project.format,
     templateId: project.templateId ?? "",
-    defaultCaptionStyle: project.defaultCaptionStyle ?? ""
+    defaultCaptionStyle: project.defaultCaptionStyle ?? "",
+    musicPresetId: project.musicPresetId ?? ""
   };
 }
 
@@ -522,7 +572,8 @@ function buildProjectPayload(form: ProjectFormState): ProjectPayload {
     durationTarget: toNullableNumber(form.durationTarget),
     format: form.format.trim() || "9:16",
     templateId: form.templateId || null,
-    defaultCaptionStyle: form.defaultCaptionStyle || null
+    defaultCaptionStyle: form.defaultCaptionStyle || null,
+    musicPresetId: form.musicPresetId || null
   };
 }
 
@@ -957,6 +1008,10 @@ export function ProjectStudio({
   const [productionChecklistSource, setProductionChecklistSource] =
     useState<DataSource>("mock");
   const [blueprint, setBlueprint] = useState<RenderBlueprintResponse | null>(null);
+  const [beatSyncPlan, setBeatSyncPlan] =
+    useState<BuildBeatSyncPlanResponse | null>(null);
+  const [beatSyncPlanSource, setBeatSyncPlanSource] =
+    useState<DataSource>("mock");
   const [blueprintSource, setBlueprintSource] = useState<DataSource | null>(null);
   const [blueprintLoading, setBlueprintLoading] = useState(false);
   const [visualSceneId, setVisualSceneId] = useState(
@@ -1113,6 +1168,24 @@ export function ProjectStudio({
     });
   const activeTemplateId =
     projectForm.templateId || project.templateId || effectiveTemplate.id;
+  const suggestedMusicPresetId = inferMusicUseCase(
+    selectedChannel,
+    activeTemplateId
+  );
+  const selectedMusicPreset =
+    getMusicPresetById(projectForm.musicPresetId || project.musicPresetId || null) ??
+    getMusicPresetById(suggestedMusicPresetId) ??
+    musicPresetsCatalog[0]!;
+  const selectedMusicAssetId =
+    blueprint?.selectedMusicAssetId ?? project.backgroundMusicAssetId ?? null;
+  const selectedMusicAsset = resolveAsset(assets, selectedMusicAssetId);
+  const musicBeatSyncPlan = beatSyncPlan?.beatSyncPlan ?? blueprint?.beatSyncPlan ?? null;
+  const musicWarnings =
+    beatSyncPlan?.warnings ??
+    blueprint?.musicWarnings ??
+    (selectedMusicAsset?.musicProfile?.safetyWarning
+      ? [selectedMusicAsset.musicProfile.safetyWarning]
+      : []);
   const reelsFactoryTemplate = getReelsFactoryTemplateById(activeTemplateId);
   const isReelsFactoryProject = isReelsFactoryTemplateId(activeTemplateId);
   const effectiveProjectCaptionStyle =
@@ -1354,6 +1427,41 @@ export function ProjectStudio({
     };
   }, [project.id]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadBeatSyncPlan() {
+      const snapshot = await getProjectBeatSyncPlanSnapshot({
+        projectId: project.id,
+        musicAssetId: project.backgroundMusicAssetId ?? null,
+        musicPresetId:
+          project.musicPresetId ?? projectForm.musicPresetId ?? null,
+        reelDurationSeconds:
+          totalDuration > 0 ? totalDuration : project.durationTarget ?? null
+      });
+
+      if (!active) {
+        return;
+      }
+
+      setBeatSyncPlan(snapshot.item);
+      setBeatSyncPlanSource(snapshot.source);
+    }
+
+    void loadBeatSyncPlan();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    project.id,
+    project.backgroundMusicAssetId,
+    project.durationTarget,
+    project.musicPresetId,
+    projectForm.musicPresetId,
+    totalDuration
+  ]);
+
   function resetSceneComposer(nextOrder?: number) {
     setEditingSceneId(null);
     setSceneForm(createEmptySceneForm(nextOrder ?? project.scenes.length + 1));
@@ -1409,6 +1517,72 @@ export function ProjectStudio({
       setStatusMessage(
         `${extractErrorMessage(error)} Projeto atualizado apenas nesta sessao.`
       );
+    }
+  }
+
+  async function handleAutoSelectMusic() {
+    const selectionSnapshot = await selectMusicForProjectSnapshot({
+      templateId: activeTemplateId,
+      musicPresetId: projectForm.musicPresetId || selectedMusicPreset.id,
+      audioMasteringPresetId,
+      tone: inferMusicTone(selectedChannel, activeTemplateId),
+      durationSeconds: totalDuration > 0 ? totalDuration : project.durationTarget ?? 30,
+      useCase: inferMusicUseCase(selectedChannel, activeTemplateId),
+      allowUnknownLicense: false
+    });
+    const selectedRecord = selectionSnapshot.item.selectedMusicAsset;
+
+    if (!selectedRecord) {
+      setStatusMessage(
+        selectionSnapshot.item.warnings[0] ??
+          "Nenhuma musica local compativel foi encontrada para este projeto."
+      );
+      return;
+    }
+
+    const payload: ProjectPayload = {
+      ...buildProjectPayload(projectForm),
+      backgroundMusicAssetId: selectedRecord.asset.id,
+      musicPresetId: selectionSnapshot.item.preset.id,
+      musicVolume: selectionSnapshot.item.preset.defaultMusicVolume
+    };
+
+    try {
+      const updated = await updateProjectRequest(project.id, payload);
+      const nextProject = {
+        ...updated,
+        scenes: sortScenes(updated.scenes)
+      };
+      setProject(nextProject);
+      setProjectForm(toProjectFormState(nextProject));
+      setSource("api");
+      setStatusMessage(
+        `Musica ${selectedRecord.asset.filename} aplicada com preset ${selectionSnapshot.item.preset.id}.`
+      );
+
+      if (blueprintSource) {
+        await loadBlueprintFor(nextProject);
+      }
+
+      return;
+    } catch (error) {
+      const nextProject: StudioProject = {
+        ...project,
+        ...payload,
+        channel: resolveChannel(channels, payload.channelId, project.channel),
+        updatedAt: new Date().toISOString()
+      };
+
+      setProject(nextProject);
+      setProjectForm(toProjectFormState(nextProject));
+      setSource("mock");
+      setStatusMessage(
+        `${extractErrorMessage(error)} Musica ${selectedRecord.asset.filename} aplicada apenas nesta sessao.`
+      );
+
+      if (blueprintSource) {
+        await loadBlueprintFor(nextProject);
+      }
     }
   }
 
@@ -2690,6 +2864,64 @@ export function ProjectStudio({
               </div>
             </div>
 
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm text-mist/65">
+                  Music preset
+                </span>
+                <select
+                  value={projectForm.musicPresetId}
+                  onChange={(event) =>
+                    setProjectForm((current) => ({
+                      ...current,
+                      musicPresetId: event.target.value
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                >
+                  <option value="">Auto por nicho/template</option>
+                  {musicPresetsCatalog.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name} - {preset.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="rounded-[1.35rem] border border-white/10 bg-black/20 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Selecionada para o projeto
+                </p>
+                <p className="mt-2 text-sm font-medium text-white">
+                  {selectedMusicAsset?.filename ?? "Nenhuma musica aplicada"}
+                </p>
+                <p className="mt-2 text-sm leading-7 text-mist/68">
+                  preset {selectedMusicPreset.id} / volume base{" "}
+                  {selectedMusicPreset.defaultMusicVolume.toFixed(2)} / fonte{" "}
+                  {beatSyncPlanSource}
+                </p>
+                <p className="mt-2 text-xs leading-6 text-mist/60">
+                  {selectedMusicAsset?.musicProfile
+                    ? `${selectedMusicAsset.musicProfile.mood} / ${selectedMusicAsset.musicProfile.genre} / ${selectedMusicAsset.musicProfile.energy}`
+                    : "Sem perfil musical persistido para este asset."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleAutoSelectMusic();
+                }}
+                className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-4 py-2 text-sm font-medium text-[#d8f8ff]"
+              >
+                Selecionar musica automaticamente
+              </button>
+              <span className="rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs uppercase tracking-[0.22em] text-mist/65">
+                suggested {suggestedMusicPresetId}
+              </span>
+            </div>
+
             <label className="block">
               <span className="mb-2 block text-sm text-mist/65">Script</span>
               <textarea
@@ -3932,6 +4164,92 @@ export function ProjectStudio({
               </div>
             )}
           </div>
+        </article>
+
+        <article className="rounded-[1.9rem] border border-[#7be0ff]/20 bg-[#7be0ff]/8 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                Music Library
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">
+                Preset musical e Beat Sync
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                Selecao local de musica autorizada com plano ritmico para cortes,
+                flashes e microclips.
+              </p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-mist/65">
+              beat sync {beatSyncPlanSource}
+            </span>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Music preset efetivo
+              </p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {selectedMusicPreset.name}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/65">
+                {selectedMusicPreset.id} / bpm{" "}
+                {selectedMusicPreset.bpmRange
+                  ? `${selectedMusicPreset.bpmRange.min}-${selectedMusicPreset.bpmRange.max}`
+                  : "livre"}{" "}
+                / mastering {selectedMusicPreset.recommendedAudioMasteringPresetId}
+              </p>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Asset musical atual
+              </p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {selectedMusicAsset?.filename ?? "Sem musica aplicada"}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-mist/65">
+                assetId {selectedMusicAsset?.id ?? "n/a"} / license{" "}
+                {selectedMusicAsset?.musicProfile?.licenseStatus ?? "n/a"} / bpm{" "}
+                {selectedMusicAsset?.musicProfile?.bpm ?? "n/a"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+              Beat Sync Plan
+            </p>
+            <p className="mt-2 text-sm text-white">
+              confidence {(musicBeatSyncPlan?.confidence ?? 0).toFixed(2)} / cut
+              times {musicBeatSyncPlan?.suggestedCutTimes.length ?? 0} / flashes{" "}
+              {musicBeatSyncPlan?.suggestedFlashTimes.length ?? 0} / SFX cues{" "}
+              {musicBeatSyncPlan?.suggestedSfxCues.length ?? 0}
+            </p>
+            <p className="mt-2 text-xs leading-6 text-mist/65">
+              intro {formatDuration(musicBeatSyncPlan?.introBeatTime ?? null)} /
+              climax {formatDuration(musicBeatSyncPlan?.climaxBeatTime ?? null)} /
+              outro {formatDuration(musicBeatSyncPlan?.outroBeatTime ?? null)}
+            </p>
+            <p className="mt-2 text-xs leading-6 text-mist/60">
+              beat markers {musicBeatSyncPlan?.beatMarkersUsed.length ?? 0} / cues{" "}
+              {(beatSyncPlan?.beatSyncPlan?.suggestedSfxCues ?? []).length} / music
+              warnings {musicWarnings.length}
+            </p>
+          </div>
+
+          {musicWarnings.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              {musicWarnings.map((warning) => (
+                <div
+                  key={warning}
+                  className="rounded-[1rem] border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"
+                >
+                  {warning}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </article>
 
         <RenderJobsPanel

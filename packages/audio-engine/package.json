@@ -13,6 +13,14 @@
     "./mastering": {
       "types": "./dist/mastering.d.ts",
       "default": "./dist/mastering.js"
+    },
+    "./music-library": {
+      "types": "./dist/music-library.d.ts",
+      "default": "./dist/music-library.js"
+    },
+    "./music-analysis": {
+      "types": "./dist/music-analysis.d.ts",
+      "default": "./dist/music-analysis.js"
     }
   },
   "scripts": {

@@ -34,7 +34,9 @@ function mapAsset(asset: StudioAsset | null): BlueprintAssetInput | null {
     width: asset.width,
     height: asset.height,
     mimeType: asset.mimeType,
-    extension: asset.extension
+    extension: asset.extension,
+    musicProfile: asset.musicProfile ?? null,
+    sfxProfile: asset.sfxProfile ?? null
   };
 }
 
@@ -154,6 +156,7 @@ export function mapProjectToBlueprintInput(
     defaultCaptionStyle: project.defaultCaptionStyle,
     backgroundMusicAssetId: project.backgroundMusicAssetId,
     backgroundMusicAsset: mapAsset(audioAssets?.backgroundMusicAsset ?? null),
+    musicPresetId: project.musicPresetId ?? null,
     voiceoverAssetId: project.voiceoverAssetId,
     voiceoverAsset: mapAsset(audioAssets?.voiceoverAsset ?? null),
     audioMood: project.audioMood,

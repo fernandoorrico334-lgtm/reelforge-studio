@@ -203,6 +203,44 @@ async function main() {
     }
   });
 
+  const stadiumHypeTrack = await prisma.asset.create({
+    data: {
+      filename: "stadium-hype-phonk.wav",
+      originalName: "stadium-hype-phonk.wav",
+      path: "storage/assets/track/music/stadium-hype-phonk.wav",
+      type: "MUSIC",
+      category: "TRACK",
+      emotion: "EPIC",
+      tags: JSON.stringify(["audio", "music", "football", "hype", "phonk"]),
+      licenseType: "royalty-free-local",
+      copyrightRisk: "LOW",
+      recommendedUse: "Reels esportivos com cortes rapidos e microclips",
+      duration: 22,
+      mimeType: "audio/wav",
+      extension: ".wav",
+      fileSize: 2380000
+    }
+  });
+
+  const documentaryBedTrack = await prisma.asset.create({
+    data: {
+      filename: "documentary-clean-bed.wav",
+      originalName: "documentary-clean-bed.wav",
+      path: "storage/assets/track/music/documentary-clean-bed.wav",
+      type: "MUSIC",
+      category: "TRACK",
+      emotion: "CURIOUS",
+      tags: JSON.stringify(["audio", "music", "documentary", "clean"]),
+      licenseType: "licensed-pack",
+      copyrightRisk: "LOW",
+      recommendedUse: "Documentarios, curiosidades e storytelling limpo",
+      duration: 24,
+      mimeType: "audio/wav",
+      extension: ".wav",
+      fileSize: 2520000
+    }
+  });
+
   const voiceStub = await prisma.asset.create({
     data: {
       filename: "narration-guide.wav",
@@ -241,6 +279,141 @@ async function main() {
     }
   });
 
+  const whistleSfx = await prisma.asset.create({
+    data: {
+      filename: "stadium-whistle.wav",
+      originalName: "stadium-whistle.wav",
+      path: "storage/assets/effect/sfx/stadium-whistle.wav",
+      type: "SFX",
+      category: "EFFECT",
+      emotion: "EPIC",
+      tags: JSON.stringify(["audio", "sfx", "football", "whistle"]),
+      licenseType: "royalty-free-local",
+      copyrightRisk: "LOW",
+      recommendedUse: "Transicoes e impacto em reels de futebol",
+      duration: 0.9,
+      mimeType: "audio/wav",
+      extension: ".wav",
+      fileSize: 96000
+    }
+  });
+
+  await prisma.musicAssetProfile.createMany({
+    data: [
+      {
+        assetId: ambientTrack.id,
+        title: "Ambient Dark Bed",
+        artist: "ReelForge Seed Library",
+        sourceType: "user_owned",
+        licenseStatus: "owned",
+        mood: "dark",
+        genre: "cinematic",
+        bpm: 88,
+        bpmConfidence: 0.62,
+        energy: "medium",
+        useCase: "true_crime",
+        durationSeconds: 18,
+        loudness: -17.8,
+        beatMarkers: JSON.stringify([
+          { timeSeconds: 0, strength: 0.62, confidence: 0.5 },
+          { timeSeconds: 4.1, strength: 0.71, confidence: 0.58 },
+          { timeSeconds: 8.2, strength: 0.77, confidence: 0.64 },
+          { timeSeconds: 12.3, strength: 0.8, confidence: 0.66 }
+        ]),
+        energyTimeline: JSON.stringify([
+          { timeSeconds: 0, energy: 34 },
+          { timeSeconds: 6, energy: 48 },
+          { timeSeconds: 12, energy: 58 },
+          { timeSeconds: 18, energy: 44 }
+        ]),
+        notes: "Base sombria para true crime e misterio.",
+        safetyWarning: null
+      },
+      {
+        assetId: stadiumHypeTrack.id,
+        title: "Stadium Hype Phonk",
+        artist: "ReelForge Seed Library",
+        sourceType: "royalty_free",
+        licenseStatus: "royalty_free",
+        mood: "hype",
+        genre: "phonk",
+        bpm: 156,
+        bpmConfidence: 0.74,
+        energy: "extreme",
+        useCase: "football",
+        durationSeconds: 22,
+        loudness: -12.4,
+        beatMarkers: JSON.stringify([
+          { timeSeconds: 0.48, strength: 0.82, confidence: 0.72 },
+          { timeSeconds: 1.24, strength: 0.86, confidence: 0.74 },
+          { timeSeconds: 2.01, strength: 0.88, confidence: 0.76 },
+          { timeSeconds: 2.77, strength: 0.91, confidence: 0.77 }
+        ]),
+        energyTimeline: JSON.stringify([
+          { timeSeconds: 0, energy: 66 },
+          { timeSeconds: 6, energy: 81 },
+          { timeSeconds: 12, energy: 92 },
+          { timeSeconds: 18, energy: 86 }
+        ]),
+        notes: "Ideal para cortes rapidos, football_hype e viral_fast_cut.",
+        safetyWarning: null
+      },
+      {
+        assetId: documentaryBedTrack.id,
+        title: "Documentary Clean Bed",
+        artist: "ReelForge Seed Library",
+        sourceType: "licensed_pack",
+        licenseStatus: "licensed",
+        mood: "documentary",
+        genre: "ambient",
+        bpm: 96,
+        bpmConfidence: 0.58,
+        energy: "low",
+        useCase: "documentary",
+        durationSeconds: 24,
+        loudness: -18.6,
+        beatMarkers: JSON.stringify([
+          { timeSeconds: 0, strength: 0.54, confidence: 0.43 },
+          { timeSeconds: 5.2, strength: 0.6, confidence: 0.46 },
+          { timeSeconds: 10.4, strength: 0.64, confidence: 0.49 }
+        ]),
+        energyTimeline: JSON.stringify([
+          { timeSeconds: 0, energy: 24 },
+          { timeSeconds: 8, energy: 32 },
+          { timeSeconds: 16, energy: 36 },
+          { timeSeconds: 24, energy: 28 }
+        ]),
+        notes: "Cama discreta para explicacao e documentario.",
+        safetyWarning: null
+      }
+    ]
+  });
+
+  await prisma.sfxAssetProfile.createMany({
+    data: [
+      {
+        assetId: hitSfx.id,
+        title: "Impact Hit",
+        category: "impact",
+        intensity: "high",
+        durationSeconds: 0.6,
+        useCase: "impact_moment",
+        licenseStatus: "owned",
+        notes: "Impacto curto para cortes e revelacoes."
+      },
+      {
+        assetId: whistleSfx.id,
+        title: "Stadium Whistle",
+        category: "whistle",
+        intensity: "high",
+        durationSeconds: 0.9,
+        useCase: "football",
+        licenseStatus: "royalty_free",
+        notes: "Entrada esportiva e transicao de microclip."
+      }
+    ]
+  });
+
   await prisma.videoProject.create({
     data: {
       title: "A queda do cla Uchiha em 3 atos",
@@ -253,6 +426,7 @@ async function main() {
       templateId: "anime_dark",
       defaultCaptionStyle: "anime_punch",
       backgroundMusicAssetId: ambientTrack.id,
+      musicPresetId: "true_crime_dark",
       voiceoverAssetId: voiceStub.id,
       audioMood: "dark_suspense",
       musicVolume: 0.16,

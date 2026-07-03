@@ -3,7 +3,10 @@ import {
   getCaptionStyleById,
   type CaptionPosition
 } from "@reelforge/caption-engine";
-import { getAudioMoodPresetById } from "@reelforge/audio-engine";
+import {
+  getAudioMoodPresetById,
+  getMusicPresetById
+} from "@reelforge/audio-engine";
 import { getTemplateById } from "@reelforge/templates";
 import {
   normalizeOptionalEmotionTagValue,
@@ -128,6 +131,7 @@ export interface StudioProject {
   templateId: string | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
+  musicPresetId?: string | null;
   voiceoverAssetId: string | null;
   audioMood: string | null;
   musicVolume: number;
@@ -150,6 +154,7 @@ export interface CreateProjectInput {
   templateId: string | null;
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
+  musicPresetId?: string | null;
   voiceoverAssetId: string | null;
   audioMood: string | null;
   musicVolume: number | null;
@@ -325,6 +330,31 @@ function normalizeOptionalAudioMood(
   }
 
   return resolvedMood.id;
+}
+
+function normalizeOptionalMusicPresetId(
+  value: unknown,
+  fieldName = "musicPresetId"
+) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new ValidationError(`${fieldName} must be a string or null.`);
+  }
+
+  const resolvedPreset = getMusicPresetById(value);
+
+  if (!resolvedPreset) {
+    throw new ValidationError(`${fieldName} must match a known music preset id.`);
+  }
+
+  return resolvedPreset.id;
 }
 
 function normalizeOptionalCaptionStyleId(
@@ -688,6 +718,7 @@ export function validateCreateProjectInput(
         "defaultCaptionStyle"
       ) ?? null,
     backgroundMusicAssetId: readOptionalString(record, "backgroundMusicAssetId") ?? null,
+    musicPresetId: normalizeOptionalMusicPresetId(record.musicPresetId) ?? null,
     voiceoverAssetId: readOptionalString(record, "voiceoverAssetId") ?? null,
     audioMood: normalizeOptionalAudioMood(record.audioMood) ?? null,
     musicVolume: normalizeOptionalUnitInterval(record.musicVolume, "musicVolume") ?? 0.18,
@@ -745,6 +776,11 @@ export function validateUpdateProjectInput(
   if ("backgroundMusicAssetId" in record) {
     update.backgroundMusicAssetId =
       readOptionalString(record, "backgroundMusicAssetId") ?? null;
+  }
+
+  if ("musicPresetId" in record) {
+    update.musicPresetId =
+      normalizeOptionalMusicPresetId(record.musicPresetId) ?? null;
   }
 
   if ("voiceoverAssetId" in record) {

@@ -17,7 +17,17 @@ const nextConfig: NextConfig = {
     "@reelforge/story-engine",
     "@reelforge/templates",
     "@reelforge/video-engine"
-  ]
+  ],
+  webpack(config) {
+    config.resolve ??= {};
+    config.resolve.extensionAlias = {
+      ...(config.resolve.extensionAlias ?? {}),
+      ".js": [".ts", ".tsx", ".js"],
+      ".mjs": [".mts", ".mjs"],
+      ".cjs": [".cts", ".cjs"]
+    };
+    return config;
+  }
 };
 
 export default nextConfig;

@@ -18,17 +18,30 @@ function sortAssets(assets: StudioAsset[]) {
   );
 }
 
+function attachProfiles(asset: StudioAsset, state: ReturnType<typeof getMemoryStudioState>) {
+  return {
+    ...asset,
+    musicProfile:
+      state.musicAssetProfiles.find((profile) => profile.assetId === asset.id) ?? null,
+    sfxProfile:
+      state.sfxAssetProfiles.find((profile) => profile.assetId === asset.id) ?? null
+  };
+}
+
 export function createInMemoryAssetRepository(): AssetRepository {
   const state = getMemoryStudioState();
 
   return {
     async list(filters: AssetListFilters = {}) {
       return sortAssets(
-        state.assets.filter((asset) => matchesAssetFilters(asset, filters))
+        state.assets
+          .filter((asset) => matchesAssetFilters(asset, filters))
+          .map((asset) => attachProfiles(asset, state))
       );
     },
     async getById(id) {
-      return state.assets.find((asset) => asset.id === id) ?? null;
+      const asset = state.assets.find((entry) => entry.id === id);
+      return asset ? attachProfiles(asset, state) : null;
     },
     async create(input: CreateAssetInput) {
       const timestamp = createTimestamp();
@@ -48,7 +61,7 @@ export function createInMemoryAssetRepository(): AssetRepository {
       };
 
       state.assets.unshift(asset);
-      return asset;
+      return attachProfiles(asset, state);
     },
     async update(id: string, input: UpdateAssetInput) {
       const assetIndex = state.assets.findIndex((asset) => asset.id === id);
@@ -70,7 +83,7 @@ export function createInMemoryAssetRepository(): AssetRepository {
       };
 
       state.assets[assetIndex] = updated;
-      return updated;
+      return attachProfiles(updated, state);
     },
     async delete(id: string) {
       const assetIndex = state.assets.findIndex((asset) => asset.id === id);

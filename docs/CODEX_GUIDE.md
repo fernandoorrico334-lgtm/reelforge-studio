@@ -24,6 +24,10 @@ Ajudar qualquer futura sessao do Codex a expandir ReelForge Studio sem quebrar a
 - manter `packages/audio-engine` como fonte unica das regras de mixagem local;
 - quando tocar em presets premium, importar `@reelforge/audio-engine/mastering`
   em vez de misturar catalogos diretamente em apps;
+- manter tambem `packages/audio-engine` como fonte unica dos perfis de musica,
+  presets editoriais, auto-select e beat sync;
+- ao tocar em Music Library, nao duplicar enums de mood/genre/energy/licenca no
+  frontend ou na API; consumir os contratos compartilhados;
 - manter `packages/narration-engine` como fonte unica das regras de narracao
   local;
 - manter `packages/research-collector` como fonte unica das heuristicas de
@@ -57,6 +61,10 @@ Ajudar qualquer futura sessao do Codex a expandir ReelForge Studio sem quebrar a
   acoplar `cinematic_v2` ao frontend diretamente;
 - ao tocar em audio, preservar o comportamento sem soundtrack como caminho
   valido e nao quebrar renders mudos;
+- ao tocar em selecao automatica de musica, nunca inventar asset inexistente e
+  respeitar `licenseStatus` como sinal operacional;
+- ao tocar em beat sync, manter fallback claro para grid ritmico quando o BPM
+  tiver baixa confianca ou quando FFmpeg/ffprobe nao puderem rodar;
 - ao tocar no app web, manter o polling de render ativo apenas quando houver
   jobs `queued` ou `processing`.
 - ao tocar em `Channel`, tratar defaults como identidade editorial de producao,
@@ -183,6 +191,19 @@ Ao tocar no Premium Audio Studio Pipeline, a sequencia minima passa a ser:
 8. `npm run smoke:narration-render-plan`
 9. se o ambiente permitir spawn: `npm run smoke:render-with-narration`
 10. se o ambiente permitir spawn: `npm run smoke:premium-audio-render`
+
+Ao tocar na Music Library ou no Beat Sync Engine, a sequencia minima passa a
+ser:
+
+1. `npm run db:generate`
+2. `npm run db:migrate:deploy`
+3. `npm run build`
+4. `npm run typecheck`
+5. `npm run smoke:music-render-plan`
+6. se o ambiente permitir spawn: `npm run smoke:music-library`
+7. se o ambiente permitir spawn: `npm run smoke:render-with-music-sync`
+8. validar `/music-library`
+9. validar `/projects/[id]`
 
 Ao tocar no Media Collector, a sequencia minima passa a ser:
 

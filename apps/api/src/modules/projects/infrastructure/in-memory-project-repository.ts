@@ -15,6 +15,26 @@ import type {
 export function createProjectRepository(): ProjectRepository {
   const state = getMemoryStudioState();
 
+  function mapAssetWithProfiles(assetId: string | null) {
+    if (!assetId) {
+      return null;
+    }
+
+    const asset = state.assets.find((entry) => entry.id === assetId);
+
+    if (!asset) {
+      return null;
+    }
+
+    return {
+      ...asset,
+      musicProfile:
+        state.musicAssetProfiles.find((profile) => profile.assetId === assetId) ?? null,
+      sfxProfile:
+        state.sfxAssetProfiles.find((profile) => profile.assetId === assetId) ?? null
+    };
+  }
+
   function mapScene(sceneId: string): ProjectScene | null {
     const scene = state.scenes.find((entry) => entry.id === sceneId);
 
@@ -24,15 +44,9 @@ export function createProjectRepository(): ProjectRepository {
 
     return {
       ...scene,
-      asset: scene.assetId
-        ? state.assets.find((asset) => asset.id === scene.assetId) ?? null
-        : null,
-      generatedAsset: scene.generatedAssetId
-        ? state.assets.find((asset) => asset.id === scene.generatedAssetId) ?? null
-        : null,
-      generatedNarrationAsset: scene.generatedNarrationAssetId
-        ? state.assets.find((asset) => asset.id === scene.generatedNarrationAssetId) ?? null
-        : null
+      asset: mapAssetWithProfiles(scene.assetId),
+      generatedAsset: mapAssetWithProfiles(scene.generatedAssetId),
+      generatedNarrationAsset: mapAssetWithProfiles(scene.generatedNarrationAssetId)
     };
   }
 
@@ -97,7 +111,8 @@ export function createProjectRepository(): ProjectRepository {
         voiceVolume: input.voiceVolume ?? 1,
         sfxVolume: input.sfxVolume ?? 0.7,
         enableAudioDucking: input.enableAudioDucking ?? false,
-        duckingLevel: input.duckingLevel ?? 0.35
+        duckingLevel: input.duckingLevel ?? 0.35,
+        musicPresetId: input.musicPresetId ?? null
       };
 
       state.videoProjects.unshift(project);

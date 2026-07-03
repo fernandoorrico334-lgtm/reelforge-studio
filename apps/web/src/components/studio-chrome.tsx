@@ -13,6 +13,7 @@ const navigation = [
   { href: "/characters", label: "Characters", short: "CR" },
   { href: "/channels", label: "Canais", short: "CH" },
   { href: "/assets", label: "Biblioteca", short: "AS" },
+  { href: "/music-library", label: "Music Library", short: "ML" },
   { href: "/generated-images", label: "Geradas", short: "GI" },
   { href: "/generated-audio", label: "Narracoes", short: "NA" },
   { href: "/projects", label: "Projetos", short: "PJ" },

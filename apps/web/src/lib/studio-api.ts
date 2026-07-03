@@ -1,6 +1,12 @@
 ﻿import { getAudioMoodPresets } from "@reelforge/audio-engine";
 import { getCaptionStyles } from "@reelforge/caption-engine";
 import {
+  buildBeatSyncPlan,
+  getMusicPresetById,
+  getMusicPresets,
+  selectMusicForReel
+} from "@reelforge/audio-engine";
+import {
   getNegativePromptPacks,
   getVisualPromptPacks
 } from "@reelforge/prompt-engine";
@@ -48,6 +54,7 @@ import type {
   CreateRenderJobPayload,
   DashboardSnapshot,
   DataSource,
+  BuildBeatSyncPlanResponse,
   EditorialMicroclip,
   EditorialMicroclipPayload,
   GenerateMissingVisualsPayload,
@@ -72,6 +79,7 @@ import type {
   MediaCollectionPayload,
   MediaCollectionSearchResponse,
   MediaCollectorProviderDescriptor,
+  MusicLibraryItemRecord,
   ProjectMissingAssetCollectionsResponse,
   ProjectAssetSuggestionsResponse,
   ProjectCaptionAnalysisResponse,
@@ -117,6 +125,9 @@ import type {
   ScenePayload,
   ScenePromptBuildResponse,
   SceneReorderPayload,
+  SelectMusicResponse,
+  SfxAssetProfile,
+  SfxLibraryItemRecord,
   StudioAsset,
   StudioChannel,
   StudioProject,
@@ -652,6 +663,99 @@ function findMockResearchDetail(id: string) {
   );
 }
 
+function buildMusicLibrarySummary(asset: StudioAsset) {
+  const profile = asset.musicProfile ?? null;
+
+  if (!profile) {
+    return `Perfil pendente para ${asset.filename}`;
+  }
+
+  const bpmLabel =
+    typeof profile.bpm === "number" && Number.isFinite(profile.bpm)
+      ? `${Math.round(profile.bpm)} BPM`
+      : "BPM n/d";
+
+  return [
+    profile.mood,
+    profile.genre,
+    profile.energy,
+    profile.useCase,
+    bpmLabel
+  ].join(" / ");
+}
+
+function buildMockMusicLibraryItems(): MusicLibraryItemRecord[] {
+  return cloneValue(
+    mockAssets
+      .filter(
+        (asset) =>
+          asset.type === "MUSIC" ||
+          (asset.type === "AUDIO" && Boolean(asset.musicProfile))
+      )
+      .map((asset) => ({
+        asset,
+        profile: asset.musicProfile ?? null,
+        status: asset.musicProfile ? ("profiled" as const) : ("pending" as const),
+        summary: buildMusicLibrarySummary(asset),
+        warnings: asset.musicProfile?.safetyWarning
+          ? [asset.musicProfile.safetyWarning]
+          : asset.musicProfile
+            ? []
+            : ["Asset sem perfil musical detalhado."]
+      }))
+      .sort((left, right) =>
+        right.asset.updatedAt.localeCompare(left.asset.updatedAt)
+      )
+  );
+}
+
+function buildMockSfxLibraryItems(): SfxLibraryItemRecord[] {
+  return cloneValue(
+    mockAssets
+      .filter(
+        (asset) =>
+          asset.type === "SFX" ||
+          (asset.type === "AUDIO" && Boolean(asset.sfxProfile))
+      )
+      .map((asset) => ({
+        asset,
+        profile: asset.sfxProfile ?? null,
+        status: asset.sfxProfile ? ("profiled" as const) : ("pending" as const),
+        warnings: asset.sfxProfile ? [] : ["Asset sem perfil de SFX detalhado."]
+      }))
+      .sort((left, right) =>
+        right.asset.updatedAt.localeCompare(left.asset.updatedAt)
+      )
+  );
+}
+
+function applyMockSfxProfileUpdate(
+  asset: StudioAsset,
+  patch: Partial<SfxAssetProfile>
+): SfxLibraryItemRecord {
+  const nextProfile = {
+    assetId: asset.id,
+    title: asset.sfxProfile?.title ?? asset.filename,
+    category: asset.sfxProfile?.category ?? "transition",
+    intensity: asset.sfxProfile?.intensity ?? "medium",
+    durationSeconds: asset.sfxProfile?.durationSeconds ?? asset.duration ?? null,
+    useCase: asset.sfxProfile?.useCase ?? "generic",
+    licenseStatus: asset.sfxProfile?.licenseStatus ?? "unknown",
+    notes: asset.sfxProfile?.notes ?? null,
+    ...patch
+  } satisfies SfxAssetProfile;
+
+  return {
+    asset: cloneValue({
+      ...asset,
+      sfxProfile: nextProfile
+    }),
+    profile: cloneValue(nextProfile),
+    status: "profiled",
+    warnings: []
+  };
+}
+
 async function requestJson<T>(
   path: string,
   init?: RequestInit
@@ -720,6 +824,256 @@ export async function getAssetsSnapshot(): Promise<{
   } catch (error) {
     logServerFallback("assets", error);
     return { items: cloneValue(mockAssets), source: "mock" };
+  }
+}
+
+export async function getMusicLibraryRequest(
+  filters: {
+    mood?: string;
+    genre?: string;
+    energy?: string;
+    useCase?: string;
+    licenseStatus?: string;
+    search?: string;
+  } = {}
+) {
+  const query = buildQueryString({
+    mood: filters.mood,
+    genre: filters.genre,
+    energy: filters.energy,
+    useCase: filters.useCase,
+    licenseStatus: filters.licenseStatus,
+    search: filters.search
+  });
+
+  return requestJson<MusicLibraryItemRecord[]>(`/audio/music-library${query}`);
+}
+
+export async function getMusicLibrarySnapshot(
+  filters: Parameters<typeof getMusicLibraryRequest>[0] = {}
+): Promise<{
+  items: MusicLibraryItemRecord[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getMusicLibraryRequest(filters);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("audio/music-library", error);
+    return { items: buildMockMusicLibraryItems(), source: "mock" };
+  }
+}
+
+export async function analyzeMusicLibraryAssetRequest(assetId: string) {
+  return requestJson<MusicLibraryItemRecord>(
+    `/audio/music-library/analyze/${encodeURIComponent(assetId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
+export async function updateMusicLibraryProfileRequest(
+  assetId: string,
+  payload: Partial<NonNullable<MusicLibraryItemRecord["profile"]>>
+) {
+  return requestJson<MusicLibraryItemRecord>(
+    `/audio/music-library/${encodeURIComponent(assetId)}/profile`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function getSfxLibraryRequest(
+  filters: {
+    category?: string;
+    intensity?: string;
+    useCase?: string;
+    licenseStatus?: string;
+    search?: string;
+  } = {}
+) {
+  const query = buildQueryString({
+    category: filters.category,
+    intensity: filters.intensity,
+    useCase: filters.useCase,
+    licenseStatus: filters.licenseStatus,
+    search: filters.search
+  });
+
+  return requestJson<SfxLibraryItemRecord[]>(`/audio/sfx-library${query}`);
+}
+
+export async function getSfxLibrarySnapshot(
+  filters: Parameters<typeof getSfxLibraryRequest>[0] = {}
+): Promise<{
+  items: SfxLibraryItemRecord[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getSfxLibraryRequest(filters);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback("audio/sfx-library", error);
+    return { items: buildMockSfxLibraryItems(), source: "mock" };
+  }
+}
+
+export async function updateSfxLibraryProfileRequest(
+  assetId: string,
+  payload: Partial<SfxAssetProfile>
+) {
+  return requestJson<SfxLibraryItemRecord>(
+    `/audio/sfx-library/${encodeURIComponent(assetId)}/profile`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function selectMusicForProjectRequest(payload: {
+  templateId?: string | null;
+  musicPresetId?: string | null;
+  audioMasteringPresetId?: string | null;
+  tone?: string | null;
+  durationSeconds: number;
+  useCase?: string | null;
+  allowUnknownLicense?: boolean;
+}) {
+  return requestJson<SelectMusicResponse>("/audio/select-music", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function selectMusicForProjectSnapshot(payload: {
+  templateId?: string | null;
+  musicPresetId?: string | null;
+  audioMasteringPresetId?: string | null;
+  tone?: string | null;
+  durationSeconds: number;
+  useCase?: string | null;
+  allowUnknownLicense?: boolean;
+}): Promise<{
+  item: SelectMusicResponse;
+  source: DataSource;
+}> {
+  try {
+    const item = await selectMusicForProjectRequest(payload);
+    return { item, source: "api" };
+  } catch (error) {
+    logServerFallback("audio/select-music", error);
+    const mockMusicLibrary = buildMockMusicLibraryItems();
+    const mockSfxLibrary = buildMockSfxLibraryItems();
+    const result = selectMusicForReel({
+      templateId: payload.templateId ?? null,
+      musicPresetId: payload.musicPresetId ?? null,
+      audioMasteringPresetId: payload.audioMasteringPresetId ?? null,
+      tone: payload.tone ?? null,
+      durationSeconds: payload.durationSeconds,
+      useCase: payload.useCase ?? null,
+      allowUnknownLicense: payload.allowUnknownLicense ?? false,
+      musicAssets: mockMusicLibrary.flatMap((item) =>
+        item.profile ? [{ asset: item.asset, profile: item.profile }] : []
+      ),
+      sfxAssets: mockSfxLibrary.flatMap((item) =>
+        item.profile ? [{ asset: item.asset, profile: item.profile }] : []
+      )
+    });
+    const preset =
+      getMusicPresetById(payload.musicPresetId ?? null) ??
+      getMusicPresetById("shorts_clean_voice") ??
+      getMusicPresets()[0]!;
+    const selectedMusicAsset = result.selectedMusicAsset
+      ? (mockMusicLibrary.find(
+          (item) => item.asset.id === result.selectedMusicAsset?.asset.id
+        ) ?? null)
+      : null;
+    const selectedSfxAssets = result.selectedSfxAssets
+      .map((item) =>
+        mockSfxLibrary.find((record) => record.asset.id === item.asset.id) ?? null
+      )
+      .filter((item): item is SfxLibraryItemRecord => item !== null);
+
+    return {
+      item: {
+        preset,
+        selectedMusicAsset,
+        selectedSfxAssets,
+        reason: result.reason,
+        warnings: result.warnings,
+        confidence: result.confidence
+      },
+      source: "mock"
+    };
+  }
+}
+
+export async function getProjectBeatSyncPlanRequest(payload: {
+  projectId: string;
+  musicAssetId?: string | null;
+  musicPresetId?: string | null;
+  reelDurationSeconds?: number | null;
+}) {
+  return requestJson<BuildBeatSyncPlanResponse>("/audio/beat-sync-plan", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getProjectBeatSyncPlanSnapshot(payload: {
+  projectId: string;
+  musicAssetId?: string | null;
+  musicPresetId?: string | null;
+  reelDurationSeconds?: number | null;
+}): Promise<{
+  item: BuildBeatSyncPlanResponse | null;
+  source: DataSource;
+}> {
+  try {
+    const item = await getProjectBeatSyncPlanRequest(payload);
+    return { item, source: "api" };
+  } catch (error) {
+    logServerFallback("audio/beat-sync-plan", error);
+
+    const project = findMockProject(payload.projectId);
+
+    if (!project) {
+      return { item: null, source: "mock" };
+    }
+
+    const selectedMusicAsset =
+      mockAssets.find(
+        (asset) =>
+          asset.id === (payload.musicAssetId ?? project.backgroundMusicAssetId)
+      ) ?? null;
+    const reelDurationSeconds =
+      payload.reelDurationSeconds ??
+      project.durationTarget ??
+      project.scenes.reduce((total, scene) => total + (scene.duration ?? 0), 0);
+    const beatSyncPlan = buildBeatSyncPlan({
+      musicAssetProfile: selectedMusicAsset?.musicProfile ?? null,
+      reelDurationSeconds,
+      sceneCount: project.scenes.length,
+      presetId: payload.musicPresetId ?? project.musicPresetId ?? null,
+      microclips: []
+    });
+
+    return {
+      item: {
+        projectId: project.id,
+        selectedMusicAssetId: selectedMusicAsset?.id ?? null,
+        selectedMusicAssetPath: selectedMusicAsset?.path ?? null,
+        musicPresetId: payload.musicPresetId ?? project.musicPresetId ?? null,
+        beatSyncPlan,
+        warnings: beatSyncPlan.warnings
+      },
+      source: "mock"
+    };
   }
 }
 

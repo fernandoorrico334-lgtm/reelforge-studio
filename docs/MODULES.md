@@ -14,6 +14,7 @@ Estado atual:
 - wizard rapido de producao em `/produce`;
 - gestao de canais em `/channels`;
 - biblioteca local de assets em `/assets`;
+- biblioteca musical em `/music-library`;
 - galeria de audio gerado em `/generated-audio`;
 - CRUD de projetos em `/projects`;
 - timeline inicial e editor de cenas em `/projects/[id]`;
@@ -128,6 +129,17 @@ Na Etapa 11A, `apps/web` ganhou tambem:
 - leitura de `effectiveNarrationAssetId`, `effectiveNarrationAssetPath` e
   `narrationSource` no painel de blueprint.
 
+Na Etapa 11F, `apps/web` ganhou tambem:
+
+- pagina `/music-library` com abas de Music Library e SFX Library;
+- filtros por mood, genre, energy, use case, categoria e licenca;
+- edicao de perfis de musica e SFX;
+- acao `Analisar com FFmpeg` quando a API estiver ativa;
+- integracao de `Music Preset`, auto-select de trilha e `Beat Sync Plan` em
+  `/projects/[id]`;
+- badges de `music`, `sfx`, BPM e licenca em `/assets`;
+- sugestao de music preset em `/prompt-lab`.
+
 ## apps/api
 
 Responsavel por expor os contratos HTTP e orquestrar os casos de uso.
@@ -136,6 +148,7 @@ Estado atual:
 
 - modulo `channels` com CRUD completo;
 - modulo `assets` com CRUD manual, upload real e preview por `assetId`;
+- modulo `audio-library` com perfis de musica/SFX, auto-select e beat sync;
 - modulo `characters` com perfis, referencias e prompt-base;
 - modulo `hybrid-visual` com relatorio, jobs e geracao mock local;
 - modulo `narration` com jobs, providers, voice packs e geracao WAV local;
@@ -229,6 +242,15 @@ Rotas atuais:
 - `GET /media/renders/:renderJobId/thumbnail`
 - `GET /audio-moods`
 - `GET /audio-moods/:id`
+- `GET /audio/music-presets`
+- `GET /audio/music-presets/:id`
+- `GET /audio/music-library`
+- `POST /audio/music-library/analyze/:assetId`
+- `PUT /audio/music-library/:assetId/profile`
+- `GET /audio/sfx-library`
+- `PUT /audio/sfx-library/:assetId/profile`
+- `POST /audio/select-music`
+- `POST /audio/beat-sync-plan`
 - `GET /visual-source-modes`
 - `GET /visual-generation/providers`
 - `GET /visual-generation/jobs`
@@ -311,6 +333,16 @@ Pecas novas relevantes no modulo `assets`:
 - `application/asset-upload-service.ts`
 - `infrastructure/local-asset-storage.ts`
 - `infrastructure/asset-file-utils.ts`
+
+Pecas novas relevantes no modulo `audio-library`:
+
+- `modules/audio-library/domain/audio-library.ts`
+- `modules/audio-library/application/audio-library-repository.ts`
+- `modules/audio-library/application/audio-library-service.ts`
+- `modules/audio-library/infrastructure/prisma-audio-library-repository.ts`
+- `modules/audio-library/infrastructure/in-memory-audio-library-repository.ts`
+- `modules/audio-library/infrastructure/audio-library-repository-factory.ts`
+- `http/routes/audio-library-routes.ts`
 
 Pecas novas relevantes no modulo `intake`:
 
@@ -445,6 +477,9 @@ Estado atual:
 - `scripts/smoke-narration-windows-sapi-local.mjs`
 - `scripts/smoke-audio-mastering-presets.mjs`
 - `scripts/smoke-premium-audio-render.mjs`
+- `scripts/smoke-music-library.mjs`
+- `scripts/smoke-music-render-plan.mjs`
+- `scripts/smoke-render-with-music-sync.mjs`
 
 Comandos novos relevantes da Etapa 10B:
 
@@ -470,6 +505,14 @@ Estado atual:
   `summarizeAudioPlan`, `getAudioMasteringPresets`,
   `getAudioMasteringPresetById`, `resolveAudioMasteringPreset` e
   `buildPremiumAudioMixPlan`;
+- perfis e catalogos de biblioteca:
+  `MusicAssetProfile`, `SfxAssetProfile`, `musicPresets` e `sfxPresets`;
+- funcoes editoriais de musica:
+  `getMusicPresets`, `getMusicPresetById`, `suggestMusicPresetByContext`,
+  `selectMusicForReel`, `buildBeatSyncPlan` e `summarizeMusicProfile`;
+- analise local opcional com FFmpeg/ffprobe:
+  `analyzeAudioAsset`, `detectApproxBpm`, `detectBeatMarkers`,
+  `detectEnergyTimeline` e `detectLoudness`;
 - regras deterministicas para soundtrack, voiceover, SFX, ducking e
   mastering premium.
 

@@ -716,6 +716,21 @@ export function AssetsManager({
                           quality {qualityPresetId}
                         </span>
                       ) : null}
+                      {asset.musicProfile ? (
+                        <span className="rounded-full border border-[#7be0ff]/25 bg-[#7be0ff]/10 px-3 py-1 text-xs text-[#d8f8ff]">
+                          music
+                        </span>
+                      ) : null}
+                      {asset.sfxProfile ? (
+                        <span className="rounded-full border border-[#ffe28a]/25 bg-[#ffe28a]/10 px-3 py-1 text-xs text-[#fff4d0]">
+                          sfx
+                        </span>
+                      ) : null}
+                      {asset.musicProfile?.licenseStatus ? (
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/70">
+                          license {asset.musicProfile.licenseStatus}
+                        </span>
+                      ) : null}
                       {asset.type === "VIDEO" ? (
                         <span className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-1 text-xs text-[#fff0cb]">
                           microclip-ready
@@ -760,6 +775,11 @@ export function AssetsManager({
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/70">
                     {asset.width ?? "?"} x {asset.height ?? "?"}
                   </span>
+                  {asset.musicProfile?.bpm ? (
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/70">
+                      {Math.round(asset.musicProfile.bpm)} BPM
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="mt-5 grid gap-4 md:grid-cols-2">

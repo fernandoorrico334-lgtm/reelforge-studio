@@ -1,3 +1,10 @@
+import {
+  getMusicPresetById,
+  type BeatSyncPlan,
+  type BeatSyncSfxCue,
+  type MusicPreset
+} from "./music-library.js";
+
 export const audioMoodPresetIds = [
   "dark_suspense",
   "epic_rise",
@@ -42,6 +49,7 @@ export interface AudioProjectInput {
   title: string;
   durationTarget?: number | null;
   backgroundMusicAssetId?: string | null;
+  musicPresetId?: string | null;
   voiceoverAssetId?: string | null;
   audioMood?: string | null;
   musicVolume?: number | null;
@@ -151,6 +159,8 @@ export interface AudioMixPlan {
   hasConfiguredAudio: boolean;
   totalDuration: number;
   mood: AudioMoodPreset | null;
+  musicPresetId: string | null;
+  musicPreset: MusicPreset | null;
   backgroundMusic: AudioMixPlanTrack | null;
   voiceover: AudioMixPlanTrack | null;
   sceneNarrations: AudioMixPlanSceneNarration[];
@@ -161,6 +171,15 @@ export interface AudioMixPlan {
   sfxVolume: number;
   enableAudioDucking: boolean;
   duckingLevel: number;
+  narrationDucking: {
+    enabled: boolean;
+    strategy: AudioDuckingStrategy;
+    amount: number;
+  };
+  sfxCues: BeatSyncSfxCue[];
+  microclipBeatSyncStrategy: string | null;
+  beatSyncPlan: BeatSyncPlan | null;
+  musicWarnings: string[];
   warnings: string[];
   validation: AudioMixPlanValidation;
   summary: string;
@@ -510,7 +529,8 @@ export function summarizeAudioPlan(plan: AudioMixPlan) {
     `${plan.sceneClipAudio.length} microclip audio`,
     plan.enableAudioDucking && (plan.voiceover || plan.sceneNarrations.length > 0)
       ? `ducking ${Math.round(plan.duckingLevel * 100)}%`
-      : "ducking off"
+      : "ducking off",
+    plan.musicPreset ? `music preset ${plan.musicPreset.name}` : "music preset n/a"
   ];
 
   return fragments.join(", ");
@@ -525,6 +545,7 @@ export function buildAudioMixPlan(
   const orderedScenes = [...scenes].sort((left, right) => left.order - right.order);
   const assetMap = buildAssetMap(assets);
   const mood = getAudioMoodPresetById(project.audioMood);
+  const musicPreset = getMusicPresetById(project.musicPresetId);
   const musicVolume = normalizeVolume(
     project.musicVolume,
     mood?.recommendedMusicVolume ?? 0.18
@@ -720,6 +741,8 @@ export function buildAudioMixPlan(
     hasConfiguredAudio,
     totalDuration,
     mood,
+    musicPresetId: musicPreset?.id ?? project.musicPresetId ?? null,
+    musicPreset,
     backgroundMusic,
     voiceover,
     sceneNarrations,
@@ -730,6 +753,15 @@ export function buildAudioMixPlan(
     sfxVolume,
     enableAudioDucking,
     duckingLevel,
+    narrationDucking: {
+      enabled: enableAudioDucking,
+      strategy: mood?.duckingStrategy ?? "bed_under_voice",
+      amount: duckingLevel
+    },
+    sfxCues: [],
+    microclipBeatSyncStrategy: null,
+    beatSyncPlan: null,
+    musicWarnings: [],
     warnings: [...new Set(warnings)],
     validation: {
       valid: true,
@@ -748,3 +780,5 @@ export function buildAudioMixPlan(
     summary: summarizeAudioPlan(preliminaryPlan)
   };
 }
+
+export * from "./music-library.js";

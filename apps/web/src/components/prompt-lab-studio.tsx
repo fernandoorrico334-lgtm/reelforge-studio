@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { suggestMusicPresetByContext } from "@reelforge/audio-engine";
 import {
   buildVisualPrompt,
   type NegativePromptPackId,
@@ -160,6 +161,7 @@ export function PromptLabStudio({
   );
   const [editorialMicroclipSuggestion, setEditorialMicroclipSuggestion] =
     useState("");
+  const [musicMoodHint, setMusicMoodHint] = useState("");
   const [narrationPreviewText, setNarrationPreviewText] = useState(
     projects[0]?.scenes[0]?.narrationText ??
       projects[0]?.scenes[0]?.captionText ??
@@ -217,6 +219,15 @@ export function PromptLabStudio({
     qualityPresets.find((preset) => preset.id === "standard") ??
     qualityPresets[0] ??
     null;
+  const suggestedMusicPreset = suggestMusicPresetByContext({
+    templateId: effectiveTemplateId || null,
+    tone:
+      musicMoodHint ||
+      effectiveChannel?.narrativeTone ||
+      selectedScene?.emotion ||
+      selectedRequirement?.emotion ||
+      null
+  });
   const preview = buildVisualPrompt({
     scene: selectedScene
       ? {
@@ -1101,6 +1112,39 @@ export function PromptLabStudio({
               O mock provider continua sendo o baseline deterministico para preview
               e smoke 100% local.
             </p>
+          </div>
+
+          <div className="rounded-[1.35rem] border border-[#7be0ff]/20 bg-[#7be0ff]/8 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                  Music Preset Suggestion
+                </p>
+                <h3 className="mt-2 text-xl font-semibold text-white">
+                  {suggestedMusicPreset.name}
+                </h3>
+                <p className="mt-2 text-sm leading-7 text-mist/68">
+                  Template/tom sugerem o preset {suggestedMusicPreset.id} para o
+                  proximo render.
+                </p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/72">
+                bpm{" "}
+                {suggestedMusicPreset.bpmRange
+                  ? `${suggestedMusicPreset.bpmRange.min}-${suggestedMusicPreset.bpmRange.max}`
+                  : "livre"}
+              </span>
+            </div>
+
+            <label className="mt-4 block">
+              <span className="mb-2 block text-sm text-mist/65">Music mood hint</span>
+              <input
+                value={musicMoodHint}
+                onChange={(event) => setMusicMoodHint(event.target.value)}
+                placeholder="hype, dark, documentary, suspense..."
+                className="w-full rounded-[1.4rem] border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+              />
+            </label>
           </div>
 
           <div className="rounded-[1.35rem] border border-[#7be0ff]/20 bg-[#7be0ff]/8 p-4">

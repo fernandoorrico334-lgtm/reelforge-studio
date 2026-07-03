@@ -168,6 +168,216 @@ export type AudioMasteringPresetId =
 
 export type AudioDuckingMode = "sidechain" | "global_reduction" | "none";
 
+export const musicSourceTypes = [
+  "local_upload",
+  "user_owned",
+  "royalty_free",
+  "licensed_pack",
+  "unknown"
+] as const;
+
+export type MusicSourceType = (typeof musicSourceTypes)[number];
+
+export const audioLicenseStatuses = [
+  "owned",
+  "royalty_free",
+  "licensed",
+  "platform_only",
+  "unknown"
+] as const;
+
+export type AudioLicenseStatus = (typeof audioLicenseStatuses)[number];
+
+export const musicMoods = [
+  "hype",
+  "dark",
+  "epic",
+  "suspense",
+  "emotional",
+  "aggressive",
+  "cinematic",
+  "calm",
+  "documentary",
+  "viral"
+] as const;
+
+export type MusicMood = (typeof musicMoods)[number];
+
+export const musicGenres = [
+  "phonk",
+  "trap",
+  "drill",
+  "cinematic",
+  "orchestral",
+  "electronic",
+  "ambient",
+  "rock",
+  "generic"
+] as const;
+
+export type MusicGenre = (typeof musicGenres)[number];
+
+export const musicEnergies = [
+  "low",
+  "medium",
+  "high",
+  "extreme"
+] as const;
+
+export type MusicEnergy = (typeof musicEnergies)[number];
+
+export const musicUseCases = [
+  "football",
+  "shorts",
+  "true_crime",
+  "documentary",
+  "cinematic",
+  "motivational",
+  "generic"
+] as const;
+
+export type MusicUseCase = (typeof musicUseCases)[number];
+
+export const sfxCategories = [
+  "whoosh",
+  "hit",
+  "riser",
+  "boom",
+  "crowd",
+  "whistle",
+  "impact",
+  "flash",
+  "transition",
+  "ambience"
+] as const;
+
+export type SfxCategory = (typeof sfxCategories)[number];
+
+export const sfxIntensities = [
+  "low",
+  "medium",
+  "high",
+  "extreme"
+] as const;
+
+export type SfxIntensity = (typeof sfxIntensities)[number];
+
+export const sfxUseCases = [
+  "football",
+  "transition",
+  "impact_moment",
+  "reveal",
+  "microclip",
+  "generic"
+] as const;
+
+export type SfxUseCase = (typeof sfxUseCases)[number];
+
+export const musicPresetIds = [
+  "football_hype",
+  "viral_fast_cut",
+  "cinematic_epic",
+  "true_crime_dark",
+  "documentary_clean",
+  "shorts_clean_voice"
+] as const;
+
+export type MusicPresetId = (typeof musicPresetIds)[number];
+
+export interface BeatMarker {
+  timeSeconds: number;
+  strength: number;
+  confidence: number;
+}
+
+export interface EnergyTimelinePoint {
+  timeSeconds: number;
+  energy: number;
+}
+
+export interface MusicAssetProfile {
+  assetId: string;
+  title: string;
+  artist: string | null;
+  sourceType: MusicSourceType;
+  licenseStatus: AudioLicenseStatus;
+  mood: MusicMood;
+  genre: MusicGenre;
+  bpm: number | null;
+  bpmConfidence: number;
+  energy: MusicEnergy;
+  useCase: MusicUseCase;
+  durationSeconds: number | null;
+  loudness: number | null;
+  beatMarkers: BeatMarker[];
+  energyTimeline: EnergyTimelinePoint[];
+  notes: string | null;
+  safetyWarning: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SfxAssetProfile {
+  assetId: string;
+  title: string;
+  category: SfxCategory;
+  intensity: SfxIntensity;
+  durationSeconds: number | null;
+  useCase: SfxUseCase;
+  licenseStatus: AudioLicenseStatus;
+  notes: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MusicPreset {
+  id: MusicPresetId;
+  name: string;
+  description: string;
+  preferredMood: MusicMood[];
+  preferredGenre: MusicGenre[];
+  bpmRange: {
+    min: number;
+    max: number;
+  } | null;
+  energyRange: MusicEnergy[];
+  recommendedSfxCategories: SfxCategory[];
+  defaultMusicVolume: number;
+  defaultNarrationDucking: number;
+  recommendedAudioMasteringPresetId: string;
+  microclipBeatSyncStrategy: string;
+  safetyNotes: string;
+}
+
+export interface BeatSyncSfxCue {
+  category: SfxCategory;
+  timeSeconds: number;
+  reason: string;
+  intensity: SfxIntensity;
+}
+
+export interface BeatSyncMicroclipPlacement {
+  microclipId: string | null;
+  sceneId: string | null;
+  label: string | null;
+  suggestedStartSeconds: number;
+  nearestBeatSeconds: number;
+  reason: string;
+}
+
+export interface BeatSyncPlan {
+  beatMarkersUsed: BeatMarker[];
+  suggestedCutTimes: number[];
+  suggestedFlashTimes: number[];
+  suggestedSfxCues: BeatSyncSfxCue[];
+  suggestedMicroclipPlacement: BeatSyncMicroclipPlacement[];
+  introBeatTime: number | null;
+  climaxBeatTime: number | null;
+  outroBeatTime: number | null;
+  warnings: string[];
+  confidence: number;
+}
+
 export interface AudioMasteringPresetSummary {
   id: AudioMasteringPresetId;
   name: string;
@@ -612,8 +822,43 @@ export interface StudioAsset {
   downloadedAt?: string | null;
   collectionId?: string | null;
   usageNotes?: string | null;
+  musicProfile?: MusicAssetProfile | null;
+  sfxProfile?: SfxAssetProfile | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MusicLibraryItemRecord {
+  asset: StudioAsset;
+  profile: MusicAssetProfile | null;
+  status: "profiled" | "pending";
+  summary: string;
+  warnings: string[];
+}
+
+export interface SfxLibraryItemRecord {
+  asset: StudioAsset;
+  profile: SfxAssetProfile | null;
+  status: "profiled" | "pending";
+  warnings: string[];
+}
+
+export interface SelectMusicResponse {
+  preset: MusicPreset;
+  selectedMusicAsset: MusicLibraryItemRecord | null;
+  selectedSfxAssets: SfxLibraryItemRecord[];
+  reason: string;
+  warnings: string[];
+  confidence: number;
+}
+
+export interface BuildBeatSyncPlanResponse {
+  projectId: string;
+  selectedMusicAssetId: string | null;
+  selectedMusicAssetPath: string | null;
+  musicPresetId: string | null;
+  beatSyncPlan: BeatSyncPlan;
+  warnings: string[];
 }
 
 export interface CharacterReference {
@@ -1271,6 +1516,8 @@ export interface ProjectAudioPlanResponse {
   hasConfiguredAudio: boolean;
   totalDuration: number;
   mood: AudioMoodPresetSummary | null;
+  musicPresetId: string | null;
+  musicPreset: MusicPreset | null;
   backgroundMusic: AudioMixPlanTrack | null;
   voiceover: AudioMixPlanTrack | null;
   sceneNarrations: AudioMixPlanSceneNarration[];
@@ -1281,6 +1528,15 @@ export interface ProjectAudioPlanResponse {
   sfxVolume: number;
   enableAudioDucking: boolean;
   duckingLevel: number;
+  narrationDucking: {
+    enabled: boolean;
+    strategy: "none" | "bed_under_voice";
+    amount: number;
+  };
+  sfxCues: BeatSyncSfxCue[];
+  microclipBeatSyncStrategy: string | null;
+  beatSyncPlan: BeatSyncPlan | null;
+  musicWarnings: string[];
   warnings: string[];
   validation: AudioMixPlanValidation;
   summary: string;
@@ -1928,6 +2184,7 @@ export interface ProjectPayload {
   templateId?: string | null;
   defaultCaptionStyle?: string | null;
   backgroundMusicAssetId?: string | null;
+  musicPresetId?: string | null;
   voiceoverAssetId?: string | null;
   audioMood?: AudioMoodPresetId | null;
   musicVolume?: number | null;
@@ -2472,6 +2729,13 @@ export interface RenderBlueprintResponse {
   hasEditorialMicroclips: boolean;
   microclipCount: number;
   totalMicroclipDurationSeconds: number;
+  selectedMusicAssetId?: string | null;
+  selectedMusicAssetPath?: string | null;
+  musicPresetId?: string | null;
+  musicLicenseStatus?: AudioLicenseStatus | null;
+  beatSyncPlan?: BeatSyncPlan | null;
+  sfxCueCount?: number;
+  musicWarnings?: string[];
   audio: ProjectAudioPlanResponse;
   summary: RenderBlueprintSummary;
   subtitleExports: {
@@ -2588,6 +2852,7 @@ export interface StudioProject {
   templateId?: string | null;
   defaultCaptionStyle?: string | null;
   backgroundMusicAssetId?: string | null;
+  musicPresetId?: string | null;
   voiceoverAssetId?: string | null;
   audioMood?: AudioMoodPresetId | null;
   musicVolume?: number | null;

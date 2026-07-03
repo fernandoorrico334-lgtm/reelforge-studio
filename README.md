@@ -4,7 +4,7 @@ ReelForge Studio e uma plataforma local em evolucao para transformar imagens,
 videos, quadrinhos, artes, screenshots, audios, musicas, efeitos e overlays em
 videos verticais 9:16 com acabamento cinematografico.
 
-Esta base agora cobre dezessete camadas do produto:
+Esta base agora cobre dezoito camadas do produto:
 
 - fundacao do monorepo;
 - persistencia local com Prisma + SQLite preparada;
@@ -36,6 +36,9 @@ Esta base agora cobre dezessete camadas do produto:
 - Premium Audio Studio Pipeline com presets de masterizacao, ducking real ou
   fallback global, compressor/limiter/loudnorm via FFmpeg quando disponiveis,
   metadata no `RenderJob` e smokes dedicados.
+- Music Library + Beat Sync Engine com perfis locais de musica e SFX, analise
+  aproximada via FFmpeg/ffprobe quando disponiveis, selecao automatica por
+  preset e plano ritmico para cortes, flashes, SFX e microclips.
 
 Continuam fora do escopo nesta etapa:
 
@@ -56,6 +59,8 @@ Continuam fora do escopo nesta etapa:
   `/projects/[id]` e `/research/[id]`.
 - `apps/web` com pagina `/generated-audio` e painel `Local Narration` em
   `/projects/[id]` e `/prompt-lab`.
+- `apps/web` com pagina `/music-library` e integracao de selecao automatica de
+  trilha em `/projects/[id]`.
 - `prisma/` com schema, seed e migrations para SQLite.
 - `storage/assets` para intake local.
 - `storage/assets/generated/narrations` para WAVs gerados localmente.
@@ -76,7 +81,8 @@ Continuam fora do escopo nesta etapa:
 - `packages/video-engine` com composicao de blueprint, Render V1 e
   Cinematic V2 server-side.
 - `packages/audio-engine` com moods, plano de mixagem, presets premium de
-  masterizacao e validacao deterministica de audio.
+  masterizacao, perfis de musica/SFX, selecao automatica e beat sync
+  deterministico.
 - `scripts/smoke-render-v1.mjs` para validacao ponta a ponta com assets reais
   gerados localmente.
 - `scripts/smoke-render-audio.mjs` para validacao ponta a ponta do pipeline de
@@ -255,6 +261,53 @@ Limitacoes da V1:
   ficar `disabled` por padrao.
 - clonagem de voz, imitacao de pessoa real e qualquer uso de API externa ficam
   fora desta etapa.
+
+## Music Library + Beat Sync Engine
+
+- `packages/audio-engine` agora concentra:
+  `MusicAssetProfile`, `SfxAssetProfile`, music presets, selecao automatica de
+  trilha, SFX recomendados e `BeatSyncPlan`.
+- A API expoe:
+  `GET /audio/music-presets`,
+  `GET /audio/music-presets/:id`,
+  `GET /audio/music-library`,
+  `POST /audio/music-library/analyze/:assetId`,
+  `PUT /audio/music-library/:assetId/profile`,
+  `GET /audio/sfx-library`,
+  `PUT /audio/sfx-library/:assetId/profile`,
+  `POST /audio/select-music` e
+  `POST /audio/beat-sync-plan`.
+- O dashboard ganhou a pagina `/music-library` para revisar trilhas/SFX locais,
+  rodar analise FFmpeg quando o ambiente permitir e salvar metadados editoriais.
+- `/projects/[id]` agora consegue:
+  selecionar `musicPresetId`,
+  sugerir preset por contexto,
+  escolher musica automaticamente e
+  visualizar o `Beat Sync Plan`.
+- O render blueprint passou a expor:
+  `selectedMusicAssetId`,
+  `selectedMusicAssetPath`,
+  `musicPresetId`,
+  `musicLicenseStatus`,
+  `beatSyncPlan`,
+  `sfxCueCount` e
+  `musicWarnings`.
+
+Validacoes principais da etapa:
+
+```bash
+npm run smoke:music-render-plan
+npm run smoke:music-library
+npm run smoke:render-with-music-sync
+```
+
+Observacoes:
+
+- `smoke:music-render-plan` e logico e nao depende de FFmpeg.
+- `smoke:music-library` e `smoke:render-with-music-sync` podem ficar `skipped`
+  no sandbox do Codex quando `child_process.spawn` estiver bloqueado.
+- A biblioteca trabalha apenas com assets de audio locais/autorizados; nao ha
+  downloader de musicas nem scraping.
 
 ## Manual Intake
 
@@ -451,6 +504,11 @@ Models adicionais da Etapa 10C:
 - `ResearchAssetRequirement`
 - `ResearchOutlineScene`
 
+Models adicionais da Etapa 11F:
+
+- `MusicAssetProfile`
+- `SfxAssetProfile`
+
 Package adicional da Etapa 10D:
 
 - `packages/media-collector`
@@ -460,6 +518,7 @@ Migration desta etapa:
 - `manual_intake_system`
 - `research_collector_v1`
 - `media_collector_v1`
+- `music_library_beat_sync_engine`
 
 ## Endpoints atuais
 
@@ -554,6 +613,15 @@ Migration desta etapa:
 - `GET /media/renders/:renderJobId/thumbnail`
 - `GET /audio-moods`
 - `GET /audio-moods/:id`
+- `GET /audio/music-presets`
+- `GET /audio/music-presets/:id`
+- `GET /audio/music-library`
+- `POST /audio/music-library/analyze/:assetId`
+- `PUT /audio/music-library/:assetId/profile`
+- `GET /audio/sfx-library`
+- `PUT /audio/sfx-library/:assetId/profile`
+- `POST /audio/select-music`
+- `POST /audio/beat-sync-plan`
 - `GET /templates`
 - `GET /templates/:id`
 - `GET /caption-styles`
@@ -607,14 +675,16 @@ Extensoes aceitas hoje:
   autorizadas.
 - `/channels` CRUD completo de canais.
 - `/assets` biblioteca com upload real, preview local, filtros e modo manual.
+- `/music-library` catalogo de trilhas e SFX locais com BPM, energia e licenca.
 - `/research` listagem e criacao de dossies.
 - `/research/[id]` workspace de sources, facts, timeline, hooks, outline e
   create-production.
 - `/projects` CRUD de projetos e acesso ao editor.
 - `/produce` wizard rapido para gerar projeto a partir de roteiro.
 - `/projects/[id]` timeline com cenas, painel narrativo, templates premium,
-  Caption Engine, Audio Engine, Production Checklist, smart picks, preview de
-  legenda, render blueprint e painel de renderizacoes.
+  Caption Engine, Audio Engine, Music Library, Beat Sync Plan,
+  Production Checklist, smart picks, preview de legenda, render blueprint e
+  painel de renderizacoes.
 - `/renders` monitor operacional da fila local, com logs e preview do MP4.
 
 ## Como testar Production Flow V1
@@ -809,6 +879,34 @@ curl http://localhost:4000/video-projects/<project-id>/audio-plan
 ```bash
 curl http://localhost:4000/audio/mastering-presets
 curl http://localhost:4000/audio/mastering-presets/football_hype
+```
+
+## Como testar Music Library + Beat Sync Engine
+
+1. Rode `npm run db:generate`.
+2. Rode `npm run db:migrate:deploy`.
+3. Rode `npm run build`.
+4. Rode `npm run typecheck`.
+5. Rode `npm run smoke:music-render-plan`.
+6. Se o ambiente permitir `child_process.spawn`, rode tambem:
+   - `npm run smoke:music-library`
+   - `npm run smoke:render-with-music-sync`
+7. Abra `/music-library` e confira:
+   - filtros por mood, genre, energy, use case e licenca;
+   - edicao de perfil musical e de SFX;
+   - acao `Analisar com FFmpeg` quando a API estiver ativa.
+8. Abra `/projects/[id]` e confira:
+   - seletor de `Music Preset`;
+   - acao `Selecionar musica automaticamente`;
+   - painel `Beat Sync Plan`;
+   - warnings de licenca/BPM quando houver.
+9. Rotas novas desta etapa:
+
+```bash
+curl http://localhost:4000/audio/music-presets
+curl http://localhost:4000/audio/music-library
+curl http://localhost:4000/audio/select-music -X POST -H "Content-Type: application/json" -d "{\"durationSeconds\":35,\"musicPresetId\":\"football_hype\",\"useCase\":\"football\",\"allowUnknownLicense\":false}"
+curl http://localhost:4000/audio/beat-sync-plan -X POST -H "Content-Type: application/json" -d "{\"projectId\":\"<project-id>\",\"musicPresetId\":\"football_hype\"}"
 ```
 
 ## Render modes atuais
@@ -1028,6 +1126,10 @@ upload para manter os registros apos reiniciar a API.
 - o Audio Engine agora aplica presets premium, compressor, limiter, loudnorm e
   ducking por FFmpeg quando o ambiente permite, mas ainda nao possui edicao por
   waveform nem automacao fina guiada por envelope visual;
+- a Music Library estima BPM, beat markers e energia de forma aproximada; quando
+  a confianca for baixa, o beat sync cai para grid ritmico seguro;
+- a selecao automatica de musica e SFX depende da qualidade do metadata local e
+  nunca inventa assets inexistentes;
 - o `cinematic_v2` ainda trabalha com fades por cena, sem crossfade real entre
   segmentos;
 - o `cinematic_v2` prioriza imagens e normalizacao segura de video, sem speed
@@ -1073,10 +1175,14 @@ upload para manter os registros apos reiniciar a API.
   retries automaticos e cleanup controlado.
 - Etapa 11C entregue: Premium Audio Studio Pipeline com presets de
   masterizacao, metadata de qualidade em `RenderJob` e smokes dedicados.
+- Etapa 11F entregue: Music Library + Beat Sync Engine com perfis locais de
+  trilha/SFX, pagina `/music-library`, auto-select no studio e blueprint
+  ritmico por projeto.
 - Proximo foco: refinamento de overlays, transicoes reais e composicao
   multi-faixa visual.
-- Evolucao futura do audio: automacao temporal mais fina, waveform tooling e
-  mix por faixa mais editorial.
+- Evolucao futura do audio: automacao temporal mais fina, waveform tooling,
+  mix por faixa mais editorial e sincronizacao musical mais precisa por analise
+  offline mais rica.
 
 ## Principios desta base
 

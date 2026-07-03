@@ -1,6 +1,7 @@
 import { loadEnv } from "./config/env.js";
 import { createApp } from "./http/app.js";
 import { resolveAssetRepository } from "./modules/assets/infrastructure/asset-repository-factory.js";
+import { resolveAudioLibraryRepository } from "./modules/audio-library/infrastructure/audio-library-repository-factory.js";
 import { createLocalAssetStorage } from "./modules/assets/infrastructure/local-asset-storage.js";
 import { resolveCharacterRepository } from "./modules/characters/infrastructure/character-repository-factory.js";
 import { resolveChannelRepository } from "./modules/channels/infrastructure/channel-repository-factory.js";
@@ -19,6 +20,7 @@ const [
   projectBinding,
   channelBinding,
   assetBinding,
+  audioLibraryBinding,
   characterBinding,
   intakeBinding,
   editorialMicroclipBinding,
@@ -30,6 +32,7 @@ const [
   resolveProjectRepository(dataBackend),
   resolveChannelRepository(dataBackend),
   resolveAssetRepository(dataBackend),
+  resolveAudioLibraryRepository(dataBackend),
   resolveCharacterRepository(dataBackend),
   resolveIntakeRepository(dataBackend),
   resolveEditorialMicroclipRepository(dataBackend),
@@ -42,7 +45,8 @@ const [
 const repositoryMode =
   projectBinding.backend === channelBinding.backend &&
   channelBinding.backend === assetBinding.backend &&
-  assetBinding.backend === characterBinding.backend &&
+  assetBinding.backend === audioLibraryBinding.backend &&
+  audioLibraryBinding.backend === characterBinding.backend &&
   characterBinding.backend === intakeBinding.backend &&
   intakeBinding.backend === editorialMicroclipBinding.backend &&
   editorialMicroclipBinding.backend === narrationJobBinding.backend &&
@@ -60,6 +64,7 @@ const app = createApp({
   researchRepository: researchBinding.repository,
   channelRepository: channelBinding.repository,
   assetRepository: assetBinding.repository,
+  audioLibraryRepository: audioLibraryBinding.repository,
   characterRepository: characterBinding.repository,
   editorialMicroclipRepository: editorialMicroclipBinding.repository,
   intakeRepository: intakeBinding.repository,
@@ -71,7 +76,7 @@ const app = createApp({
 
 app.listen(port, () => {
   console.log(
-    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, editorialMicroclips=${editorialMicroclipBinding.label}, narration=${narrationJobBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
+    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, audioLibrary=${audioLibraryBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, editorialMicroclips=${editorialMicroclipBinding.label}, narration=${narrationJobBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
   );
 });
 

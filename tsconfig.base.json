@@ -25,6 +25,9 @@
       "@reelforge/audio-engine/mastering": [
         "packages/audio-engine/src/mastering.ts"
       ],
+      "@reelforge/audio-engine/music-analysis": [
+        "packages/audio-engine/src/music-analysis.ts"
+      ],
       "@reelforge/narration-engine": [
         "packages/narration-engine/src/index.ts"
       ],

@@ -274,6 +274,34 @@ Entregue:
 - melhoria de `npm run smoke:render-with-narration` para expor preset e
   relatorio de audio.
 
+## Etapa 11F - Music Library + Beat Sync Engine
+
+Entregue:
+
+- migration `music_library_beat_sync_engine`;
+- modelos `MusicAssetProfile` e `SfxAssetProfile`;
+- `VideoProject.musicPresetId`;
+- endpoints:
+  `GET /audio/music-presets`,
+  `GET /audio/music-presets/:id`,
+  `GET /audio/music-library`,
+  `POST /audio/music-library/analyze/:assetId`,
+  `PUT /audio/music-library/:assetId/profile`,
+  `GET /audio/sfx-library`,
+  `PUT /audio/sfx-library/:assetId/profile`,
+  `POST /audio/select-music` e
+  `POST /audio/beat-sync-plan`;
+- pagina `/music-library` com gestao de trilhas e SFX locais;
+- integracao de `Music Preset`, auto-select e `Beat Sync Plan` em
+  `/projects/[id]`;
+- badges de musica/SFX/licenca em `/assets`;
+- analise local aproximada de BPM, beat markers, energia e loudness quando
+  FFmpeg/ffprobe estiverem disponiveis;
+- smokes:
+  `npm run smoke:music-render-plan`,
+  `npm run smoke:music-library` e
+  `npm run smoke:render-with-music-sync`.
+
 ## Proxima etapa operacional sugerida
 
 - Etapa 10I concluida: Workflow Packs + Image Quality Presets para ComfyUI
@@ -299,7 +327,7 @@ Entregue:
    prioridade e cleanup.
 2. Enriquecer overlays, crossfades e composicao multi-faixa.
 3. Aprofundar o audio premium com automacao temporal mais fina, waveform tooling
-   e mix por faixa.
+   mix por faixa e sincronizacao ritmica mais precisa.
 4. Conectar o Media Collector e o Research Collector a matching mais forte de
    assets e requirements.
 5. Conectar o Manual Intake a associacao mais forte com projetos e presets.

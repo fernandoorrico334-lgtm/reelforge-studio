@@ -218,6 +218,16 @@ export function RenderBlueprintPanel({
                 {blueprint.audio.voiceover ? "on" : "off"}
               </p>
               <p className="mt-2 text-xs text-mist/55">
+                selectedMusicAssetId {blueprint.selectedMusicAssetId ?? "n/a"} / preset{" "}
+                {blueprint.musicPresetId ?? "n/a"} / license{" "}
+                {blueprint.musicLicenseStatus ?? "n/a"}
+              </p>
+              <p className="mt-2 text-xs text-mist/55">
+                beat sync {blueprint.beatSyncPlan?.confidence?.toFixed(2) ?? "0.00"} / cut
+                times {blueprint.beatSyncPlan?.suggestedCutTimes.length ?? 0} / cues{" "}
+                {blueprint.sfxCueCount}
+              </p>
+              <p className="mt-2 text-xs text-mist/55">
                 editorial microclips {blueprint.microclipCount} / hasEditorialMicroclips{" "}
                 {blueprint.hasEditorialMicroclips ? "yes" : "no"}
               </p>
@@ -240,6 +250,12 @@ export function RenderBlueprintPanel({
               ) : null}
             </div>
           </div>
+
+          {(blueprint.musicWarnings?.length ?? 0) > 0 ? (
+            <div className="mt-4 rounded-[1.2rem] border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
+              {blueprint.musicWarnings?.join(" ")}
+            </div>
+          ) : null}
 
           <div className="mt-6 grid gap-3 xl:grid-cols-2">
             {blueprint.scenes.slice(0, 4).map((scene) => (

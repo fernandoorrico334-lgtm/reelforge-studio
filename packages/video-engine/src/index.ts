@@ -14,7 +14,13 @@ import {
 } from "@reelforge/caption-engine";
 import {
   buildAudioMixPlan,
-  type AudioMixPlan
+  buildBeatSyncPlan,
+  getMusicPresetById,
+  suggestMusicPresetByContext,
+  type AudioLicenseStatus,
+  type AudioMixPlan,
+  type MusicAssetProfile,
+  type SfxAssetProfile
 } from "@reelforge/audio-engine";
 import {
   getCinematicPresetById,
@@ -73,6 +79,8 @@ export interface BlueprintAssetInput {
   height: number | null;
   mimeType: string | null;
   extension: string | null;
+  musicProfile?: MusicAssetProfile | null;
+  sfxProfile?: SfxAssetProfile | null;
 }
 
 export interface BlueprintEditorialMicroclipInput {
@@ -141,6 +149,7 @@ export interface BlueprintProjectInput {
   defaultCaptionStyle: string | null;
   backgroundMusicAssetId: string | null;
   backgroundMusicAsset: BlueprintAssetInput | null;
+  musicPresetId: string | null;
   voiceoverAssetId: string | null;
   voiceoverAsset: BlueprintAssetInput | null;
   audioMood: string | null;
@@ -310,6 +319,13 @@ export interface RenderBlueprint {
   hasEditorialMicroclips: boolean;
   microclipCount: number;
   totalMicroclipDurationSeconds: number;
+  selectedMusicAssetId: string | null;
+  selectedMusicAssetPath: string | null;
+  musicPresetId: string | null;
+  musicLicenseStatus: AudioLicenseStatus | null;
+  beatSyncPlan: AudioMixPlan["beatSyncPlan"];
+  sfxCueCount: number;
+  musicWarnings: string[];
   audio: AudioMixPlan;
   summary: RenderBlueprintSummary;
   subtitleExports: {
@@ -719,12 +735,13 @@ function buildBlueprintAudioPlan(
       extension: asset.extension
     }));
 
-  return buildAudioMixPlan(
+  const audioPlan = buildAudioMixPlan(
     {
       id: project.id,
       title: project.title,
       durationTarget: project.durationTarget,
       backgroundMusicAssetId: project.backgroundMusicAssetId,
+      musicPresetId: project.musicPresetId,
       voiceoverAssetId: project.voiceoverAssetId,
       audioMood: project.audioMood,
       musicVolume: project.musicVolume,
@@ -769,6 +786,60 @@ function buildBlueprintAudioPlan(
     })),
     [...new Map(audioAssets.map((asset) => [asset.id, asset] as const)).values()]
   );
+  const selectedMusicPreset =
+    getMusicPresetById(project.musicPresetId) ??
+    suggestMusicPresetByContext({
+      templateId: project.templateId,
+      tone: project.channel.narrativeTone,
+      useCase: project.channel.niche,
+      niche: project.channel.niche
+    });
+  const beatSyncPlan = buildBeatSyncPlan({
+    musicAssetProfile: project.backgroundMusicAsset?.musicProfile ?? null,
+    reelDurationSeconds: audioPlan.totalDuration,
+    microclips: project.scenes.flatMap((scene) =>
+      (sceneMicroclipMap.get(scene.id) ?? []).map((microclip) => ({
+        microclipId: microclip.microclipId,
+        sceneId: scene.id,
+        label: microclip.label,
+        usageMode: microclip.usageMode,
+        durationSeconds: microclip.durationSeconds,
+        insertStartSeconds: microclip.insertStartSeconds,
+        narrationOverlay: microclip.narrationOverlay
+      }))
+    ),
+    sceneCount: project.scenes.length,
+    presetId: selectedMusicPreset.id,
+    narrationWindows: audioPlan.sceneNarrations.map((sceneNarration) => ({
+      startSeconds: sceneNarration.startTime,
+      endSeconds: sceneNarration.startTime + sceneNarration.duration
+    }))
+  });
+  const musicWarnings = [...beatSyncPlan.warnings];
+
+  if (!project.backgroundMusicAssetId) {
+    musicWarnings.push("Projeto sem musica selecionada na biblioteca local.");
+  }
+
+  if (project.backgroundMusicAsset?.musicProfile?.safetyWarning) {
+    musicWarnings.push(project.backgroundMusicAsset.musicProfile.safetyWarning);
+  }
+
+  return {
+    ...audioPlan,
+    musicPresetId: selectedMusicPreset.id,
+    musicPreset: selectedMusicPreset,
+    narrationDucking: {
+      enabled: audioPlan.enableAudioDucking,
+      strategy: audioPlan.narrationDucking.strategy,
+      amount: audioPlan.duckingLevel
+    },
+    sfxCues: beatSyncPlan.suggestedSfxCues,
+    microclipBeatSyncStrategy: selectedMusicPreset.microclipBeatSyncStrategy,
+    beatSyncPlan,
+    musicWarnings: [...new Set(musicWarnings)],
+    warnings: [...new Set([...audioPlan.warnings, ...musicWarnings])]
+  };
 }
 
 export function resolveProjectTemplate(
@@ -1111,6 +1182,14 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     hasEditorialMicroclips,
     microclipCount,
     totalMicroclipDurationSeconds,
+    selectedMusicAssetId: project.backgroundMusicAssetId,
+    selectedMusicAssetPath: project.backgroundMusicAsset?.path ?? null,
+    musicPresetId: audio.musicPresetId,
+    musicLicenseStatus:
+      project.backgroundMusicAsset?.musicProfile?.licenseStatus ?? null,
+    beatSyncPlan: audio.beatSyncPlan,
+    sfxCueCount: audio.sfxCues.length,
+    musicWarnings: audio.musicWarnings,
     audio,
     summary: {
       durationTotal,
