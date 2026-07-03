@@ -382,8 +382,23 @@ async function main() {
   assert(analyzed.profile, "Music analysis did not persist a profile.");
   assert(musicLibrary.length > 0, "Music library is empty after analysis.");
   assert(
-    selection.selectedMusicAsset?.asset.id === musicAsset.id,
-    "Automatic music selection did not pick the smoke asset."
+    selection.selectedMusicAsset,
+    "Automatic music selection did not return any compatible music asset."
+  );
+  assert(
+    selection.selectedMusicAsset.profile?.licenseStatus !== "unknown" &&
+      selection.selectedMusicAsset.profile?.licenseStatus !== "platform_only",
+    "Automatic music selection picked an asset with unsafe license status."
+  );
+  assert(
+    selection.selectedMusicAsset.profile?.useCase === "football",
+    "Automatic music selection did not pick a football-compatible track."
+  );
+  assert(
+    ["hype", "aggressive", "epic", "cinematic"].includes(
+      selection.selectedMusicAsset.profile?.mood ?? ""
+    ),
+    "Automatic music selection returned a track with incompatible mood for football_hype."
   );
   assert(
     beatSync.selectedMusicAssetId === musicAsset.id,
@@ -394,6 +409,7 @@ async function main() {
     projectId: project.id,
     assetId: musicAsset.id,
     selectedMusicAssetId: selection.selectedMusicAsset?.asset.id ?? null,
+    selectedMusicFilename: selection.selectedMusicAsset?.asset.filename ?? null,
     beatMarkersUsed: analyzed.profile?.beatMarkers.length ?? 0,
     beatSyncConfidence: beatSync.beatSyncPlan.confidence,
     warnings: beatSync.warnings,
