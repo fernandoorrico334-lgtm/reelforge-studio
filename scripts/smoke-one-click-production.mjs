@@ -304,7 +304,8 @@ async function main() {
       "prepare_only should be completed or partial with warnings."
     );
 
-    printSmokeSummary("smoke:one-click-production", {
+    printSmokeSummary({
+      smoke: "one-click-production",
       status: "completed",
       projectId,
       runId: prepared.runId,
