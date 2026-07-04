@@ -25,6 +25,18 @@ packages/audio-engine/src/mastering.d.ts
 
 storage/assets/*
 !storage/assets/.gitkeep
+!storage/assets/music/
+storage/assets/music/*
+!storage/assets/music/.gitkeep
+!storage/assets/sfx/
+storage/assets/sfx/*
+!storage/assets/sfx/.gitkeep
+!storage/assets/microclips/
+storage/assets/microclips/*
+!storage/assets/microclips/.gitkeep
+!storage/assets/imports/
+storage/assets/imports/*
+!storage/assets/imports/.gitkeep
 !storage/assets/generated/
 storage/assets/generated/*
 !storage/assets/generated/narrations/
