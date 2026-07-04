@@ -35,8 +35,11 @@ import {
   generateSceneNarrationRequest,
   generateSceneVisualRequest,
   getEditorialMicroclipsForProjectRequest,
+  getOneClickProductionChecklistSnapshot,
+  getOneClickProductionRunsSnapshot,
   getProjectBeatSyncPlanSnapshot,
   getProjectCaptionAnalysisSnapshot,
+  getProjectDetailSnapshot,
   getProjectProductionChecklistSnapshot,
   getProjectRenderBlueprintSnapshot,
   getSceneGeneratedImagesRequest,
@@ -44,6 +47,7 @@ import {
   markVisualGenerationJobReviewedRequest,
   regenerateVisualGenerationJobRequest,
   reorderScenesRequest,
+  runOneClickProductionRequest,
   selectMusicForProjectSnapshot,
   useSceneNarrationRequest,
   useGeneratedImageForSceneRequest,
@@ -84,6 +88,9 @@ import type {
   ProjectProductionChecklistResponse,
   ProjectScene,
   ProjectStatus,
+  ReelProductionChecklist,
+  ReelProductionRun,
+  ReelProductionRunMode,
   ReelsFactoryNextAction,
   RenderBlueprintResponse,
   ScenePayload,
@@ -1013,6 +1020,15 @@ export function ProjectStudio({
     useState<ProjectProductionChecklistResponse | null>(null);
   const [productionChecklistSource, setProductionChecklistSource] =
     useState<DataSource>("mock");
+  const [oneClickChecklist, setOneClickChecklist] =
+    useState<ReelProductionChecklist | null>(null);
+  const [oneClickChecklistSource, setOneClickChecklistSource] =
+    useState<DataSource>("mock");
+  const [oneClickRuns, setOneClickRuns] = useState<ReelProductionRun[]>([]);
+  const [oneClickRunsSource, setOneClickRunsSource] =
+    useState<DataSource>("mock");
+  const [oneClickRunningMode, setOneClickRunningMode] =
+    useState<ReelProductionRunMode | null>(null);
   const [blueprint, setBlueprint] = useState<RenderBlueprintResponse | null>(null);
   const [beatSyncPlan, setBeatSyncPlan] =
     useState<BuildBeatSyncPlanResponse | null>(null);
@@ -1373,8 +1389,10 @@ export function ProjectStudio({
 
     Promise.all([
       getProjectCaptionAnalysisSnapshot(project.id, project),
-      getProjectProductionChecklistSnapshot(project.id, project)
-    ]).then(([captionSnapshot, checklistSnapshot]) => {
+      getProjectProductionChecklistSnapshot(project.id, project),
+      getOneClickProductionChecklistSnapshot(project.id, project),
+      getOneClickProductionRunsSnapshot(project.id)
+    ]).then(([captionSnapshot, checklistSnapshot, oneClickSnapshot, runsSnapshot]) => {
       if (!active) {
         return;
       }
@@ -1383,6 +1401,10 @@ export function ProjectStudio({
       setCaptionAnalysisSource(captionSnapshot.source);
       setProductionChecklist(checklistSnapshot.item);
       setProductionChecklistSource(checklistSnapshot.source);
+      setOneClickChecklist(oneClickSnapshot.item);
+      setOneClickChecklistSource(oneClickSnapshot.source);
+      setOneClickRuns(runsSnapshot.items);
+      setOneClickRunsSource(runsSnapshot.source);
     });
 
     return () => {
@@ -1700,6 +1722,71 @@ export function ProjectStudio({
 
   async function handleLoadBlueprint() {
     await loadBlueprintFor(project);
+  }
+
+  async function refreshOneClickProduction(nextProject: StudioProject) {
+    const [checklistSnapshot, runsSnapshot] = await Promise.all([
+      getOneClickProductionChecklistSnapshot(nextProject.id, nextProject),
+      getOneClickProductionRunsSnapshot(nextProject.id)
+    ]);
+
+    setOneClickChecklist(checklistSnapshot.item);
+    setOneClickChecklistSource(checklistSnapshot.source);
+    setOneClickRuns(runsSnapshot.items);
+    setOneClickRunsSource(runsSnapshot.source);
+  }
+
+  async function handleOneClickProduction(mode: ReelProductionRunMode) {
+    setOneClickRunningMode(mode);
+
+    try {
+      const result = await runOneClickProductionRequest(project.id, {
+        mode,
+        providerStrategy: {
+          visualProvider: "comfyui-local",
+          fallbackVisualProvider: "mock-svg",
+          narrationProvider: "mock-tts"
+        },
+        defaults: {
+          voicePackId:
+            appliedEditingStyleSummary?.recommendedNarrationVoicePackId ??
+            narrationVoicePackId,
+          musicPresetId: selectedMusicPreset.id,
+          audioMasteringPresetId: selectedAudioMasteringPreset.id,
+          qualityPresetId: visualQualityPresetId,
+          workflowPackId: visualWorkflowPackId
+        },
+        options: {
+          generateMissingNarration: true,
+          generateMissingVisuals: true,
+          selectMusic: true,
+          buildBeatSyncPlan: true,
+          useEditorialMicroclips: true,
+          createRenderJob: mode === "render",
+          runRender: mode === "render"
+        }
+      });
+      const projectSnapshot = await getProjectDetailSnapshot(project.id);
+      const nextProject = projectSnapshot.item
+        ? {
+            ...projectSnapshot.item,
+            scenes: sortScenes(projectSnapshot.item.scenes)
+          }
+        : project;
+
+      setProject(nextProject);
+      setSource(projectSnapshot.source);
+      setOneClickChecklist(result.checklist);
+      await refreshOneClickProduction(nextProject);
+      await loadBlueprintFor(nextProject);
+      setStatusMessage(
+        `One-Click ${mode.replaceAll("_", " ")} finalizado com status ${result.status}.`
+      );
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    } finally {
+      setOneClickRunningMode(null);
+    }
   }
 
   async function refreshGeneratedImagesForScene(sceneId: string) {
@@ -4509,6 +4596,134 @@ export function ProjectStudio({
                   {warning}
                 </div>
               ))}
+            </div>
+          ) : null}
+        </article>
+
+        <article className="rounded-[1.9rem] border border-[#9af0b2]/20 bg-[#9af0b2]/8 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-mist/55">
+                One-Click Production
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">
+                Produzir reel a partir do projeto atual
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-mist/68">
+                Checklist, narração, visual, música, beat sync, blueprint e
+                RenderJob em um fluxo assistido local.
+              </p>
+            </div>
+            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-mist/65">
+              checklist {oneClickChecklistSource} / runs {oneClickRunsSource}
+            </span>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Cenas
+              </p>
+              <p className="mt-2 text-xl font-semibold text-white">
+                {oneClickChecklist?.scenesTotal ?? orderedScenes.length}
+              </p>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Narração
+              </p>
+              <p className="mt-2 text-xl font-semibold text-white">
+                {oneClickChecklist?.scenesWithNarration ?? narrationReadyCount}/
+                {oneClickChecklist?.scenesTotal ?? orderedScenes.length}
+              </p>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Visual
+              </p>
+              <p className="mt-2 text-xl font-semibold text-white">
+                {oneClickChecklist?.scenesWithVisual ?? visualReadyCount}/
+                {oneClickChecklist?.scenesTotal ?? orderedScenes.length}
+              </p>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Render
+              </p>
+              <p className="mt-2 text-xl font-semibold text-white">
+                {oneClickChecklist?.renderReady ? "ready" : "partial"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            {(["dry_run", "prepare_only", "render"] as ReelProductionRunMode[]).map(
+              (mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    void handleOneClickProduction(mode);
+                  }}
+                  disabled={Boolean(oneClickRunningMode)}
+                  className="rounded-full border border-[#9af0b2]/30 bg-[#9af0b2]/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[#d8ffe0] disabled:opacity-45"
+                >
+                  {oneClickRunningMode === mode
+                    ? "rodando..."
+                    : mode === "dry_run"
+                      ? "Dry run"
+                      : mode === "prepare_only"
+                        ? "Preparar assets"
+                        : "Produzir Reel"}
+                </button>
+              )
+            )}
+          </div>
+
+          {oneClickChecklist?.warnings.length ? (
+            <div className="mt-5 grid gap-2">
+              {oneClickChecklist.warnings.slice(0, 4).map((warning) => (
+                <div
+                  key={warning}
+                  className="rounded-[1rem] border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"
+                >
+                  {warning}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {oneClickRuns[0] ? (
+            <div className="mt-5 rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                    Último run
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-white">
+                    {oneClickRuns[0].mode} / {oneClickRuns[0].status}
+                  </p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/65">
+                  {oneClickRuns[0].renderJobId ?? "sem render job"}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                {oneClickRuns[0].steps.slice(0, 6).map((step) => (
+                  <div
+                    key={step.id}
+                    className="rounded-[1rem] border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-mist/70"
+                  >
+                    <span className="text-white">{step.label}</span> /{" "}
+                    {step.status}
+                  </div>
+                ))}
+              </div>
+              {oneClickRuns[0].outputPath ? (
+                <p className="mt-3 text-xs leading-6 text-mist/65">
+                  output {oneClickRuns[0].outputPath}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </article>

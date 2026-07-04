@@ -670,7 +670,7 @@ export function ReelsFactoryStudio({
                   href={`/projects/${createdProject.projectId}`}
                   className="rounded-full border border-signal/30 bg-signal/12 px-4 py-2 text-xs text-signal"
                 >
-                  Abrir projeto
+                  Abrir producao
                 </Link>
                 <Link
                   href={`/projects/${createdProject.projectId}`}
@@ -682,7 +682,7 @@ export function ReelsFactoryStudio({
                   href={`/projects/${createdProject.projectId}`}
                   className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-mist/80"
                 >
-                  Gerar imagens
+                  Produzir agora
                 </Link>
                 <Link
                   href={`/projects/${createdProject.projectId}`}
@@ -727,7 +727,7 @@ export function ReelsFactoryStudio({
                       href={`/projects/${item.projectId}`}
                       className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-mist/80"
                     >
-                      Abrir projeto
+                      Produzir projeto
                     </Link>
                   </div>
                 </div>

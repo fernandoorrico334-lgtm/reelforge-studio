@@ -105,6 +105,8 @@ import type {
   NarrationJob,
   NarrationProviderDescriptor,
   NarrationVoicePack,
+  OneClickProductionPayload,
+  OneClickProductionResponse,
   ResearchAnalyzeResponse,
   ResearchConnectorSearchPayload,
   ResearchCreateProductionPayload,
@@ -131,6 +133,8 @@ import type {
   ReelsFactoryPreviewResponse,
   ReelsFactoryTemplate,
   RenderBlueprintResponse,
+  ReelProductionChecklist,
+  ReelProductionRun,
   ResearchRequirementPromptBuildResponse,
   ScenePayload,
   ScenePromptBuildResponse,
@@ -2205,6 +2209,121 @@ export async function getProjectProductionChecklistSnapshot(
       item: buildLocalProductionChecklist(cloneValue(project)),
       source: 'mock'
     };
+  }
+}
+
+function buildLocalOneClickChecklist(project: StudioProject): ReelProductionChecklist {
+  const scenes = project.scenes.map((scene) => ({
+    sceneId: scene.id,
+    order: scene.order,
+    title: scene.title,
+    narrationReady: Boolean(scene.generatedNarrationAssetId),
+    visualReady: Boolean(scene.generatedAssetId ?? scene.assetId),
+    microclipCount: 0,
+    effectiveAssetId: scene.generatedAssetId ?? scene.assetId ?? null,
+    effectiveNarrationAssetId: scene.generatedNarrationAssetId ?? null,
+    warnings: [
+      ...(!scene.generatedNarrationAssetId ? ["Cena sem narracao gerada."] : []),
+      ...(!(scene.generatedAssetId ?? scene.assetId)
+        ? ["Cena sem visual efetivo."]
+        : [])
+    ]
+  }));
+  const scenesWithNarration = scenes.filter((scene) => scene.narrationReady).length;
+  const scenesWithVisual = scenes.filter((scene) => scene.visualReady).length;
+  const missingItems = [
+    ...(scenesWithNarration < project.scenes.length ? ["narration"] : []),
+    ...(scenesWithVisual < project.scenes.length ? ["visuals"] : [])
+  ];
+
+  return {
+    projectId: project.id,
+    scenesTotal: project.scenes.length,
+    scenesWithNarration,
+    scenesWithVisual,
+    scenesWithMicroclips: 0,
+    hasMusic: Boolean(project.backgroundMusicAssetId),
+    hasBeatSyncPlan: Boolean(project.backgroundMusicAssetId || project.musicPresetId),
+    hasEditingReferencePreset: Boolean(project.editingReferencePresetId),
+    hasAudioMasteringPreset: true,
+    renderReady: project.scenes.length > 0 && missingItems.length === 0,
+    missingItems,
+    scenes,
+    warnings: [
+      ...(!project.backgroundMusicAssetId ? ["Projeto sem musica selecionada."] : []),
+      ...(!project.editingReferencePresetId ? ["Projeto sem preset editorial."] : [])
+    ],
+    nextActions: [
+      ...(missingItems.includes("narration") ? ["generate_missing_narration"] : []),
+      ...(missingItems.includes("visuals") ? ["generate_missing_visuals"] : []),
+      ...(!project.backgroundMusicAssetId ? ["select_music_optional"] : []),
+      "prepare_assets"
+    ]
+  };
+}
+
+export async function getOneClickProductionChecklistRequest(projectId: string) {
+  return requestJson<ReelProductionChecklist>(
+    `/reel-production/projects/${encodeURIComponent(projectId)}/checklist`
+  );
+}
+
+export async function getOneClickProductionChecklistSnapshot(
+  projectId: string,
+  fallbackProject?: StudioProject | null
+): Promise<{
+  item: ReelProductionChecklist | null;
+  source: DataSource;
+}> {
+  try {
+    const item = await getOneClickProductionChecklistRequest(projectId);
+    return { item, source: "api" };
+  } catch (error) {
+    const project = fallbackProject ?? findMockProject(projectId);
+
+    if (!project) {
+      logServerFallback(`reel-production-checklist:${projectId}`, error);
+      return { item: null, source: "mock" };
+    }
+
+    return {
+      item: buildLocalOneClickChecklist(cloneValue(project)),
+      source: "mock"
+    };
+  }
+}
+
+export async function runOneClickProductionRequest(
+  projectId: string,
+  payload: OneClickProductionPayload
+) {
+  return requestJson<OneClickProductionResponse>(
+    `/reel-production/projects/${encodeURIComponent(projectId)}/run`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function getOneClickProductionRunsRequest(projectId: string) {
+  return requestJson<ReelProductionRun[]>(
+    `/reel-production/projects/${encodeURIComponent(projectId)}/runs`
+  );
+}
+
+export async function getOneClickProductionRunsSnapshot(
+  projectId: string
+): Promise<{
+  items: ReelProductionRun[];
+  source: DataSource;
+}> {
+  try {
+    const items = await getOneClickProductionRunsRequest(projectId);
+    return { items, source: "api" };
+  } catch (error) {
+    logServerFallback(`reel-production-runs:${projectId}`, error);
+    return { items: [], source: "mock" };
   }
 }
 

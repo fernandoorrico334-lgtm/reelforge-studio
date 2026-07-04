@@ -149,6 +149,14 @@ Na Etapa 11G, `apps/web` ganhou tambem:
 - link operacional para a biblioteca de referencias no dashboard e na barra
   lateral.
 
+Na Etapa 11H, `apps/web` ganhou tambem:
+
+- card `One-Click Production` no dashboard;
+- painel `One-Click Production` em `/projects/[id]`;
+- acoes `Dry run`, `Preparar assets` e `Produzir Reel`;
+- leitura de checklist, runs, warnings e RenderJob gerado pelo fluxo;
+- atalhos na Reels Factory para abrir a producao do projeto criado.
+
 ## apps/api
 
 Responsavel por expor os contratos HTTP e orquestrar os casos de uso.
@@ -168,6 +176,7 @@ Estado atual:
 - modulo `research` com dossies, fontes e analise editorial local;
 - modulo `projects` com CRUD completo de projetos e cenas;
 - modulo `production` com wizard local deterministico;
+- modulo `reel-production` com checklist inteligente e orquestracao one-click;
 - modulo `render-jobs` com fila, detalhe e media final;
 - escolha explicita do backend via `DATA_BACKEND`.
 
@@ -197,6 +206,11 @@ Rotas atuais:
 - `POST /video-projects/:id/scenes/reorder`
 - `POST /video-projects/:id/render-jobs`
 - `POST /production/create-from-script`
+- `GET /reel-production/projects/:projectId/checklist`
+- `POST /reel-production/projects/:projectId/run`
+- `GET /reel-production/projects/:projectId/runs`
+- `GET /reel-production/runs/:id`
+- `POST /reel-production/runs/:id/cancel`
 - `GET /render-jobs`
 - `GET /render-jobs/:id`
 - `POST /render-jobs/:id/cancel`

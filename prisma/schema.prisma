@@ -465,6 +465,21 @@ enum EditingReferenceMicroclipPlacement {
   multiple
 }
 
+enum ReelProductionRunStatus {
+  draft
+  running
+  completed
+  failed
+  partial
+  cancelled
+}
+
+enum ReelProductionRunMode {
+  dry_run
+  prepare_only
+  render
+}
+
 model Channel {
   id                       String            @id @default(cuid())
   name                     String            @unique
@@ -928,11 +943,32 @@ model VideoProject {
   mediaCollections      MediaCollection[]
   scenes                Scene[]
   renderJobs            RenderJob[]
+  reelProductionRuns    ReelProductionRun[]
   visualGenerationJobs  VisualGenerationJob[]
   narrationJobs         NarrationJob[]
   editorialMicroclips   EditorialMicroclip[]
 
   @@index([channelId, status])
+}
+
+model ReelProductionRun {
+  id             String                  @id @default(cuid())
+  videoProjectId String
+  status         ReelProductionRunStatus @default(draft)
+  mode           ReelProductionRunMode
+  steps          String                  @default("[]")
+  startedAt      DateTime?
+  completedAt    DateTime?
+  errorMessage   String?
+  renderJobId    String?
+  outputPath     String?
+  metadata       String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  videoProject   VideoProject            @relation(fields: [videoProjectId], references: [id], onDelete: Cascade)
+
+  @@index([videoProjectId, createdAt])
+  @@index([status, createdAt])
 }
 
 model Scene {

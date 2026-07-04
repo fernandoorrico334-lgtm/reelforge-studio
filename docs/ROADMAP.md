@@ -328,6 +328,28 @@ Entregue:
 - uso seguro de `storage/references/` para reels locais fora do Git;
 - smoke `npm run smoke:editing-reference-presets`.
 
+## Etapa 11H - One-Click Reel Production Flow
+
+Entregue:
+
+- migration `one_click_reel_production`;
+- modelo `ReelProductionRun` para rastrear execucao, passos, status,
+  RenderJob e output;
+- modulo API `reel-production` com checklist e orquestracao de runs;
+- endpoints:
+  `GET /reel-production/projects/:projectId/checklist`,
+  `POST /reel-production/projects/:projectId/run`,
+  `GET /reel-production/projects/:projectId/runs`,
+  `GET /reel-production/runs/:id` e
+  `POST /reel-production/runs/:id/cancel`;
+- modos `dry_run`, `prepare_only` e `render`;
+- integracao com Reels Factory, narracao local, Hybrid Visual, Music Library,
+  Beat Sync, microclips opcionais, Render Blueprint e RenderJob;
+- painel `One-Click Production` em `/projects/[id]`;
+- card no dashboard e atalhos operacionais na Reels Factory;
+- smoke `npm run smoke:one-click-production` e smoke opcional
+  `npm run smoke:one-click-render`.
+
 ## Proxima etapa operacional sugerida
 
 - aprofundar a analise editorial por blocos, nao apenas por media global;

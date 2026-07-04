@@ -11,6 +11,7 @@ import { resolveVisualGenerationJobRepository } from "./modules/hybrid-visual/in
 import { resolveIntakeRepository } from "./modules/intake/infrastructure/intake-repository-factory.js";
 import { resolveNarrationJobRepository } from "./modules/narration/infrastructure/narration-job-repository-factory.js";
 import { resolveProjectRepository } from "./modules/projects/infrastructure/project-repository-factory.js";
+import { resolveReelProductionRunRepository } from "./modules/reel-production/infrastructure/reel-production-run-repository-factory.js";
 import { resolveResearchRepository } from "./modules/research/infrastructure/research-repository-factory.js";
 import { resolveRenderJobRepository } from "./modules/render-jobs/infrastructure/render-job-repository-factory.js";
 import { createLocalRenderStorage } from "./modules/render-jobs/infrastructure/local-render-storage.js";
@@ -27,6 +28,7 @@ const [
   editorialMicroclipBinding,
   editingReferenceBinding,
   narrationJobBinding,
+  reelProductionRunBinding,
   researchBinding,
   renderJobBinding,
   visualGenerationJobBinding
@@ -40,6 +42,7 @@ const [
   resolveEditorialMicroclipRepository(dataBackend),
   resolveEditingReferenceRepository(dataBackend),
   resolveNarrationJobRepository(dataBackend),
+  resolveReelProductionRunRepository(dataBackend),
   resolveResearchRepository(dataBackend),
   resolveRenderJobRepository(dataBackend),
   resolveVisualGenerationJobRepository(dataBackend)
@@ -55,6 +58,7 @@ const repositoryMode =
   editorialMicroclipBinding.backend === editingReferenceBinding.backend &&
   editingReferenceBinding.backend === narrationJobBinding.backend &&
   narrationJobBinding.backend === researchBinding.backend &&
+  reelProductionRunBinding.backend === researchBinding.backend &&
   researchBinding.backend === renderJobBinding.backend &&
   renderJobBinding.backend === visualGenerationJobBinding.backend
     ? projectBinding.backend
@@ -74,6 +78,7 @@ const app = createApp({
   editingReferenceRepository: editingReferenceBinding.repository,
   intakeRepository: intakeBinding.repository,
   narrationJobRepository: narrationJobBinding.repository,
+  reelProductionRunRepository: reelProductionRunBinding.repository,
   renderJobRepository: renderJobBinding.repository,
   renderStorage: createLocalRenderStorage(),
   visualGenerationJobRepository: visualGenerationJobBinding.repository
@@ -81,7 +86,7 @@ const app = createApp({
 
 app.listen(port, () => {
   console.log(
-    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, audioLibrary=${audioLibraryBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, editorialMicroclips=${editorialMicroclipBinding.label}, editingReferences=${editingReferenceBinding.label}, narration=${narrationJobBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
+    `ReelForge API listening on http://localhost:${port} with projects=${projectBinding.label}, channels=${channelBinding.label}, assets=${assetBinding.label}, audioLibrary=${audioLibraryBinding.label}, characters=${characterBinding.label}, intake=${intakeBinding.label}, editorialMicroclips=${editorialMicroclipBinding.label}, editingReferences=${editingReferenceBinding.label}, narration=${narrationJobBinding.label}, reelProduction=${reelProductionRunBinding.label}, research=${researchBinding.label}, renders=${renderJobBinding.label}, hybridVisual=${visualGenerationJobBinding.label}`
   );
 });
 

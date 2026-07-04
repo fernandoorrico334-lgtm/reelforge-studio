@@ -141,6 +141,13 @@ export default async function HomePage() {
           accent="#ffe28a"
         />
         <DashboardCard
+          href="/projects"
+          title="One-Click Production"
+          value="Ready"
+          description="Abra um projeto e produza narração, visual, música, blueprint e RenderJob em um fluxo assistido."
+          accent="#9af0b2"
+        />
+        <DashboardCard
           href="/produce"
           title="Nova Producao"
           value="Flow"

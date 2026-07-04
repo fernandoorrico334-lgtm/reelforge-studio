@@ -12,6 +12,7 @@ import type { IntakeRepository } from "../modules/intake/application/intake-repo
 import type { NarrationJobRepository } from "../modules/narration/application/narration-job-repository.js";
 import { createStudioManifest } from "../modules/projects/application/create-studio-manifest.js";
 import type { ProjectRepository } from "../modules/projects/application/project-repository.js";
+import type { ReelProductionRunRepository } from "../modules/reel-production/application/reel-production-run-repository.js";
 import type { ResearchRepository } from "../modules/research/application/research-repository.js";
 import type { RenderJobRepository } from "../modules/render-jobs/application/render-job-repository.js";
 import type { RenderStorage } from "../modules/render-jobs/application/render-storage.js";
@@ -32,6 +33,7 @@ import { handleMediaCollectorRoute } from "./routes/media-collector-routes.js";
 import { handleNarrationRoute } from "./routes/narration-routes.js";
 import { handleProductionRoute } from "./routes/production-routes.js";
 import { handlePromptEngineRoute } from "./routes/prompt-engine-routes.js";
+import { handleReelProductionRoute } from "./routes/reel-production-routes.js";
 import { handleReelsFactoryRoute } from "./routes/reels-factory-routes.js";
 import { handleResearchRoute } from "./routes/research-routes.js";
 import { handleRenderJobRoute } from "./routes/render-job-routes.js";
@@ -59,6 +61,7 @@ interface AppDependencies {
   narrationJobRepository: NarrationJobRepository;
   repositoryMode: RepositoryMode;
   projectRepository: ProjectRepository;
+  reelProductionRunRepository: ReelProductionRunRepository;
   researchRepository: ResearchRepository;
   renderJobRepository: RenderJobRepository;
   renderStorage: RenderStorage;
@@ -78,6 +81,7 @@ export function createApp({
   narrationJobRepository,
   repositoryMode,
   projectRepository,
+  reelProductionRunRepository,
   researchRepository,
   renderJobRepository,
   renderStorage,
@@ -174,6 +178,29 @@ export function createApp({
           assetRepository,
           channelRepository,
           projectRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
+      await handleReelProductionRoute(
+        request,
+        response,
+        url.pathname,
+        {
+          appEnv,
+          assetRepository,
+          audioLibraryRepository,
+          characterRepository,
+          editorialMicroclipRepository,
+          narrationJobRepository,
+          projectRepository,
+          renderJobRepository,
+          renderStorage,
+          runRepository: reelProductionRunRepository,
+          visualGenerationJobRepository
         }
       )
     ) {
@@ -544,6 +571,11 @@ export function createApp({
         "/research/dossiers/:id/create-production",
         "/research/asset-requirements/:id/generate-visual",
         "/production/create-from-script",
+        "/reel-production/projects/:projectId/checklist",
+        "/reel-production/projects/:projectId/run",
+        "/reel-production/projects/:projectId/runs",
+        "/reel-production/runs/:id",
+        "/reel-production/runs/:id/cancel",
         "/reels-factory/templates",
         "/reels-factory/templates/:id",
         "/reels-factory/preview",

@@ -50,7 +50,9 @@
     "smoke:music-library": "node scripts/smoke-music-library.mjs",
     "smoke:music-render-plan": "node scripts/smoke-music-render-plan.mjs",
     "smoke:editing-reference-presets": "node scripts/smoke-editing-reference-presets.mjs",
-    "smoke:editing-reference-project-flow": "node scripts/smoke-editing-reference-project-flow.mjs"
+    "smoke:editing-reference-project-flow": "node scripts/smoke-editing-reference-project-flow.mjs",
+    "smoke:one-click-production": "node scripts/smoke-one-click-production.mjs",
+    "smoke:one-click-render": "node scripts/smoke-one-click-render.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

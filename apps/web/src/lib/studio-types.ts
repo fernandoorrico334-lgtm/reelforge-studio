@@ -3127,6 +3127,115 @@ export interface CreateRenderJobPayload {
   audioMasteringPresetId?: AudioMasteringPresetId;
 }
 
+export type ReelProductionRunStatus =
+  | "draft"
+  | "running"
+  | "completed"
+  | "failed"
+  | "partial"
+  | "cancelled";
+
+export type ReelProductionRunMode = "dry_run" | "prepare_only" | "render";
+
+export type ReelProductionStepStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "skipped"
+  | "failed";
+
+export interface ReelProductionStep {
+  id: string;
+  label: string;
+  status: ReelProductionStepStatus;
+  message: string;
+  entityIds: Record<string, string | string[] | null>;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface ReelProductionSceneChecklist {
+  sceneId: string;
+  order: number;
+  title: string;
+  narrationReady: boolean;
+  visualReady: boolean;
+  microclipCount: number;
+  effectiveAssetId: string | null;
+  effectiveNarrationAssetId: string | null;
+  warnings: string[];
+}
+
+export interface ReelProductionChecklist {
+  projectId: string;
+  scenesTotal: number;
+  scenesWithNarration: number;
+  scenesWithVisual: number;
+  scenesWithMicroclips: number;
+  hasMusic: boolean;
+  hasBeatSyncPlan: boolean;
+  hasEditingReferencePreset: boolean;
+  hasAudioMasteringPreset: boolean;
+  renderReady: boolean;
+  missingItems: string[];
+  scenes: ReelProductionSceneChecklist[];
+  warnings: string[];
+  nextActions: string[];
+}
+
+export interface ReelProductionRun {
+  id: string;
+  videoProjectId: string;
+  status: ReelProductionRunStatus;
+  mode: ReelProductionRunMode;
+  steps: ReelProductionStep[];
+  startedAt: string | null;
+  completedAt: string | null;
+  errorMessage: string | null;
+  renderJobId: string | null;
+  outputPath: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OneClickProductionPayload {
+  mode: ReelProductionRunMode;
+  providerStrategy?: {
+    visualProvider?: string | null;
+    fallbackVisualProvider?: string | null;
+    narrationProvider?: string | null;
+  };
+  defaults?: {
+    voicePackId?: string | null;
+    musicPresetId?: string | null;
+    audioMasteringPresetId?: string | null;
+    qualityPresetId?: string | null;
+    workflowPackId?: string | null;
+  };
+  options?: {
+    generateMissingNarration?: boolean;
+    generateMissingVisuals?: boolean;
+    selectMusic?: boolean;
+    buildBeatSyncPlan?: boolean;
+    useEditorialMicroclips?: boolean;
+    createRenderJob?: boolean;
+    runRender?: boolean;
+  };
+}
+
+export interface OneClickProductionResponse {
+  runId: string;
+  status: ReelProductionRunStatus;
+  steps: ReelProductionStep[];
+  projectId: string;
+  renderJobId: string | null;
+  outputPath: string | null;
+  checklist: ReelProductionChecklist;
+  warnings: string[];
+  nextActions: string[];
+}
+
 export interface StudioProject {
   id: string;
   title: string;

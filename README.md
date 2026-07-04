@@ -42,6 +42,9 @@ Esta base agora cobre dezenove camadas do produto:
 - Editing Reference Presets com cadastro de reels locais de referencia,
   analise editorial basica via FFmpeg/ffprobe, presets reutilizaveis e
   sugestoes por template dentro do estudio.
+- One-Click Reel Production Flow com checklist inteligente, geracao de
+  narracao/visual ausentes, selecao de musica local, Beat Sync Plan, blueprint
+  e criacao de RenderJob em um fluxo assistido por projeto.
 
 Continuam fora do escopo nesta etapa:
 
@@ -106,6 +109,9 @@ Continuam fora do escopo nesta etapa:
   output persistidos no `RenderJob`.
 - fluxo de producao rapido via `/produce`, com criacao de projeto a partir de
   roteiro, sugestoes de assets e defaults editoriais por canal.
+- fluxo `One-Click Production` em `/projects/[id]` e endpoints
+  `/reel-production/*` para preparar ou produzir um reel a partir de projetos
+  existentes da Reels Factory.
 
 ## Estrutura
 
