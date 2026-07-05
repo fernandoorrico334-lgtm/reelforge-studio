@@ -6,15 +6,19 @@ import {
   buildProductionDiscoveryRequirementsRequest,
   createProductionDiscoveryPackageRequest,
   createProductionDiscoveryProjectRequest,
+  getDiscoveryProviderActivationStatus,
   getProductionDiscoveryMediaCandidates,
   getProductionDiscoveryNiches,
   getProductionDiscoveryProviders,
   getProductionDiscoverySourcePacks,
   listProductionDiscoveryPackages,
+  runDiscoverySearchRequest,
   runProductionDiscoveryResearchRequest,
   searchProductionDiscoveryCandidatesRequest
 } from "../lib/studio-api";
 import type {
+  DiscoveryProviderActivationStatus,
+  DiscoverySearchResponse,
   ProductionDiscoveryNicheProfile,
   ProductionDiscoveryPackage,
   ProductionDiscoveryProvider,
@@ -33,10 +37,13 @@ function packageStatusLabel(value: string) {
 export function ProductionDiscoveryStudio() {
   const [niches, setNiches] = useState<ProductionDiscoveryNicheProfile[]>([]);
   const [providers, setProviders] = useState<ProductionDiscoveryProvider[]>([]);
+  const [providerStatus, setProviderStatus] = useState<DiscoveryProviderActivationStatus[]>([]);
   const [sourcePacks, setSourcePacks] = useState<ProductionDiscoverySourcePack[]>([]);
   const [packages, setPackages] = useState<ProductionDiscoveryPackage[]>([]);
   const [activePackage, setActivePackage] = useState<ProductionDiscoveryPackage | null>(null);
   const [candidates, setCandidates] = useState<MediaCandidate[]>([]);
+  const [discoverySearchResult, setDiscoverySearchResult] =
+    useState<DiscoverySearchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState({
@@ -70,15 +77,17 @@ export function ProductionDiscoveryStudio() {
     Promise.all([
       getProductionDiscoveryNiches(),
       getProductionDiscoveryProviders(),
+      getDiscoveryProviderActivationStatus(),
       getProductionDiscoverySourcePacks(),
       listProductionDiscoveryPackages()
     ])
-      .then(async ([nicheItems, providerItems, sourcePackItems, packageItems]) => {
+      .then(async ([nicheItems, providerItems, statusItems, sourcePackItems, packageItems]) => {
         if (cancelled) {
           return;
         }
         setNiches(nicheItems);
         setProviders(providerItems);
+        setProviderStatus(statusItems);
         setSourcePacks(sourcePackItems);
         setPackages(packageItems);
         const first = packageItems[0] ?? null;
@@ -121,6 +130,33 @@ export function ProductionDiscoveryStudio() {
         setActivePackage(created);
         setCandidates([]);
         await refreshPackages(created.id);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
+    });
+  }
+
+  function runDiscoverySearch() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const selectedProviders = providerStatus
+          .filter((provider) =>
+            ["live_search", "assisted_links", "discovery_only", "generated_fallback"].includes(
+              provider.mode
+            )
+          )
+          .slice(0, 6)
+          .map((provider) => provider.id);
+        const result = await runDiscoverySearchRequest({
+          query: form.topic,
+          mediaType: "image",
+          providers: selectedProviders,
+          targetCount: 6,
+          niche: form.niche,
+          packageId: activePackage?.id ?? null
+        });
+        setDiscoverySearchResult(result);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : String(caught));
       }
@@ -185,24 +221,33 @@ export function ProductionDiscoveryStudio() {
                 Discovery Radar providers
               </p>
               <h2 className="mt-2 text-2xl font-semibold text-white">
-                {providers.length} fontes abertas/internas catalogadas
+                {providerStatus.length || providers.length} fontes abertas/internas catalogadas
               </h2>
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-mist/70">
               <span className="rounded-full border border-white/10 px-3 py-1">
-                discovery-only {providers.filter((provider) => provider.discoveryOnly).length}
+                live {providerStatus.filter((provider) => provider.mode === "live_search").length}
               </span>
               <span className="rounded-full border border-white/10 px-3 py-1">
-                API key {providers.filter((provider) => provider.requiresApiKey).length}
+                not configured{" "}
+                {providerStatus.filter((provider) => provider.mode === "not_configured").length}
               </span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={runDiscoverySearch}
+            disabled={isPending || providerStatus.length === 0}
+            className="mt-4 rounded-2xl border border-[#7dd3fc]/25 bg-[#7dd3fc]/10 px-4 py-3 text-sm font-semibold text-[#d8f5ff] disabled:opacity-50"
+          >
+            Buscar candidatos no Discovery Radar
+          </button>
           <div className="mt-4 grid gap-2 md:grid-cols-3">
-            {providers.slice(0, 18).map((provider) => (
+            {providerStatus.slice(0, 18).map((provider) => (
               <div key={provider.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
                 <p className="text-sm font-semibold text-white">{provider.name}</p>
                 <p className="mt-1 text-xs text-mist/55">
-                  {provider.defaultLicenseStatus} / risk {provider.defaultRiskLevel}
+                  {provider.mode} / {provider.defaultLicenseStatus}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1 text-[10px] uppercase tracking-[0.16em]">
                   {provider.discoveryOnly ? (
@@ -212,10 +257,10 @@ export function ProductionDiscoveryStudio() {
                   ) : null}
                   {provider.requiresApiKey ? (
                     <span className="rounded-full bg-sky-400/10 px-2 py-1 text-sky-100">
-                      key required
+                      {provider.configured ? "key configured" : "not configured"}
                     </span>
                   ) : null}
-                  {!provider.importSupported ? (
+                  {!provider.canImport ? (
                     <span className="rounded-full bg-red-400/10 px-2 py-1 text-red-100">
                       no import
                     </span>
@@ -224,6 +269,34 @@ export function ProductionDiscoveryStudio() {
               </div>
             ))}
           </div>
+          {discoverySearchResult ? (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">
+                Ultima busca candidate-first
+              </p>
+              <p className="mt-2 text-sm text-mist/70">
+                Collection {discoverySearchResult.collectionId} / assets created{" "}
+                {discoverySearchResult.assetsCreated}
+              </p>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {discoverySearchResult.candidates.map((candidate) => (
+                  <div key={candidate.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                    <p className="text-sm font-semibold text-white">
+                      {candidate.title}
+                    </p>
+                    <p className="mt-1 text-xs text-mist/55">
+                      {candidate.provider} / {candidate.status} / asset{" "}
+                      {candidate.assetId ?? "null"}
+                    </p>
+                    <p className="mt-1 text-xs text-mist/45">
+                      {candidate.sourceLicense ?? "unknown"} /{" "}
+                      {candidate.copyrightRisk ?? "UNKNOWN"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 

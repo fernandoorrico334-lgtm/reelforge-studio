@@ -26,6 +26,7 @@ import { handleCandidateMediaRoute } from "./routes/candidate-media-routes.js";
 import { handleCaptionStyleRoute } from "./routes/caption-style-routes.js";
 import { handleCharacterRoute } from "./routes/characters-routes.js";
 import { handleChannelRoute } from "./routes/channels-routes.js";
+import { handleDiscoveryRoute } from "./routes/discovery-routes.js";
 import { handleEditorialMicroclipRoute } from "./routes/editorial-microclip-routes.js";
 import { handleEditingReferenceRoute } from "./routes/editing-reference-routes.js";
 import { handleHybridVisualRoute } from "./routes/hybrid-visual-routes.js";
@@ -183,6 +184,19 @@ export function createApp({
           assetRepository,
           narrationJobRepository,
           projectRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
+      await handleDiscoveryRoute(
+        request,
+        response,
+        url.pathname,
+        {
+          intakeRepository
         }
       )
     ) {
@@ -495,6 +509,8 @@ export function createApp({
         "/health",
         "/studio/manifest",
         "/projects",
+        "/discovery/providers/status",
+        "/discovery/search",
         "/production-discovery/niches",
         "/production-discovery/providers",
         "/production-discovery/source-packs",

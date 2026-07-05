@@ -42,6 +42,9 @@ import {
 } from "./project-video-blueprint";
 import type {
   ProductionDiscoveryCreatePayload,
+  DiscoveryProviderActivationStatus,
+  DiscoverySearchPayload,
+  DiscoverySearchResponse,
   ProductionDiscoveryNicheProfile,
   ProductionDiscoveryPackage,
   ProductionDiscoveryProvider,
@@ -1001,6 +1004,17 @@ export async function getProductionDiscoveryProviders() {
 
 export async function getProductionDiscoverySourcePacks() {
   return requestJson<ProductionDiscoverySourcePack[]>("/production-discovery/source-packs");
+}
+
+export async function getDiscoveryProviderActivationStatus() {
+  return requestJson<DiscoveryProviderActivationStatus[]>("/discovery/providers/status");
+}
+
+export async function runDiscoverySearchRequest(payload: DiscoverySearchPayload) {
+  return requestJson<DiscoverySearchResponse>("/discovery/search", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export async function listProductionDiscoveryPackages() {

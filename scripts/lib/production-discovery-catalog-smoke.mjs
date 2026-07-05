@@ -126,6 +126,7 @@ function validateProviderShape(provider) {
 export async function runProductionDiscoveryCatalogSmoke(smokeName) {
   const engine = await loadEngine();
   const providers = engine.getDiscoveryMediaProviders();
+  const activationMatrix = engine.getProviderActivationMatrix({});
   const sourcePacks = engine.getDiscoverySourcePacks();
   const providerIds = new Set(providers.map((provider) => provider.id));
   const sourcePackIds = new Set(sourcePacks.map((pack) => pack.id));
@@ -154,10 +155,56 @@ export async function runProductionDiscoveryCatalogSmoke(smokeName) {
       "gdelt-news-discovery"
     ]) {
       const provider = providers.find((item) => item.id === id);
+      const status = activationMatrix.find((item) => item.id === id);
       assert(provider, `Missing discovery-only provider ${id}.`);
+      assert(status, `Missing activation status for ${id}.`);
       assert(provider.discoveryOnly, `${id} must be discovery-only.`);
       assert(!provider.importSupported, `${id} must not support import.`);
+      assert(
+        status.mode === "discovery_only" || status.mode === "assisted_links" || status.mode === "not_configured",
+        `${id} should be discovery_only, assisted_links or not_configured.`
+      );
+      assert(!status.canImport, `${id} must not be importable from discovery.`);
     }
+  } else if (smokeName === "smoke:provider-activation-matrix") {
+    assert(activationMatrix.length === providers.length, "Every provider needs activation status.");
+    for (const status of activationMatrix) {
+      assert(status.importRequiresConfirmation, `${status.id} must require import confirmation.`);
+      assert(status.mode, `${status.id} needs activation mode.`);
+    }
+  } else if (smokeName === "smoke:optional-key-providers-status") {
+    const optionalProviders = activationMatrix.filter((status) => status.requiresApiKey);
+    assert(optionalProviders.length > 0, "Expected optional key providers.");
+    assert(
+      optionalProviders.every((status) => status.mode === "not_configured"),
+      "Without env keys, optional providers should be not_configured."
+    );
+  } else if (smokeName === "smoke:live-search-priority-providers") {
+    const result = engine.searchDiscoveryCandidates({
+      query: "football stadium night",
+      mediaType: "image",
+      providers: [
+        "wikimedia-commons",
+        "internet-archive",
+        "library-of-congress",
+        "wikipedia-mediawiki",
+        "wikidata",
+        "openverse",
+        "local-library",
+        "manual-intake",
+        "media-collector",
+        "manual-url",
+        "comfyui-generated-fallback"
+      ],
+      targetCount: 10,
+      niche: "football"
+    });
+    assert(result.assetsCreated === 0, "Search must not create assets.");
+    assert(result.candidates.length > 0, "Priority live search should return candidates.");
+    assert(
+      result.candidates.every((candidate) => candidate.assetId === null && candidate.downloadUrl === null),
+      "Candidates must not contain assetId or downloadUrl."
+    );
   } else if (groups[smokeName]) {
     const groupProviders = providers.filter((provider) => provider.group === groups[smokeName]);
     assert(groupProviders.length > 0, `No providers for group ${groups[smokeName]}.`);

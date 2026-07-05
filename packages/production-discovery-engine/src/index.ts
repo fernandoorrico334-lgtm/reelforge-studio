@@ -190,6 +190,87 @@ export interface CandidateProviderPlan {
   sourceUrl: string;
 }
 
+export type DiscoveryProviderActivationMode =
+  | "live_search"
+  | "assisted_links"
+  | "discovery_only"
+  | "not_configured"
+  | "stub"
+  | "generated_fallback";
+
+export interface DiscoveryProviderActivationStatus {
+  id: string;
+  name: string;
+  enabled: boolean;
+  configured: boolean;
+  requiresApiKey: boolean;
+  missingConfig: string[];
+  mode: DiscoveryProviderActivationMode;
+  canSearch: boolean;
+  canImport: boolean;
+  importRequiresConfirmation: boolean;
+  discoveryOnly: boolean;
+  supportsImage: boolean;
+  supportsVideo: boolean;
+  supportsAudio: boolean;
+  supportsDocuments: boolean;
+  supportsData: boolean;
+  supportsLicenseMetadata: boolean;
+  defaultRiskLevel: DiscoveryProviderRiskLevel;
+  defaultLicenseStatus: DiscoveryProviderLicenseStatus;
+  setupInstructions: string;
+  notes: string;
+}
+
+export interface DiscoverySearchInput {
+  query: string;
+  mediaType?: VisualRequirementMediaType | "audio" | "music" | "source_link" | "research_source" | null;
+  providers?: string[] | null;
+  targetCount?: number | null;
+  niche?: string | null;
+  projectId?: string | null;
+  packageId?: string | null;
+}
+
+export interface DiscoverySearchCandidate {
+  id: string;
+  title: string;
+  provider: string;
+  sourceUrl: string | null;
+  previewUrl: string | null;
+  downloadUrl: null;
+  mediaType: string;
+  licenseStatus: DiscoveryProviderLicenseStatus;
+  riskLevel: DiscoveryProviderRiskLevel;
+  sourceAuthor: string | null;
+  sourceLicense: string | null;
+  sourceLicenseUrl: string | null;
+  relevanceScore: number;
+  qualityScore: number;
+  sceneFitScore: number;
+  overallScore: number;
+  whyThisCandidate: string;
+  requiresManualReview: true;
+  assetId: null;
+}
+
+export interface DiscoveryProviderSearchResult {
+  providerId: string;
+  mode: DiscoveryProviderActivationMode;
+  configured: boolean;
+  status: "completed" | "skipped" | "not_configured" | "stub";
+  candidatesCount: number;
+  warning: string | null;
+  error: string | null;
+}
+
+export interface DiscoverySearchResult {
+  candidates: DiscoverySearchCandidate[];
+  providerResults: DiscoveryProviderSearchResult[];
+  warnings: string[];
+  assetsCreated: 0;
+}
+
 function mediaProvider(input: DiscoveryMediaProvider): DiscoveryMediaProvider {
   return input;
 }
@@ -1432,6 +1513,57 @@ const sourcePacks: DiscoverySourcePack[] = [
 
 const sourcePackById = new Map(sourcePacks.map((pack) => [pack.id, pack]));
 
+const providerConfigEnvVars: Record<string, string[]> = {
+  pexels: ["PEXELS_API_KEY"],
+  pixabay: ["PIXABAY_API_KEY"],
+  unsplash: ["UNSPLASH_ACCESS_KEY"],
+  "flickr-creative-commons": ["FLICKR_API_KEY"],
+  dpla: ["DPLA_API_KEY"],
+  "nypl-digital-collections": ["NYPL_API_KEY"],
+  europeana: ["EUROPEANA_API_KEY"],
+  "smithsonian-open-access": ["SMITHSONIAN_API_KEY"],
+  rijksmuseum: ["RIJKSMUSEUM_API_KEY"],
+  "harvard-art-museums": ["HARVARD_ART_MUSEUMS_API_KEY"],
+  thesportsdb: ["THESPORTSDB_API_KEY"],
+  "football-data-org": ["FOOTBALL_DATA_API_KEY"],
+  balldontlie: ["BALLDONTLIE_API_KEY"],
+  "api-sports-free-tier-optional": ["API_SPORTS_KEY"],
+  freesound: ["FREESOUND_API_KEY"],
+  "youtube-discovery": ["YOUTUBE_API_KEY"],
+  "google-assisted-search": ["GOOGLE_SEARCH_API_KEY"]
+};
+
+const priorityLiveSearchProviders = new Set([
+  "wikimedia-commons",
+  "internet-archive",
+  "library-of-congress",
+  "wikipedia-mediawiki",
+  "wikidata",
+  "openverse",
+  "local-library",
+  "manual-intake",
+  "media-collector",
+  "manual-url",
+  "comfyui-generated-fallback",
+  "nasa-image-video",
+  "met-museum",
+  "art-institute-chicago",
+  "cleveland-museum-art",
+  "getty-open-content",
+  "victoria-and-albert",
+  "public-domain-image-archive",
+  "project-gutenberg",
+  "gutendex",
+  "statsbomb-open-data"
+]);
+
+const assistedLinkProviders = new Set([
+  "google-assisted-search",
+  "forum-discovery",
+  "manual-url"
+]);
+
+
 const genericSafetyRules = [
   "Tratar toda midia candidata como pendente ate revisao do usuario.",
   "Nunca baixar automaticamente; criar apenas candidatos e avisos.",
@@ -1945,4 +2077,238 @@ export function buildCandidateProviderPlan(input: {
       sourceUrl: provider.homepage
     };
   });
+}
+
+function hasConfig(env: Record<string, string | undefined>, keys: string[]) {
+  return keys.filter((key) => !env[key]?.trim());
+}
+
+function activationModeForProvider(
+  provider: DiscoveryMediaProvider,
+  configured: boolean
+): DiscoveryProviderActivationMode {
+  if (provider.id === "comfyui-generated-fallback") {
+    return "generated_fallback";
+  }
+
+  if (!configured) {
+    return "not_configured";
+  }
+
+  if (assistedLinkProviders.has(provider.id)) {
+    return "assisted_links";
+  }
+
+  if (provider.discoveryOnly) {
+    return "discovery_only";
+  }
+
+  if (priorityLiveSearchProviders.has(provider.id)) {
+    return "live_search";
+  }
+
+  return "stub";
+}
+
+export function getProviderActivationMatrix(
+  env: Record<string, string | undefined> = {}
+): DiscoveryProviderActivationStatus[] {
+  return discoveryMediaProviders.map((provider) => {
+    const requiredKeys = providerConfigEnvVars[provider.id] ?? [];
+    const missingConfig = provider.requiresApiKey
+      ? hasConfig(env, requiredKeys.length > 0 ? requiredKeys : [`${provider.id.toUpperCase().replaceAll("-", "_")}_API_KEY`])
+      : [];
+    const configured = missingConfig.length === 0;
+    const mode = activationModeForProvider(provider, configured);
+    const canSearch =
+      mode === "live_search" ||
+      mode === "assisted_links" ||
+      mode === "discovery_only" ||
+      mode === "generated_fallback";
+
+    return {
+      id: provider.id,
+      name: provider.name,
+      enabled: mode !== "not_configured",
+      configured,
+      requiresApiKey: provider.requiresApiKey,
+      missingConfig,
+      mode,
+      canSearch,
+      canImport:
+        provider.importSupported &&
+        !provider.discoveryOnly &&
+        mode !== "not_configured" &&
+        mode !== "discovery_only",
+      importRequiresConfirmation: true,
+      discoveryOnly: provider.discoveryOnly,
+      supportsImage: provider.supportsImage,
+      supportsVideo: provider.supportsVideo,
+      supportsAudio: provider.supportsAudio,
+      supportsDocuments: provider.supportsDocuments,
+      supportsData: provider.supportsData,
+      supportsLicenseMetadata: provider.supportsLicenseMetadata,
+      defaultRiskLevel: provider.defaultRiskLevel,
+      defaultLicenseStatus: provider.defaultLicenseStatus,
+      setupInstructions: provider.setupInstructions,
+      notes: provider.notes
+    };
+  });
+}
+
+function normalizeSearchProviders(input: DiscoverySearchInput) {
+  if (input.providers && input.providers.length > 0) {
+    return input.providers;
+  }
+
+  const packs = getSourcePacksForNiche(input.niche);
+  return unique(
+    packs.flatMap((pack) => [
+      ...pack.primaryProviderIds,
+      ...pack.fallbackProviderIds
+    ])
+  ).slice(0, Math.max(input.targetCount ?? 10, 1));
+}
+
+function buildCandidateSourceUrl(provider: DiscoveryMediaProvider, query: string) {
+  if (!provider.homepage.startsWith("http")) {
+    return provider.homepage;
+  }
+
+  const encoded = encodeURIComponent(query);
+  if (provider.id === "wikimedia-commons") {
+    return `https://commons.wikimedia.org/wiki/Special:MediaSearch?search=${encoded}`;
+  }
+  if (provider.id === "internet-archive") {
+    return `https://archive.org/search?query=${encoded}`;
+  }
+  if (provider.id === "library-of-congress") {
+    return `https://www.loc.gov/search/?fo=json&q=${encoded}`;
+  }
+  if (provider.id === "wikipedia-mediawiki") {
+    return `https://en.wikipedia.org/w/index.php?search=${encoded}`;
+  }
+  if (provider.id === "wikidata") {
+    return `https://www.wikidata.org/w/index.php?search=${encoded}`;
+  }
+  if (provider.id === "openverse") {
+    return `https://openverse.org/search/?q=${encoded}`;
+  }
+
+  return provider.homepage;
+}
+
+function candidateMediaType(input: DiscoverySearchInput, status: DiscoveryProviderActivationStatus) {
+  if (status.mode === "discovery_only" || status.mode === "assisted_links") {
+    return status.supportsData ? "research_source" : "source_link";
+  }
+
+  return input.mediaType ?? "image";
+}
+
+export function searchDiscoveryCandidates(
+  input: DiscoverySearchInput,
+  env: Record<string, string | undefined> = {}
+): DiscoverySearchResult {
+  const query = cleanText(input.query, "media reference");
+  const targetCount = Math.max(input.targetCount ?? 10, 1);
+  const matrix = getProviderActivationMatrix(env);
+  const selectedProviderIds = normalizeSearchProviders(input);
+  const candidates: DiscoverySearchCandidate[] = [];
+  const providerResults: DiscoveryProviderSearchResult[] = [];
+  const warnings: string[] = [
+    "Candidate-first ativo: nenhum Asset foi criado.",
+    "Import/download exige confirmacao explicita do usuario."
+  ];
+
+  for (const providerId of selectedProviderIds) {
+    const provider = getDiscoveryMediaProviderById(providerId);
+    const status = matrix.find((item) => item.id === providerId);
+    if (!provider || !status) {
+      providerResults.push({
+        providerId,
+        mode: "stub",
+        configured: false,
+        status: "skipped",
+        candidatesCount: 0,
+        warning: "Provider desconhecido no catalogo.",
+        error: null
+      });
+      continue;
+    }
+
+    if (status.mode === "not_configured") {
+      providerResults.push({
+        providerId,
+        mode: status.mode,
+        configured: false,
+        status: "not_configured",
+        candidatesCount: 0,
+        warning: `Provider precisa de configuracao: ${status.missingConfig.join(", ")}`,
+        error: null
+      });
+      continue;
+    }
+
+    const sourceUrl = buildCandidateSourceUrl(provider, query);
+    const index = candidates.length;
+    const relevanceScore = Math.max(40, 92 - index * 4);
+    const qualityScore = provider.supportsLicenseMetadata ? 82 : 62;
+    const sceneFitScore =
+      providerSupportsRequirement(provider, input.mediaType ?? "image") ? 84 : 56;
+    const overallScore = Math.round(
+      relevanceScore * 0.45 + qualityScore * 0.25 + sceneFitScore * 0.3
+    );
+    const candidate: DiscoverySearchCandidate = {
+      id: `candidate-${provider.id}-${index + 1}`,
+      title: `${provider.name}: ${query}`,
+      provider: provider.id,
+      sourceUrl,
+      previewUrl: provider.supportsImage || provider.supportsVideo || provider.supportsAudio ? sourceUrl : null,
+      downloadUrl: null,
+      mediaType: String(candidateMediaType(input, status)),
+      licenseStatus: provider.defaultLicenseStatus,
+      riskLevel: provider.defaultRiskLevel,
+      sourceAuthor: provider.name,
+      sourceLicense: provider.defaultLicenseStatus,
+      sourceLicenseUrl: null,
+      relevanceScore,
+      qualityScore,
+      sceneFitScore,
+      overallScore,
+      whyThisCandidate:
+        status.mode === "generated_fallback"
+          ? "Fallback local para gerar visual quando nao houver midia revisada."
+          : `${provider.name} combina com a busca e retorna apenas candidato para revisao.`,
+      requiresManualReview: true,
+      assetId: null
+    };
+
+    candidates.push(candidate);
+    providerResults.push({
+      providerId,
+      mode: status.mode,
+      configured: status.configured,
+      status: status.mode === "stub" ? "stub" : "completed",
+      candidatesCount: 1,
+      warning:
+        status.mode === "stub"
+          ? "Provider catalogado, mas ainda sem conector real; candidato assistido criado."
+          : status.discoveryOnly
+            ? "Discovery-only: abrir fonte/manual intake, sem download automatico."
+            : null,
+      error: null
+    });
+
+    if (candidates.length >= targetCount) {
+      break;
+    }
+  }
+
+  return {
+    candidates,
+    providerResults,
+    warnings,
+    assetsCreated: 0
+  };
 }
