@@ -816,7 +816,7 @@ export function AssetsManager({
                       href="/projects"
                       className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-1 text-xs text-[#fff0cb]"
                     >
-                      usar como microclip
+                      Detectar microclips
                     </a>
                   ) : null}
                 </div>

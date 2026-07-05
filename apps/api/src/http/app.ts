@@ -30,6 +30,7 @@ import { handleEditingReferenceRoute } from "./routes/editing-reference-routes.j
 import { handleHybridVisualRoute } from "./routes/hybrid-visual-routes.js";
 import { handleIntakeRoute } from "./routes/intake-routes.js";
 import { handleMediaCollectorRoute } from "./routes/media-collector-routes.js";
+import { handleMicroclipSelectorRoute } from "./routes/microclip-selector-routes.js";
 import { handleNarrationRoute } from "./routes/narration-routes.js";
 import { handleProductionRoute } from "./routes/production-routes.js";
 import { handlePromptEngineRoute } from "./routes/prompt-engine-routes.js";
@@ -147,6 +148,21 @@ export function createApp({
         {
           assetRepository,
           editingReferenceRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
+      await handleMicroclipSelectorRoute(
+        request,
+        response,
+        url.pathname,
+        {
+          assetRepository,
+          editorialMicroclipRepository,
+          projectRepository
         }
       )
     ) {
@@ -505,6 +521,8 @@ export function createApp({
         "/editing-reference-presets/suggestions",
         "/editorial-microclips/project/:projectId",
         "/editorial-microclips/:id",
+        "/microclip-selector/analyze",
+        "/microclip-selector/apply",
         "/caption-styles",
         "/caption-styles/:id",
         "/prompt-packs",

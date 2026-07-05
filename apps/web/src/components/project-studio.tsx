@@ -27,6 +27,8 @@ import { RenderBlueprintPanel } from "./render-blueprint-panel";
 import { RenderJobsPanel } from "./render-jobs-panel";
 import { StoryEnginePanel } from "./story-engine-panel";
 import {
+  analyzeMicroclipSelectorRequest,
+  applyMicroclipSelectorCandidateRequest,
   createEditorialMicroclipRequest,
   createSceneRequest,
   deleteEditorialMicroclipRequest,
@@ -83,6 +85,8 @@ import type {
   NarrationJob,
   NarrationVoicePack,
   ImageQualityPreset,
+  MicroclipSelectorAnalyzeResponse,
+  MicroclipSelectorCandidate,
   ProjectCaptionAnalysisResponse,
   ProjectPayload,
   ProjectProductionChecklistResponse,
@@ -1098,6 +1102,13 @@ export function ProjectStudio({
     useState<EditorialMicroclipFormState>(
       createEmptyEditorialMicroclipForm(initialProject.scenes[0]?.id ?? "", 1)
     );
+  const [microclipSelectorAssetId, setMicroclipSelectorAssetId] = useState("");
+  const [microclipSelectorTargetDuration, setMicroclipSelectorTargetDuration] =
+    useState("1.5");
+  const [microclipSelectorTopN, setMicroclipSelectorTopN] = useState("10");
+  const [microclipSelectorResult, setMicroclipSelectorResult] =
+    useState<MicroclipSelectorAnalyzeResponse | null>(null);
+  const [microclipSelectorLoading, setMicroclipSelectorLoading] = useState(false);
   const [audioMasteringPresetId, setAudioMasteringPresetId] =
     useState<AudioMasteringPresetId>(
       (audioMasteringPresetsCatalog.find(
@@ -1547,6 +1558,77 @@ export function ProjectStudio({
     setEditingMicroclipId(microclip.id);
     setVisualSceneId(microclip.sceneId ?? selectedVisualScene?.id ?? "");
     setEditorialMicroclipForm(toEditorialMicroclipFormState(microclip));
+  }
+
+  async function handleAnalyzeMicroclips() {
+    const assetId =
+      microclipSelectorAssetId || editorialMicroclipForm.assetId || videoAssets[0]?.id;
+
+    if (!assetId) {
+      setStatusMessage("Selecione um video local antes de analisar microclips.");
+      return;
+    }
+
+    setMicroclipSelectorLoading(true);
+
+    try {
+      const result = await analyzeMicroclipSelectorRequest({
+        assetId,
+        targetDurationSeconds: Number(microclipSelectorTargetDuration) || 1.5,
+        topN: Number(microclipSelectorTopN) || 10,
+        useCase: inferMusicUseCase(project.channel, project.templateId ?? null),
+        preset: project.musicPresetId ?? "football_hype"
+      });
+
+      setMicroclipSelectorAssetId(assetId);
+      setEditorialMicroclipForm((current) => ({
+        ...current,
+        assetId
+      }));
+      setMicroclipSelectorResult(result);
+      setStatusMessage(
+        `Analise local encontrou ${result.candidates.length} sugestao(oes) de microclip.`
+      );
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    } finally {
+      setMicroclipSelectorLoading(false);
+    }
+  }
+
+  async function handleApplyMicroclipCandidate(candidate: MicroclipSelectorCandidate) {
+    if (!selectedVisualScene) {
+      setStatusMessage("Selecione uma cena antes de aplicar o microclip sugerido.");
+      return;
+    }
+
+    if (editorialMicroclips.length >= 2) {
+      setStatusMessage("Limite de 2 microclips por projeto ja foi atingido.");
+      return;
+    }
+
+    try {
+      const result = await applyMicroclipSelectorCandidateRequest({
+        projectId: project.id,
+        sceneId: selectedVisualScene.id,
+        assetId: candidate.assetId,
+        candidateId: candidate.id,
+        label: candidate.recommendedTextOverlay ?? "microclip sugerido",
+        usageMode: candidate.usageMode
+      });
+
+      setEditorialMicroclips((current) =>
+        sortEditorialMicroclips([...current, result.microclip])
+      );
+      setEditorialMicroclipsSource("api");
+      setEditorialMicroclipForm(toEditorialMicroclipFormState(result.microclip));
+      await loadBlueprintFor(project);
+      setStatusMessage(
+        `Microclip automatico aplicado: ${result.microclip.label}.`
+      );
+    } catch (error) {
+      setStatusMessage(extractErrorMessage(error));
+    }
   }
 
   async function handleProjectSubmit(event: FormEvent<HTMLFormElement>) {
@@ -3457,6 +3539,135 @@ export function ProjectStudio({
                 ))}
               </select>
             </label>
+            <div className="rounded-[1.2rem] border border-[#ffcf70]/20 bg-black/20 p-4 md:col-span-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                    Automatic Microclip Selector
+                  </p>
+                  <p className="mt-2 text-sm text-white">
+                    Analise um video longo local e escolha trechos curtos para a cena.
+                  </p>
+                  <p className="mt-2 text-xs leading-6 text-mist/60">
+                    O selector sugere top moments, mas nao aplica mais de 2 microclips
+                    sem aprovacao manual.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleAnalyzeMicroclips();
+                  }}
+                  disabled={microclipSelectorLoading || videoAssets.length === 0}
+                  className="rounded-full border border-[#ffcf70]/30 bg-[#ffcf70]/12 px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[#fff0cb] disabled:opacity-45"
+                >
+                  {microclipSelectorLoading ? "analisando..." : "Analisar video longo"}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <label className="block md:col-span-2">
+                  <span className="mb-2 block text-sm text-mist/65">
+                    Video para detectar microclips
+                  </span>
+                  <select
+                    value={microclipSelectorAssetId || editorialMicroclipForm.assetId}
+                    onChange={(event) => {
+                      setMicroclipSelectorAssetId(event.target.value);
+                      setEditorialMicroclipForm((current) => ({
+                        ...current,
+                        assetId: event.target.value
+                      }));
+                    }}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                  >
+                    <option value="">Selecione um video</option>
+                    {videoAssets.map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.filename}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm text-mist/65">Target</span>
+                  <input
+                    value={microclipSelectorTargetDuration}
+                    onChange={(event) =>
+                      setMicroclipSelectorTargetDuration(event.target.value)
+                    }
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm text-mist/65">Top N</span>
+                  <input
+                    value={microclipSelectorTopN}
+                    onChange={(event) => setMicroclipSelectorTopN(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                  />
+                </label>
+              </div>
+
+              {microclipSelectorResult ? (
+                <div className="mt-4">
+                  <div className="flex flex-wrap gap-2 text-xs text-mist/60">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+                      duration {formatDuration(microclipSelectorResult.durationSeconds)}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+                      target {formatDuration(microclipSelectorResult.targetDurationSeconds)}
+                    </span>
+                    {microclipSelectorResult.warnings.map((warning) => (
+                      <span
+                        key={warning}
+                        className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-amber-100"
+                      >
+                        {warning}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {microclipSelectorResult.candidates.map((candidate) => (
+                      <div
+                        key={candidate.id}
+                        className="rounded-[1rem] border border-white/10 bg-white/[0.03] p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-1 text-[11px] text-[#fff0cb]">
+                            score {candidate.score.toFixed(2)}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] text-mist/70">
+                            {candidate.usageMode}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-sm font-medium text-white">
+                          {formatDuration(candidate.startTimeSeconds)} →{" "}
+                          {formatDuration(candidate.endTimeSeconds)}
+                        </p>
+                        <p className="mt-2 text-xs leading-6 text-mist/65">
+                          {candidate.reasons.join(" / ")}
+                        </p>
+                        <p className="mt-2 text-xs leading-6 text-mist/60">
+                          overlay {candidate.recommendedTextOverlay ?? "n/d"} /
+                          volume {candidate.recommendedVolumeMode}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleApplyMicroclipCandidate(candidate);
+                          }}
+                          disabled={editorialMicroclips.length >= 2}
+                          className="mt-4 rounded-full border border-[#ffcf70]/25 bg-[#ffcf70]/10 px-3 py-2 text-xs text-[#fff0cb] disabled:opacity-40"
+                        >
+                          usar este trecho
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <label className="block">
               <span className="mb-2 block text-sm text-mist/65">Uso</span>
               <select

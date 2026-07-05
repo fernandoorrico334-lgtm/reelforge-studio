@@ -89,6 +89,10 @@ import type {
   MediaCollectionPayload,
   MediaCollectionSearchResponse,
   MediaCollectorProviderDescriptor,
+  MicroclipSelectorAnalyzePayload,
+  MicroclipSelectorAnalyzeResponse,
+  MicroclipSelectorApplyPayload,
+  MicroclipSelectorApplyResponse,
   MusicLibraryItemRecord,
   ProjectMissingAssetCollectionsResponse,
   ProjectAssetSuggestionsResponse,
@@ -3119,6 +3123,30 @@ export async function deleteEditorialMicroclipRequest(microclipId: string) {
   await requestJson<void>(`/editorial-microclips/${encodeURIComponent(microclipId)}`, {
     method: "DELETE"
   });
+}
+
+export async function analyzeMicroclipSelectorRequest(
+  payload: MicroclipSelectorAnalyzePayload
+) {
+  return requestJson<MicroclipSelectorAnalyzeResponse>(
+    "/microclip-selector/analyze",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function applyMicroclipSelectorCandidateRequest(
+  payload: MicroclipSelectorApplyPayload
+) {
+  return requestJson<MicroclipSelectorApplyResponse>(
+    "/microclip-selector/apply",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
 }
 
 export async function createRenderJobRequest(

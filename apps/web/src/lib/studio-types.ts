@@ -2644,6 +2644,52 @@ export interface EditorialMicroclipPayload {
   metadata?: Record<string, unknown> | null;
 }
 
+export interface MicroclipSelectorCandidate {
+  id: string;
+  assetId: string;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  durationSeconds: number;
+  score: number;
+  reasons: string[];
+  usageMode: EditorialMicroclipUsageMode;
+  recommendedTextOverlay: string | null;
+  recommendedTransitionIn: EditorialMicroclipTransition;
+  recommendedTransitionOut: EditorialMicroclipTransition;
+  recommendedVolumeMode: EditorialMicroclipVolumeMode;
+}
+
+export interface MicroclipSelectorAnalyzePayload {
+  assetId: string;
+  targetDurationSeconds: number;
+  topN: number;
+  useCase: string;
+  preset: string;
+}
+
+export interface MicroclipSelectorAnalyzeResponse {
+  assetId: string;
+  durationSeconds: number;
+  targetDurationSeconds: number;
+  candidates: MicroclipSelectorCandidate[];
+  warnings: string[];
+}
+
+export interface MicroclipSelectorApplyPayload {
+  projectId: string;
+  sceneId: string | null;
+  assetId: string;
+  candidateId: string;
+  label: string | null;
+  usageMode: EditorialMicroclipUsageMode | null;
+}
+
+export interface MicroclipSelectorApplyResponse {
+  microclip: EditorialMicroclip;
+  candidate: MicroclipSelectorCandidate;
+  warnings: string[];
+}
+
 export interface SceneReorderPayload {
   sceneIds: string[];
 }
