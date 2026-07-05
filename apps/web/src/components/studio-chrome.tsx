@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 const navigation = [
   { href: "/", label: "Dashboard", short: "DB" },
+  { href: "/production-discovery", label: "Discovery", short: "PD" },
   { href: "/reels-factory", label: "Reels Factory", short: "RF" },
   { href: "/intake", label: "Intake", short: "IN" },
   { href: "/media-collector", label: "Media Collector", short: "MC" },

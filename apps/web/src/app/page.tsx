@@ -134,6 +134,13 @@ export default async function HomePage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-10">
         <DashboardCard
+          href="/production-discovery"
+          title="Production Discovery"
+          value="Niche"
+          description="Gere pacote por nicho com dossie, requisitos visuais e candidatos de midia sem import automatico."
+          accent="#7be0ff"
+        />
+        <DashboardCard
           href="/reels-factory"
           title="Reels Factory"
           value="Batch"

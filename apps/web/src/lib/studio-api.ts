@@ -41,6 +41,11 @@ import {
   buildLocalRenderBlueprint
 } from "./project-video-blueprint";
 import type {
+  ProductionDiscoveryCreatePayload,
+  ProductionDiscoveryNicheProfile,
+  ProductionDiscoveryPackage
+} from "./production-discovery-types";
+import type {
   AudioMoodPresetSummary,
   ApplyChannelDefaultsResponse,
   AssetPayload,
@@ -982,6 +987,57 @@ export async function getAssetsSnapshot(): Promise<{
     logServerFallback("assets", error);
     return { items: cloneValue(mockAssets), source: "mock" };
   }
+}
+
+export async function getProductionDiscoveryNiches() {
+  return requestJson<ProductionDiscoveryNicheProfile[]>("/production-discovery/niches");
+}
+
+export async function listProductionDiscoveryPackages() {
+  return requestJson<ProductionDiscoveryPackage[]>("/production-discovery/packages");
+}
+
+export async function createProductionDiscoveryPackageRequest(
+  payload: ProductionDiscoveryCreatePayload
+) {
+  return requestJson<ProductionDiscoveryPackage>("/production-discovery/create", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function runProductionDiscoveryResearchRequest(packageId: string) {
+  return requestJson<ProductionDiscoveryPackage>(
+    `/production-discovery/packages/${encodeURIComponent(packageId)}/run-research`,
+    { method: "POST" }
+  );
+}
+
+export async function buildProductionDiscoveryRequirementsRequest(packageId: string) {
+  return requestJson<ProductionDiscoveryPackage>(
+    `/production-discovery/packages/${encodeURIComponent(packageId)}/build-asset-requirements`,
+    { method: "POST" }
+  );
+}
+
+export async function searchProductionDiscoveryCandidatesRequest(packageId: string) {
+  return requestJson<ProductionDiscoveryPackage>(
+    `/production-discovery/packages/${encodeURIComponent(packageId)}/search-media-candidates`,
+    { method: "POST" }
+  );
+}
+
+export async function createProductionDiscoveryProjectRequest(packageId: string) {
+  return requestJson<ProductionDiscoveryPackage>(
+    `/production-discovery/packages/${encodeURIComponent(packageId)}/create-project`,
+    { method: "POST" }
+  );
+}
+
+export async function getProductionDiscoveryMediaCandidates(packageId: string) {
+  return requestJson<MediaCandidate[]>(
+    `/production-discovery/packages/${encodeURIComponent(packageId)}/media-candidates`
+  );
 }
 
 export async function getMusicLibraryRequest(

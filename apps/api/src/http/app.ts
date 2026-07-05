@@ -12,6 +12,7 @@ import type { IntakeRepository } from "../modules/intake/application/intake-repo
 import type { NarrationJobRepository } from "../modules/narration/application/narration-job-repository.js";
 import { createStudioManifest } from "../modules/projects/application/create-studio-manifest.js";
 import type { ProjectRepository } from "../modules/projects/application/project-repository.js";
+import type { ProductionDiscoveryRepository } from "../modules/production-discovery/application/production-discovery-repository.js";
 import type { ReelProductionRunRepository } from "../modules/reel-production/application/reel-production-run-repository.js";
 import type { ResearchRepository } from "../modules/research/application/research-repository.js";
 import type { RenderJobRepository } from "../modules/render-jobs/application/render-job-repository.js";
@@ -33,6 +34,7 @@ import { handleMediaCollectorRoute } from "./routes/media-collector-routes.js";
 import { handleMicroclipSelectorRoute } from "./routes/microclip-selector-routes.js";
 import { handleNarrationRoute } from "./routes/narration-routes.js";
 import { handleProductionRoute } from "./routes/production-routes.js";
+import { handleProductionDiscoveryRoute } from "./routes/production-discovery-routes.js";
 import { handlePromptEngineRoute } from "./routes/prompt-engine-routes.js";
 import { handleReelProductionRoute } from "./routes/reel-production-routes.js";
 import { handleReelsFactoryRoute } from "./routes/reels-factory-routes.js";
@@ -62,6 +64,7 @@ interface AppDependencies {
   narrationJobRepository: NarrationJobRepository;
   repositoryMode: RepositoryMode;
   projectRepository: ProjectRepository;
+  productionDiscoveryRepository: ProductionDiscoveryRepository;
   reelProductionRunRepository: ReelProductionRunRepository;
   researchRepository: ResearchRepository;
   renderJobRepository: RenderJobRepository;
@@ -82,6 +85,7 @@ export function createApp({
   narrationJobRepository,
   repositoryMode,
   projectRepository,
+  productionDiscoveryRepository,
   reelProductionRunRepository,
   researchRepository,
   renderJobRepository,
@@ -179,6 +183,24 @@ export function createApp({
           assetRepository,
           narrationJobRepository,
           projectRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
+      await handleProductionDiscoveryRoute(
+        request,
+        response,
+        url.pathname,
+        {
+          assetRepository,
+          channelRepository,
+          intakeRepository,
+          productionDiscoveryRepository,
+          projectRepository,
+          researchRepository
         }
       )
     ) {
@@ -473,6 +495,16 @@ export function createApp({
         "/health",
         "/studio/manifest",
         "/projects",
+        "/production-discovery/niches",
+        "/production-discovery/create",
+        "/production-discovery/packages",
+        "/production-discovery/packages/:id",
+        "/production-discovery/packages/:id/run-research",
+        "/production-discovery/packages/:id/build-asset-requirements",
+        "/production-discovery/packages/:id/search-media-candidates",
+        "/production-discovery/packages/:id/create-project",
+        "/production-discovery/packages/:id/media-candidates",
+        "/production-discovery/packages/:id/asset-requirements",
         "/video-projects",
         "/video-projects/:id",
         "/video-projects/:id/story-analysis",

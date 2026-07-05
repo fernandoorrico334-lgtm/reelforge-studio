@@ -393,6 +393,13 @@ interface ReelsFactorySceneRecipe {
   recommendedNextActions?: string[];
 }
 
+interface ProductionDiscoverySceneRecipe {
+  source?: string;
+  packageId?: string;
+  niche?: string;
+  nextActions?: string[];
+}
+
 function parseReelsFactorySceneRecipe(
   value: string | null | undefined
 ): ReelsFactorySceneRecipe | null {
@@ -408,6 +415,27 @@ function parseReelsFactorySceneRecipe(
     }
 
     return parsed as ReelsFactorySceneRecipe;
+  } catch {
+    return null;
+  }
+}
+
+function parseProductionDiscoverySceneRecipe(
+  value: string | null | undefined
+): ProductionDiscoverySceneRecipe | null {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+
+    const recipe = parsed as ProductionDiscoverySceneRecipe;
+    return recipe.source === "production-discovery" ? recipe : null;
   } catch {
     return null;
   }
@@ -1305,6 +1333,13 @@ export function ProjectStudio({
     scene,
     recipe: parseReelsFactorySceneRecipe(scene.visualRecipe)
   }));
+  const productionDiscoveryRecipes = orderedScenes
+    .map((scene) => parseProductionDiscoverySceneRecipe(scene.visualRecipe))
+    .filter((recipe): recipe is ProductionDiscoverySceneRecipe => Boolean(recipe));
+  const productionDiscoveryRecipe = productionDiscoveryRecipes[0] ?? null;
+  const productionDiscoveryNextActions = Array.from(
+    new Set(productionDiscoveryRecipes.flatMap((recipe) => recipe.nextActions ?? []))
+  );
   const reelsFactoryRecommendedNextActions = readFactoryRecommendedActions(
     reelsFactorySceneRecipes.map((entry) => entry.recipe),
     Boolean(reelsFactoryTemplate?.allowsMicroclip)
@@ -2323,6 +2358,19 @@ export function ProjectStudio({
                   </span>
                 </div>
               ) : null}
+              {productionDiscoveryRecipe ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-[#7dd3fc]/25 bg-[#7dd3fc]/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-[#d8f5ff]">
+                    Production Discovery
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-mist/70">
+                    {productionDiscoveryRecipe.niche ?? "generic"}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-mist/70">
+                    pacote {productionDiscoveryRecipe.packageId ?? "n/d"}
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div
               className={`rounded-full border px-3 py-1 text-xs ${
@@ -2338,6 +2386,45 @@ export function ProjectStudio({
           <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
             {statusMessage}
           </p>
+
+          {productionDiscoveryRecipe ? (
+            <div className="mt-4 rounded-[1.4rem] border border-[#7dd3fc]/15 bg-[#7dd3fc]/[0.06] p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-[#bdecff]/70">
+                    Candidate-first discovery
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold text-white">
+                    Midia pendente de revisao manual antes de virar asset
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-mist/68">
+                    Este projeto veio de um pacote de Production Discovery. As
+                    buscas criam candidatos, mas nenhum arquivo externo e importado
+                    ou baixado automaticamente.
+                  </p>
+                </div>
+                <a
+                  href="/production-discovery"
+                  className="rounded-full border border-[#7dd3fc]/25 bg-[#7dd3fc]/10 px-4 py-2 text-sm font-semibold text-[#d8f5ff] transition hover:bg-[#7dd3fc]/15"
+                >
+                  Abrir Discovery
+                </a>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {(productionDiscoveryNextActions.length > 0
+                  ? productionDiscoveryNextActions
+                  : ["review_media_candidates", "generate_images", "render"]
+                ).map((action) => (
+                  <span
+                    key={action}
+                    className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-mist/70"
+                  >
+                    {action.replaceAll("_", " ")}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             <div className="rounded-[1.4rem] border border-white/10 bg-black/20 p-4">

@@ -480,6 +480,15 @@ enum ReelProductionRunMode {
   render
 }
 
+enum ProductionDiscoveryStatus {
+  draft
+  researching
+  media_searching
+  ready_for_review
+  project_created
+  failed
+}
+
 model Channel {
   id                       String            @id @default(cuid())
   name                     String            @unique
@@ -969,6 +978,37 @@ model ReelProductionRun {
 
   @@index([videoProjectId, createdAt])
   @@index([status, createdAt])
+}
+
+model ProductionDiscoveryPackage {
+  id                                String                    @id @default(cuid())
+  topic                             String
+  niche                             String
+  title                             String
+  angle                             String?
+  language                          String                    @default("pt-BR")
+  tone                              String?
+  targetDurationSeconds             Int?
+  status                            ProductionDiscoveryStatus @default(draft)
+  researchDossierId                 String?
+  mediaCollectionIds                String                    @default("[]")
+  suggestedTemplateId               String?
+  suggestedEditingReferencePresetId String?
+  suggestedMusicPresetId            String?
+  suggestedAudioMasteringPresetId   String?
+  suggestedWorkflowPackId           String?
+  summary                           String?
+  outline                           String                    @default("[]")
+  assetRequirements                 String                    @default("[]")
+  mediaCandidatesSummary            String                    @default("[]")
+  warnings                          String                    @default("[]")
+  createdProjectId                  String?
+  createdAt                         DateTime                  @default(now())
+  updatedAt                         DateTime                  @updatedAt
+
+  @@index([niche, status])
+  @@index([createdProjectId])
+  @@index([researchDossierId])
 }
 
 model Scene {
