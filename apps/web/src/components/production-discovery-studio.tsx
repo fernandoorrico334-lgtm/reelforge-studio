@@ -8,13 +8,17 @@ import {
   createProductionDiscoveryProjectRequest,
   getProductionDiscoveryMediaCandidates,
   getProductionDiscoveryNiches,
+  getProductionDiscoveryProviders,
+  getProductionDiscoverySourcePacks,
   listProductionDiscoveryPackages,
   runProductionDiscoveryResearchRequest,
   searchProductionDiscoveryCandidatesRequest
 } from "../lib/studio-api";
 import type {
   ProductionDiscoveryNicheProfile,
-  ProductionDiscoveryPackage
+  ProductionDiscoveryPackage,
+  ProductionDiscoveryProvider,
+  ProductionDiscoverySourcePack
 } from "../lib/production-discovery-types";
 import type { MediaCandidate } from "../lib/studio-types";
 
@@ -28,6 +32,8 @@ function packageStatusLabel(value: string) {
 
 export function ProductionDiscoveryStudio() {
   const [niches, setNiches] = useState<ProductionDiscoveryNicheProfile[]>([]);
+  const [providers, setProviders] = useState<ProductionDiscoveryProvider[]>([]);
+  const [sourcePacks, setSourcePacks] = useState<ProductionDiscoverySourcePack[]>([]);
   const [packages, setPackages] = useState<ProductionDiscoveryPackage[]>([]);
   const [activePackage, setActivePackage] = useState<ProductionDiscoveryPackage | null>(null);
   const [candidates, setCandidates] = useState<MediaCandidate[]>([]);
@@ -63,13 +69,17 @@ export function ProductionDiscoveryStudio() {
 
     Promise.all([
       getProductionDiscoveryNiches(),
+      getProductionDiscoveryProviders(),
+      getProductionDiscoverySourcePacks(),
       listProductionDiscoveryPackages()
     ])
-      .then(async ([nicheItems, packageItems]) => {
+      .then(async ([nicheItems, providerItems, sourcePackItems, packageItems]) => {
         if (cancelled) {
           return;
         }
         setNiches(nicheItems);
+        setProviders(providerItems);
+        setSourcePacks(sourcePackItems);
         setPackages(packageItems);
         const first = packageItems[0] ?? null;
         setActivePackage(first);
@@ -139,6 +149,83 @@ export function ProductionDiscoveryStudio() {
           {error}
         </div>
       ) : null}
+
+      <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+        <div className="rounded-[1.75rem] border border-white/10 bg-black/25 p-5">
+          <p className="text-xs uppercase tracking-[0.28em] text-mist/45">
+            Source packs
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">
+            Asset Vault Builder
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-mist/68">
+            Packs agrupam fontes por nicho. Eles orientam busca e triagem, mas
+            continuam candidate-first: nada vira asset sem aprovacao manual.
+          </p>
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {sourcePacks.slice(0, 8).map((pack) => (
+              <div key={pack.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                <p className="text-sm font-semibold text-white">{pack.name}</p>
+                <p className="mt-1 text-xs text-mist/55">
+                  {pack.primaryProviderIds.length} primary /{" "}
+                  {pack.fallbackProviderIds.length} fallback
+                </p>
+                <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-[#bdecff]/70">
+                  {pack.recommendedForNiches.join(", ")}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-[1.75rem] border border-white/10 bg-black/25 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-mist/45">
+                Discovery Radar providers
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">
+                {providers.length} fontes abertas/internas catalogadas
+              </h2>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-mist/70">
+              <span className="rounded-full border border-white/10 px-3 py-1">
+                discovery-only {providers.filter((provider) => provider.discoveryOnly).length}
+              </span>
+              <span className="rounded-full border border-white/10 px-3 py-1">
+                API key {providers.filter((provider) => provider.requiresApiKey).length}
+              </span>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-3">
+            {providers.slice(0, 18).map((provider) => (
+              <div key={provider.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                <p className="text-sm font-semibold text-white">{provider.name}</p>
+                <p className="mt-1 text-xs text-mist/55">
+                  {provider.defaultLicenseStatus} / risk {provider.defaultRiskLevel}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1 text-[10px] uppercase tracking-[0.16em]">
+                  {provider.discoveryOnly ? (
+                    <span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-100">
+                      discovery only
+                    </span>
+                  ) : null}
+                  {provider.requiresApiKey ? (
+                    <span className="rounded-full bg-sky-400/10 px-2 py-1 text-sky-100">
+                      key required
+                    </span>
+                  ) : null}
+                  {!provider.importSupported ? (
+                    <span className="rounded-full bg-red-400/10 px-2 py-1 text-red-100">
+                      no import
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-[1.75rem] border border-white/10 bg-black/25 p-5">

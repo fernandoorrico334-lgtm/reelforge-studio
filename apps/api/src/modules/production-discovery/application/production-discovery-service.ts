@@ -1,9 +1,12 @@
 import {
   buildDiscoveryTitle,
   buildDiscoveryWarnings,
+  buildCandidateProviderPlan,
   buildNicheDossier,
   buildNicheResearchQueries,
   buildVisualRequirementsFromDossier,
+  getDiscoveryMediaProviders,
+  getDiscoverySourcePacks,
   getNicheProfileById,
   getNicheProfiles
 } from "../../../../../../packages/production-discovery-engine/src/index.js";
@@ -117,8 +120,32 @@ function buildRequirementCandidateSummary(
   };
 }
 
+function toCopyrightRisk(value: string | null | undefined) {
+  switch (value) {
+    case "low":
+      return "LOW" as const;
+    case "medium":
+    case "editorial_only":
+      return "MEDIUM" as const;
+    case "high":
+    case "restricted":
+      return "HIGH" as const;
+    case "unknown":
+    default:
+      return "UNKNOWN" as const;
+  }
+}
+
 export function listProductionDiscoveryNiches() {
   return getNicheProfiles();
+}
+
+export function listProductionDiscoveryProviders() {
+  return getDiscoveryMediaProviders();
+}
+
+export function listProductionDiscoverySourcePacks() {
+  return getDiscoverySourcePacks();
 }
 
 export async function createProductionDiscoveryPackage(
@@ -323,47 +350,94 @@ export async function searchProductionDiscoveryMediaCandidates(
       )
     );
 
-    const candidate = await dependencies.intakeRepository.createCandidate({
-      collectionId: collection.id,
-      provider: localAsset ? "local-library" : "manual-review",
-      originalPath: localAsset?.path ?? null,
-      title: localAsset
-        ? `Local candidate: ${localAsset.originalName}`
-        : `Candidate needed: ${String(requirement.visualNeedDescription ?? pkg.topic)}`,
-      previewUrl: localAsset ? `/media/assets/${localAsset.id}` : null,
-      downloadUrl: null,
-      sourceUrl: null,
-      sourceAuthor: localAsset?.sourceAuthor ?? null,
-      sourceLicense: localAsset?.sourceLicense ?? "unknown",
-      sourceLicenseUrl: localAsset?.sourceLicenseUrl ?? null,
-      mediaType,
-      detectedType: String(requirement.mediaType ?? mediaType),
-      suggestedCategory: mediaType === "video" ? "BROLL" : "REFERENCE",
-      suggestedTags: stringArray(requirement.suggestedTags),
-      suggestedCharacter: null,
-      suggestedProject: pkg.title,
-      width: localAsset?.width ?? null,
-      height: localAsset?.height ?? null,
-      duration: localAsset?.duration ?? null,
-      fileSize: localAsset?.fileSize ?? null,
-      extension: localAsset?.extension ?? null,
-      mimeType: localAsset?.mimeType ?? null,
-      category: mediaType === "video" ? "BROLL" : "REFERENCE",
-      franchise: null,
-      character: null,
-      emotion: null,
-      tags: ["production-discovery", pkg.niche, "requires-review"],
-      copyrightRisk: localAsset?.copyrightRisk ?? "UNKNOWN",
-      recommendedUse: "Revisar licenca e confirmar antes de importar/usar.",
-      usageNotes: "Candidato criado sem download automatico.",
-      status: "pending",
-      assetId: null,
-      errorMessage: null,
-      contentHash: null
+    const providerPlan = buildCandidateProviderPlan({
+      niche: pkg.niche,
+      requirement: {
+        mediaType: String(requirement.mediaType ?? mediaType) as never,
+        importance: String(requirement.importance ?? "medium") as never
+      },
+      limit: 3
     });
+    const candidates = [];
+
+    for (const plan of providerPlan) {
+      const isLocalCandidate = plan.providerId === "local-library" && localAsset;
+      const candidate = await dependencies.intakeRepository.createCandidate({
+        collectionId: collection.id,
+        provider: plan.providerId,
+        originalPath: isLocalCandidate ? localAsset.path : null,
+        title: isLocalCandidate
+          ? `Local candidate: ${localAsset.originalName}`
+          : `${plan.providerName}: ${String(requirement.visualNeedDescription ?? pkg.topic)}`,
+        previewUrl: isLocalCandidate
+          ? `/media/assets/${localAsset.id}`
+          : plan.previewUrl,
+        downloadUrl: null,
+        sourceUrl: plan.sourceUrl,
+        sourceAuthor: isLocalCandidate ? localAsset.sourceAuthor ?? null : plan.providerName,
+        sourceLicense: isLocalCandidate
+          ? localAsset.sourceLicense ?? "unknown"
+          : plan.defaultLicenseStatus,
+        sourceLicenseUrl: isLocalCandidate ? localAsset.sourceLicenseUrl ?? null : null,
+        mediaType,
+        detectedType: String(requirement.mediaType ?? mediaType),
+        suggestedCategory: mediaType === "video" ? "BROLL" : "REFERENCE",
+        suggestedTags: stringArray(requirement.suggestedTags),
+        suggestedCharacter: null,
+        suggestedProject: pkg.title,
+        width: isLocalCandidate ? localAsset.width ?? null : null,
+        height: isLocalCandidate ? localAsset.height ?? null : null,
+        duration: isLocalCandidate ? localAsset.duration ?? null : null,
+        fileSize: isLocalCandidate ? localAsset.fileSize ?? null : null,
+        extension: isLocalCandidate ? localAsset.extension ?? null : null,
+        mimeType: isLocalCandidate ? localAsset.mimeType ?? null : null,
+        category: mediaType === "video" ? "BROLL" : "REFERENCE",
+        franchise: null,
+        character: null,
+        emotion: null,
+        tags: [
+          "production-discovery",
+          pkg.niche,
+          "requires-review",
+          `provider:${plan.providerId}`,
+          `source-pack:${plan.sourcePackId}`,
+          `score:${plan.score}`
+        ],
+        copyrightRisk: isLocalCandidate
+          ? localAsset.copyrightRisk ?? "UNKNOWN"
+          : toCopyrightRisk(plan.defaultRiskLevel),
+        recommendedUse:
+          plan.warning ?? "Revisar licenca, preview, score e motivo antes de importar.",
+        usageNotes: JSON.stringify({
+          candidateFirst: true,
+          noAutoImport: true,
+          source: plan.providerId,
+          license: plan.defaultLicenseStatus,
+          risk: plan.defaultRiskLevel,
+          score: plan.score,
+          reason: plan.reason,
+          requiresApiKey: plan.requiresApiKey,
+          discoveryOnly: plan.discoveryOnly,
+          importSupported: plan.importSupported,
+          warning: plan.warning
+        }),
+        status: "pending",
+        assetId: null,
+        errorMessage: null,
+        contentHash: null
+      });
+
+      candidates.push(candidate);
+    }
 
     collections.push(collection.id);
-    summaries.push(buildRequirementCandidateSummary(collection.id, requirement, [candidate.id]));
+    summaries.push(
+      buildRequirementCandidateSummary(
+        collection.id,
+        requirement,
+        candidates.map((candidate) => candidate.id)
+      )
+    );
   }
 
   return dependencies.productionDiscoveryRepository.update(packageId, {

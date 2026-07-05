@@ -46,3 +46,35 @@ export interface ProductionDiscoveryCreatePayload {
   tone: string;
   targetDurationSeconds: number;
 }
+
+export interface ProductionDiscoveryProvider {
+  id: string;
+  name: string;
+  group: string;
+  homepage: string;
+  requiresApiKey: boolean;
+  freeTierAvailable: boolean;
+  supportsImage: boolean;
+  supportsVideo: boolean;
+  supportsAudio: boolean;
+  supportsDocuments: boolean;
+  supportsData: boolean;
+  supportsLicenseMetadata: boolean;
+  discoveryOnly: boolean;
+  importSupported: boolean;
+  defaultRiskLevel: string;
+  defaultLicenseStatus: string;
+  notes: string;
+  setupInstructions: string;
+}
+
+export interface ProductionDiscoverySourcePack {
+  id: string;
+  name: string;
+  description: string;
+  recommendedForNiches: string[];
+  primaryProviderIds: string[];
+  fallbackProviderIds: string[];
+  blockedAutoImportProviderIds: string[];
+  notes: string[];
+}

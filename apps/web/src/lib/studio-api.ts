@@ -43,7 +43,9 @@ import {
 import type {
   ProductionDiscoveryCreatePayload,
   ProductionDiscoveryNicheProfile,
-  ProductionDiscoveryPackage
+  ProductionDiscoveryPackage,
+  ProductionDiscoveryProvider,
+  ProductionDiscoverySourcePack
 } from "./production-discovery-types";
 import type {
   AudioMoodPresetSummary,
@@ -991,6 +993,14 @@ export async function getAssetsSnapshot(): Promise<{
 
 export async function getProductionDiscoveryNiches() {
   return requestJson<ProductionDiscoveryNicheProfile[]>("/production-discovery/niches");
+}
+
+export async function getProductionDiscoveryProviders() {
+  return requestJson<ProductionDiscoveryProvider[]>("/production-discovery/providers");
+}
+
+export async function getProductionDiscoverySourcePacks() {
+  return requestJson<ProductionDiscoverySourcePack[]>("/production-discovery/source-packs");
 }
 
 export async function listProductionDiscoveryPackages() {

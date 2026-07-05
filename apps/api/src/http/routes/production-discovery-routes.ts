@@ -11,6 +11,8 @@ import {
   getProductionDiscoveryPackage,
   listProductionDiscoveryNiches,
   listProductionDiscoveryPackages,
+  listProductionDiscoveryProviders,
+  listProductionDiscoverySourcePacks,
   runProductionDiscoveryResearch,
   searchProductionDiscoveryMediaCandidates
 } from "../../modules/production-discovery/application/production-discovery-service.js";
@@ -62,6 +64,26 @@ export async function handleProductionDiscoveryRoute(
       }
 
       sendJson(response, 200, listProductionDiscoveryNiches());
+      return true;
+    }
+
+    if (pathname === "/production-discovery/providers") {
+      if (request.method !== "GET") {
+        sendMethodNotAllowed(response, ["GET"]);
+        return true;
+      }
+
+      sendJson(response, 200, listProductionDiscoveryProviders());
+      return true;
+    }
+
+    if (pathname === "/production-discovery/source-packs") {
+      if (request.method !== "GET") {
+        sendMethodNotAllowed(response, ["GET"]);
+        return true;
+      }
+
+      sendJson(response, 200, listProductionDiscoverySourcePacks());
       return true;
     }
 

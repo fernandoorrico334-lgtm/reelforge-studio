@@ -496,6 +496,8 @@ export function createApp({
         "/studio/manifest",
         "/projects",
         "/production-discovery/niches",
+        "/production-discovery/providers",
+        "/production-discovery/source-packs",
         "/production-discovery/create",
         "/production-discovery/packages",
         "/production-discovery/packages/:id",
