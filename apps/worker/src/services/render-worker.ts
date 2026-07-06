@@ -57,6 +57,10 @@ export interface WorkerLogOptions {
   logger?: (message: string) => void;
 }
 
+export interface WorkerOnceOptions extends WorkerLogOptions {
+  renderJobId?: string | null;
+}
+
 export interface WorkerOnceResult {
   foundQueuedJob: boolean;
   renderJobId: string | null;
@@ -821,6 +825,66 @@ async function claimNextQueuedJob() {
   return nextJob.id;
 }
 
+async function claimQueuedJobById(renderJobId: string) {
+  const targetJob = await prisma.renderJob.findUnique({
+    where: {
+      id: renderJobId
+    }
+  });
+
+  if (!targetJob) {
+    return {
+      claimedRenderJobId: null,
+      videoProjectId: null,
+      errorMessage: `Render job '${renderJobId}' was not found.`
+    };
+  }
+
+  if (targetJob.status !== "queued") {
+    return {
+      claimedRenderJobId: null,
+      videoProjectId: targetJob.videoProjectId,
+      errorMessage: `Render job '${renderJobId}' is '${targetJob.status}', not queued.`
+    };
+  }
+
+  const claimResult = await prisma.renderJob.updateMany({
+    where: {
+      id: targetJob.id,
+      status: "queued"
+    },
+    data: {
+      status: "processing",
+      progress: 0,
+      currentStep: "reading_blueprint",
+      currentSceneIndex: null,
+      outputWidth: null,
+      outputHeight: null,
+      outputDuration: null,
+      outputCodec: null,
+      outputFileSize: null,
+      startedAt: new Date(),
+      completedAt: null,
+      cancelledAt: null,
+      errorMessage: null
+    }
+  });
+
+  if (claimResult.count === 0) {
+    return {
+      claimedRenderJobId: null,
+      videoProjectId: targetJob.videoProjectId,
+      errorMessage: `Render job '${renderJobId}' could not be claimed because its status changed.`
+    };
+  }
+
+  return {
+    claimedRenderJobId: targetJob.id,
+    videoProjectId: targetJob.videoProjectId,
+    errorMessage: null
+  };
+}
+
 export async function processNextRenderJob() {
   const renderJobId = await claimNextQueuedJob();
 
@@ -833,18 +897,26 @@ export async function processNextRenderJob() {
 }
 
 export async function runRenderWorkerOnce(
-  options?: WorkerLogOptions
+  options?: WorkerOnceOptions
 ): Promise<WorkerOnceResult> {
-  const renderJobId = await claimNextQueuedJob();
+  const requestedRenderJobId = options?.renderJobId?.trim() ?? "";
+  const targetedClaim = requestedRenderJobId
+    ? await claimQueuedJobById(requestedRenderJobId)
+    : null;
+  const renderJobId = requestedRenderJobId
+    ? targetedClaim?.claimedRenderJobId
+    : await claimNextQueuedJob();
 
   if (!renderJobId) {
-    emitWorkerLog(options, "No queued render jobs were found.");
+    const message =
+      targetedClaim?.errorMessage ?? "No queued render jobs were found.";
+    emitWorkerLog(options, message);
     return {
       foundQueuedJob: false,
-      renderJobId: null,
-      videoProjectId: null,
+      renderJobId: requestedRenderJobId || null,
+      videoProjectId: targetedClaim?.videoProjectId ?? null,
       finalStatus: "not_found",
-      errorMessage: "No queued render jobs were found.",
+      errorMessage: message,
       exitCode: 2
     };
   }

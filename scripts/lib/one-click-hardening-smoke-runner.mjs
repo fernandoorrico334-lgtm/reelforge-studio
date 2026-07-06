@@ -364,6 +364,10 @@ export async function runOneClickRenderRuntimeSmoke() {
     }
 
     assert(renderJob.outputPath, "Completed render job should have outputPath.");
+    const metadata =
+      typeof renderJob.metadata === "string"
+        ? JSON.parse(renderJob.metadata)
+        : renderJob.metadata ?? {};
 
     printSmokeSummary({
       smoke: "one-click-render-runtime",
@@ -373,7 +377,7 @@ export async function runOneClickRenderRuntimeSmoke() {
       renderJobId: result.renderJobId,
       outputPath: renderJob.outputPath,
       narrationIncluded: Boolean(renderJob.hasAudio),
-      audioQualityReport: Boolean(renderJob.metadata?.audioQualityReport),
+      audioQualityReport: Boolean(metadata.audioQualityReport),
       finalStatus: result.status
     });
   } finally {

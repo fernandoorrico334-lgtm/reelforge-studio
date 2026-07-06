@@ -188,13 +188,30 @@ function countUnconfirmedCandidates(candidates: Awaited<ReturnType<IntakeReposit
   }).length;
 }
 
-async function runWorkerOnceForQueuedJob() {
-  const command = process.platform === "win32" ? "npm.cmd" : "npm";
+async function runWorkerOnceForQueuedJob(renderJobId: string) {
+  const command = process.platform === "win32" ? "cmd.exe" : "npm";
+  const args =
+    process.platform === "win32"
+      ? [
+          "/d",
+          "/s",
+          "/c",
+          `npm run once --workspace @reelforge/worker -- --render-job-id ${renderJobId}`
+        ]
+      : [
+          "run",
+          "once",
+          "--workspace",
+          "@reelforge/worker",
+          "--",
+          "--render-job-id",
+          renderJobId
+        ];
 
   return new Promise<{ exitCode: number; output: string }>((resolve) => {
     let child;
     try {
-      child = spawn(command, ["run", "once", "--workspace", "@reelforge/worker"], {
+      child = spawn(command, args, {
         cwd: process.cwd(),
         env: process.env,
         windowsHide: true
@@ -757,7 +774,7 @@ export async function runOneClickReelProduction(
       });
       if (input.runWorkerOnce || input.options.runWorkerOnce) {
         steps = startStep(steps, "process_render_job");
-        const workerResult = await runWorkerOnceForQueuedJob();
+        const workerResult = await runWorkerOnceForQueuedJob(renderJob.id);
         const processedJob = await dependencies.renderJobRepository.getById(renderJob.id);
         outputPath = processedJob?.outputPath ?? outputPath;
 
