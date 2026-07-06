@@ -95,10 +95,12 @@ export interface OneClickOptions {
   useEditorialMicroclips?: boolean;
   createRenderJob?: boolean;
   runRender?: boolean;
+  runWorkerOnce?: boolean;
 }
 
 export interface OneClickRunInput {
   mode: ReelProductionRunMode;
+  runWorkerOnce: boolean;
   providerStrategy: OneClickProviderStrategy;
   defaults: OneClickDefaults;
   options: OneClickOptions;
@@ -121,7 +123,13 @@ export interface ReelProductionChecklist {
   scenesTotal: number;
   scenesWithNarration: number;
   scenesWithVisual: number;
+  scenesWithMusic: number;
   scenesWithMicroclips: number;
+  pendingMediaCandidates: number;
+  unconfirmedCandidates: number;
+  missingNarration: number;
+  missingVisuals: number;
+  missingMusic: number;
   hasMusic: boolean;
   hasBeatSyncPlan: boolean;
   hasEditingReferencePreset: boolean;
@@ -201,9 +209,14 @@ export function validateOneClickRunInput(payload: unknown): OneClickRunInput {
   );
   const defaults = readOptionalRecord(record.defaults, "defaults");
   const options = readOptionalRecord(record.options, "options");
+  const runWorkerOnce =
+    readOptionalBoolean(record.runWorkerOnce, "runWorkerOnce") ??
+    readOptionalBoolean(options.runWorkerOnce, "options.runWorkerOnce") ??
+    false;
 
   return {
     mode: normalizeMode(record.mode),
+    runWorkerOnce,
     providerStrategy: {
       visualProvider: readOptionalString(
         providerStrategy.visualProvider,
@@ -262,7 +275,8 @@ export function validateOneClickRunInput(payload: unknown): OneClickRunInput {
           options.createRenderJob,
           "options.createRenderJob"
         ) ?? true,
-      runRender: readOptionalBoolean(options.runRender, "options.runRender") ?? false
+      runRender: readOptionalBoolean(options.runRender, "options.runRender") ?? false,
+      runWorkerOnce
     }
   };
 }

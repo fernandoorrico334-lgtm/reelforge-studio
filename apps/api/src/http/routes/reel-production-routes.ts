@@ -5,6 +5,7 @@ import type { AudioLibraryRepository } from "../../modules/audio-library/applica
 import type { CharacterRepository } from "../../modules/characters/application/character-repository.js";
 import type { EditorialMicroclipRepository } from "../../modules/editorial-microclips/application/editorial-microclip-repository.js";
 import type { VisualGenerationJobRepository } from "../../modules/hybrid-visual/application/visual-generation-job-repository.js";
+import type { IntakeRepository } from "../../modules/intake/application/intake-repository.js";
 import type { NarrationJobRepository } from "../../modules/narration/application/narration-job-repository.js";
 import {
   buildReelProductionChecklist,
@@ -31,6 +32,7 @@ interface ReelProductionRouteDependencies {
   audioLibraryRepository: AudioLibraryRepository;
   characterRepository: CharacterRepository;
   editorialMicroclipRepository: EditorialMicroclipRepository;
+  intakeRepository: IntakeRepository;
   narrationJobRepository: NarrationJobRepository;
   projectRepository: ProjectRepository;
   renderJobRepository: RenderJobRepository;

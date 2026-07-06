@@ -2404,9 +2404,12 @@ function buildLocalOneClickChecklist(project: StudioProject): ReelProductionChec
   }));
   const scenesWithNarration = scenes.filter((scene) => scene.narrationReady).length;
   const scenesWithVisual = scenes.filter((scene) => scene.visualReady).length;
+  const missingNarration = Math.max(0, project.scenes.length - scenesWithNarration);
+  const missingVisuals = Math.max(0, project.scenes.length - scenesWithVisual);
+  const missingMusic = project.backgroundMusicAssetId ? 0 : 1;
   const missingItems = [
-    ...(scenesWithNarration < project.scenes.length ? ["narration"] : []),
-    ...(scenesWithVisual < project.scenes.length ? ["visuals"] : [])
+    ...(missingNarration > 0 ? ["narration"] : []),
+    ...(missingVisuals > 0 ? ["visuals"] : [])
   ];
 
   return {
@@ -2414,7 +2417,13 @@ function buildLocalOneClickChecklist(project: StudioProject): ReelProductionChec
     scenesTotal: project.scenes.length,
     scenesWithNarration,
     scenesWithVisual,
+    scenesWithMusic: project.backgroundMusicAssetId ? project.scenes.length : 0,
     scenesWithMicroclips: 0,
+    pendingMediaCandidates: 0,
+    unconfirmedCandidates: 0,
+    missingNarration,
+    missingVisuals,
+    missingMusic,
     hasMusic: Boolean(project.backgroundMusicAssetId),
     hasBeatSyncPlan: Boolean(project.backgroundMusicAssetId || project.musicPresetId),
     hasEditingReferencePreset: Boolean(project.editingReferencePresetId),

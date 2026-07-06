@@ -78,6 +78,7 @@ export async function runAssetVaultBuilderSmoke() {
   const prisma = new PrismaClient();
   const engine = await loadEngine();
   const id = runId();
+  const importPath = `storage/assets/imports/${id}-authorized-local.png`;
 
   try {
     const vault = await prisma.assetVault.create({
@@ -166,7 +167,7 @@ export async function runAssetVaultBuilderSmoke() {
         }, {
           duplicateWarning: dedup?.duplicateWarning ?? null,
           possibleDuplicateOf: dedup?.possibleDuplicateOf ?? null,
-          originalPath: saved.length === 0 ? "storage/assets/imports/smoke-authorized-local.png" : null
+          originalPath: saved.length === 0 ? importPath : null
         })
       );
     }
@@ -184,9 +185,9 @@ export async function runAssetVaultBuilderSmoke() {
     });
     const asset = await prisma.asset.create({
       data: {
-        filename: "smoke-authorized-local.png",
+        filename: `${id}-authorized-local.png`,
         originalName: first.title,
-        path: "storage/assets/imports/smoke-authorized-local.png",
+        path: importPath,
         type: "IMAGE",
         category: "REFERENCE",
         tags: JSON.stringify(["asset-vault-import", id]),

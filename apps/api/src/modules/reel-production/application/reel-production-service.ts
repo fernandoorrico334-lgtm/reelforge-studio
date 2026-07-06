@@ -1,4 +1,5 @@
 import type { AppEnv } from "../../../config/env.js";
+import { spawn } from "node:child_process";
 import { NotFoundError } from "../../../shared/errors.js";
 import type { AssetRepository } from "../../assets/application/asset-repository.js";
 import type { AudioLibraryRepository } from "../../audio-library/application/audio-library-repository.js";
@@ -10,6 +11,7 @@ import type { CharacterRepository } from "../../characters/application/character
 import type { EditorialMicroclipRepository } from "../../editorial-microclips/application/editorial-microclip-repository.js";
 import { generateVisualForScene } from "../../hybrid-visual/application/hybrid-visual-service.js";
 import type { VisualGenerationJobRepository } from "../../hybrid-visual/application/visual-generation-job-repository.js";
+import type { IntakeRepository } from "../../intake/application/intake-repository.js";
 import {
   generateNarrationForScene
 } from "../../narration/application/narration-service.js";
@@ -42,6 +44,7 @@ interface ReelProductionDependencies {
   audioLibraryRepository: AudioLibraryRepository;
   characterRepository: CharacterRepository;
   editorialMicroclipRepository: EditorialMicroclipRepository;
+  intakeRepository: IntakeRepository;
   narrationJobRepository: NarrationJobRepository;
   projectRepository: ProjectRepository;
   renderJobRepository: RenderJobRepository;
@@ -55,13 +58,12 @@ const stepDefinitions = [
   ["generate_narration", "Gerar narracao local ausente"],
   ["generate_visuals", "Gerar visuals ausentes"],
   ["select_music", "Selecionar musica local"],
-  ["beat_sync", "Criar Beat Sync Plan"],
-  ["editorial_preset", "Confirmar preset editorial"],
-  ["audio_mastering", "Confirmar audio mastering"],
-  ["microclips", "Verificar microclips opcionais"],
-  ["blueprint", "Gerar Render Blueprint"],
-  ["render_job", "Criar RenderJob final"],
-  ["run_render", "Rodar render se disponivel"]
+  ["build_beat_sync", "Criar Beat Sync Plan"],
+  ["validate_microclips", "Verificar microclips opcionais"],
+  ["build_blueprint", "Gerar Render Blueprint"],
+  ["create_render_job", "Criar RenderJob final"],
+  ["process_render_job", "Processar RenderJob pelo worker"],
+  ["finalize_output", "Finalizar output"]
 ] as const;
 
 function now() {
@@ -169,6 +171,60 @@ function sceneHasNarration(scene: ProjectScene) {
   return Boolean(scene.generatedNarrationAssetId || scene.narrationText?.trim());
 }
 
+function countUnconfirmedCandidates(candidates: Awaited<ReturnType<IntakeRepository["listCandidates"]>>) {
+  return candidates.filter((candidate) => {
+    if (candidate.status !== "pending" && candidate.status !== "approved") {
+      return false;
+    }
+
+    try {
+      const notes = candidate.usageNotes
+        ? (JSON.parse(candidate.usageNotes) as Record<string, unknown>)
+        : {};
+      return notes.userConfirmedUse !== true;
+    } catch {
+      return true;
+    }
+  }).length;
+}
+
+async function runWorkerOnceForQueuedJob() {
+  const command = process.platform === "win32" ? "npm.cmd" : "npm";
+
+  return new Promise<{ exitCode: number; output: string }>((resolve) => {
+    let child;
+    try {
+      child = spawn(command, ["run", "once", "--workspace", "@reelforge/worker"], {
+        cwd: process.cwd(),
+        env: process.env,
+        windowsHide: true
+      });
+    } catch (error) {
+      resolve({
+        exitCode: 1,
+        output: `Worker spawn failed: ${getErrorMessage(error)}`
+      });
+      return;
+    }
+    const chunks: string[] = [];
+
+    child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk.toString()));
+    child.stderr.on("data", (chunk: Buffer) => chunks.push(chunk.toString()));
+    child.on("error", (error) => {
+      resolve({
+        exitCode: 1,
+        output: `Worker spawn failed: ${error.message}`
+      });
+    });
+    child.on("close", (code) => {
+      resolve({
+        exitCode: code ?? 1,
+        output: chunks.join("").trim()
+      });
+    });
+  });
+}
+
 function normalizeVisualProvider(value: string | null): VisualGenerationProvider {
   switch (value) {
     case "comfyui-local":
@@ -263,13 +319,22 @@ async function requireProject(repository: ProjectRepository, projectId: string) 
 export async function buildReelProductionChecklist(
   dependencies: Pick<
     ReelProductionDependencies,
-    "editorialMicroclipRepository" | "projectRepository"
+    "editorialMicroclipRepository" | "intakeRepository" | "projectRepository"
   >,
   projectId: string
 ): Promise<ReelProductionChecklist> {
   const project = await requireProject(dependencies.projectRepository, projectId);
   const microclips =
     await dependencies.editorialMicroclipRepository.listByProjectId(project.id);
+  const projectCollections = await dependencies.intakeRepository.listCollections({
+    projectId: project.id
+  });
+  const candidateGroups = await Promise.all(
+    projectCollections.map((collection) =>
+      dependencies.intakeRepository.listCandidates({ collectionId: collection.id })
+    )
+  );
+  const mediaCandidates = candidateGroups.flat();
   const microclipsByScene = new Map<string, number>();
 
   for (const microclip of microclips) {
@@ -304,16 +369,27 @@ export async function buildReelProductionChecklist(
   });
   const scenesWithNarration = scenes.filter((scene) => scene.narrationReady).length;
   const scenesWithVisual = scenes.filter((scene) => scene.visualReady).length;
+  const scenesWithMusic = project.backgroundMusicAssetId ? project.scenes.length : 0;
   const scenesWithMicroclips = scenes.filter((scene) => scene.microclipCount > 0).length;
+  const pendingMediaCandidates = mediaCandidates.filter(
+    (candidate) => candidate.status === "pending"
+  ).length;
+  const unconfirmedCandidates = countUnconfirmedCandidates(mediaCandidates);
+  const missingNarration = Math.max(0, project.scenes.length - scenesWithNarration);
+  const missingVisuals = Math.max(0, project.scenes.length - scenesWithVisual);
+  const missingMusic = project.backgroundMusicAssetId ? 0 : 1;
   const missingItems: string[] = [];
   const warnings: string[] = [];
 
   if (project.scenes.length === 0) missingItems.push("scenes");
-  if (scenesWithNarration < project.scenes.length) missingItems.push("narration");
-  if (scenesWithVisual < project.scenes.length) missingItems.push("visuals");
+  if (missingNarration > 0) missingItems.push("narration");
+  if (missingVisuals > 0) missingItems.push("visuals");
   if (!project.backgroundMusicAssetId) warnings.push("Projeto sem musica selecionada.");
   if (!project.editingReferencePresetId) warnings.push("Projeto sem preset editorial.");
   if (microclips.length === 0) warnings.push("Microclip editorial opcional ainda nao anexado.");
+  if (pendingMediaCandidates > 0 || unconfirmedCandidates > 0) {
+    warnings.push("Ha candidatos de midia pendentes de revisao.");
+  }
 
   const renderReady = project.scenes.length > 0 && missingItems.length === 0;
 
@@ -322,7 +398,13 @@ export async function buildReelProductionChecklist(
     scenesTotal: project.scenes.length,
     scenesWithNarration,
     scenesWithVisual,
+    scenesWithMusic,
     scenesWithMicroclips,
+    pendingMediaCandidates,
+    unconfirmedCandidates,
+    missingNarration,
+    missingVisuals,
+    missingMusic,
     hasMusic: Boolean(project.backgroundMusicAssetId),
     hasBeatSyncPlan: Boolean(project.backgroundMusicAssetId || project.musicPresetId),
     hasEditingReferencePreset: Boolean(project.editingReferencePresetId),
@@ -336,6 +418,9 @@ export async function buildReelProductionChecklist(
         ? ["generate_missing_narration"]
         : []),
       ...(scenesWithVisual < project.scenes.length ? ["generate_missing_visuals"] : []),
+      ...(pendingMediaCandidates > 0 || unconfirmedCandidates > 0
+        ? ["review_media_candidates"]
+        : []),
       ...(!project.backgroundMusicAssetId ? ["select_music_optional"] : []),
       ...(microclips.length === 0 ? ["attach_microclip_optional"] : []),
       renderReady ? "create_render_job" : "prepare_assets"
@@ -397,11 +482,23 @@ function resolveRunStatus(
   checklist: ReelProductionChecklist
 ): ReelProductionRunStatus {
   if (steps.some((step) => step.status === "failed")) {
-    return "partial";
+    return mode === "render" ? "failed" : "partial";
   }
 
   if (mode === "dry_run") {
     return "completed";
+  }
+
+  if (
+    mode === "render" &&
+    steps.some(
+      (step) =>
+        step.id === "process_render_job" &&
+        step.status === "skipped" &&
+        step.message.includes("queued")
+    )
+  ) {
+    return "partial";
   }
 
   return checklist.renderReady ? "completed" : "partial";
@@ -442,13 +539,11 @@ export async function runOneClickReelProduction(
     steps = skipStep(steps, "generate_narration", "Dry run nao altera narracao.");
     steps = skipStep(steps, "generate_visuals", "Dry run nao gera visuals.");
     steps = skipStep(steps, "select_music", "Dry run nao seleciona musica.");
-    steps = skipStep(steps, "beat_sync", "Dry run nao cria plano persistente.");
-    steps = completeStep(steps, "editorial_preset", "Preset editorial verificado.");
-    steps = completeStep(steps, "audio_mastering", "Audio mastering verificado.");
-    steps = completeStep(steps, "microclips", "Microclips verificados.");
-    steps = skipStep(steps, "blueprint", "Dry run nao prepara blueprint.");
-    steps = skipStep(steps, "render_job", "Dry run nao cria RenderJob.");
-    steps = skipStep(steps, "run_render", "Dry run nao renderiza.");
+    steps = skipStep(steps, "build_beat_sync", "Dry run nao cria plano persistente.");
+    steps = completeStep(steps, "validate_microclips", "Microclips verificados.");
+    steps = skipStep(steps, "build_blueprint", "Dry run nao prepara blueprint.");
+    steps = skipStep(steps, "create_render_job", "Dry run nao cria RenderJob.");
+    steps = skipStep(steps, "process_render_job", "Dry run nao renderiza.");
   } else {
     if (input.options.generateMissingNarration) {
       steps = startStep(steps, "generate_narration");
@@ -600,7 +695,7 @@ export async function runOneClickReelProduction(
     }
 
     if (input.options.buildBeatSyncPlan) {
-      steps = startStep(steps, "beat_sync");
+      steps = startStep(steps, "build_beat_sync");
       const plan = await buildProjectBeatSyncPlan(
         dependencies.projectRepository,
         dependencies.assetRepository,
@@ -611,48 +706,37 @@ export async function runOneClickReelProduction(
         }
       );
       warnings.push(...plan.warnings);
-      steps = completeStep(steps, "beat_sync", "Beat Sync Plan calculado.", {
+      steps = completeStep(steps, "build_beat_sync", "Beat Sync Plan calculado.", {
         musicAssetId: plan.selectedMusicAssetId,
         presetId: plan.musicPresetId
       });
     } else {
-      steps = skipStep(steps, "beat_sync", "Beat sync desativado.");
+      steps = skipStep(steps, "build_beat_sync", "Beat sync desativado.");
     }
 
-    steps = completeStep(
-      steps,
-      "editorial_preset",
-      refreshedProject.editingReferencePresetId
-        ? "Preset editorial aplicado."
-        : "Sem preset editorial; usando defaults seguros."
-    );
     if (!refreshedProject.editingReferencePresetId) {
       warnings.push("Projeto sem preset editorial aplicado.");
     }
 
-    steps = completeStep(steps, "audio_mastering", "Audio mastering resolvido.", {
-      presetId: defaults.audioMasteringPresetId
-    });
-
     const microclips =
       await dependencies.editorialMicroclipRepository.listByProjectId(project.id);
     steps = microclips.length
-      ? completeStep(steps, "microclips", `${microclips.length} microclip(s) detectado(s).`)
-      : skipStep(steps, "microclips", "Microclip editorial opcional pendente.");
+      ? completeStep(steps, "validate_microclips", `${microclips.length} microclip(s) detectado(s).`)
+      : skipStep(steps, "validate_microclips", "Microclip editorial opcional pendente.");
 
-    steps = startStep(steps, "blueprint");
+    steps = startStep(steps, "build_blueprint");
     const blueprint = await getVideoProjectRenderBlueprint(
       dependencies.projectRepository,
       dependencies.assetRepository,
       dependencies.editorialMicroclipRepository,
       project.id
     );
-    steps = completeStep(steps, "blueprint", "Render Blueprint pronto.", {
+    steps = completeStep(steps, "build_blueprint", "Render Blueprint pronto.", {
       projectId: blueprint.projectId
     });
 
     if (input.mode === "render" && input.options.createRenderJob) {
-      steps = startStep(steps, "render_job");
+      steps = startStep(steps, "create_render_job");
       const renderJob = await createRenderJobForProject(
         dependencies.renderJobRepository,
         dependencies.projectRepository,
@@ -668,24 +752,47 @@ export async function runOneClickReelProduction(
       );
       renderJobId = renderJob.id;
       outputPath = renderJob.outputPath;
-      steps = completeStep(steps, "render_job", "RenderJob criado e enfileirado.", {
+      steps = completeStep(steps, "create_render_job", "RenderJob criado e enfileirado.", {
         renderJobId
       });
-      steps = input.options.runRender
-        ? skipStep(
-            steps,
-            "run_render",
-            "Render direto fica a cargo do worker/runtime local nesta V1."
-          )
-        : skipStep(steps, "run_render", "Run render desativado.");
+      if (input.runWorkerOnce || input.options.runWorkerOnce) {
+        steps = startStep(steps, "process_render_job");
+        const workerResult = await runWorkerOnceForQueuedJob();
+        const processedJob = await dependencies.renderJobRepository.getById(renderJob.id);
+        outputPath = processedJob?.outputPath ?? outputPath;
+
+        if (workerResult.exitCode === 0 && processedJob?.status === "completed") {
+          steps = completeStep(steps, "process_render_job", "Worker processou RenderJob.", {
+            renderJobId,
+            outputPath: outputPath ?? null
+          });
+        } else {
+          const message =
+            processedJob?.errorMessage ??
+            workerResult.output ??
+            "Worker nao concluiu o RenderJob.";
+          warnings.push(message);
+          steps = failStep(steps, "process_render_job", message);
+        }
+      } else {
+        steps = skipStep(
+          steps,
+          "process_render_job",
+          "RenderJob ficou queued aguardando worker."
+        );
+      }
     } else {
-      steps = skipStep(steps, "render_job", "Modo prepare_only nao cria RenderJob.");
-      steps = skipStep(steps, "run_render", "Sem render nesta execucao.");
+      steps = skipStep(steps, "create_render_job", "Modo prepare_only nao cria RenderJob.");
+      steps = skipStep(steps, "process_render_job", "Sem render nesta execucao.");
     }
   }
 
   checklist = await buildReelProductionChecklist(dependencies, project.id);
   const status = resolveRunStatus(input.mode, steps, checklist);
+  steps =
+    outputPath || status === "completed"
+      ? completeStep(steps, "finalize_output", outputPath ? "Output final registrado." : "Execucao finalizada.")
+      : skipStep(steps, "finalize_output", "Output final ainda nao disponivel.");
   run = await persistRun(dependencies.runRepository, run, {
     status,
     steps,

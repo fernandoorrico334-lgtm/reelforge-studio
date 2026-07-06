@@ -1061,6 +1061,7 @@ export function ProjectStudio({
     useState<DataSource>("mock");
   const [oneClickRunningMode, setOneClickRunningMode] =
     useState<ReelProductionRunMode | null>(null);
+  const [oneClickRunWorkerOnce, setOneClickRunWorkerOnce] = useState(false);
   const [blueprint, setBlueprint] = useState<RenderBlueprintResponse | null>(null);
   const [beatSyncPlan, setBeatSyncPlan] =
     useState<BuildBeatSyncPlanResponse | null>(null);
@@ -1859,6 +1860,7 @@ export function ProjectStudio({
     try {
       const result = await runOneClickProductionRequest(project.id, {
         mode,
+        runWorkerOnce: mode === "render" ? oneClickRunWorkerOnce : false,
         providerStrategy: {
           visualProvider: "comfyui-local",
           fallbackVisualProvider: "mock-svg",
@@ -1880,7 +1882,8 @@ export function ProjectStudio({
           buildBeatSyncPlan: true,
           useEditorialMicroclips: true,
           createRenderJob: mode === "render",
-          runRender: mode === "render"
+          runRender: mode === "render",
+          runWorkerOnce: mode === "render" ? oneClickRunWorkerOnce : false
         }
       });
       const projectSnapshot = await getProjectDetailSnapshot(project.id);
@@ -2925,6 +2928,35 @@ export function ProjectStudio({
                 {editorialMicroclipsSource}
               </p>
             </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Musica
+              </p>
+              <p className="mt-2 text-sm font-semibold text-white">
+                {oneClickChecklist?.hasMusic ? "selecionada" : "pendente"}
+              </p>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                Candidatos
+              </p>
+              <p className="mt-2 text-sm font-semibold text-white">
+                {oneClickChecklist?.pendingMediaCandidates ?? 0} pendentes /{" "}
+                {oneClickChecklist?.unconfirmedCandidates ?? 0} sem confirmacao
+              </p>
+            </div>
+            <label className="flex items-center gap-3 rounded-[1.2rem] border border-[#9af0b2]/20 bg-[#9af0b2]/8 p-4 text-xs text-mist/75">
+              <input
+                type="checkbox"
+                checked={oneClickRunWorkerOnce}
+                onChange={(event) => setOneClickRunWorkerOnce(event.target.checked)}
+                className="h-4 w-4 accent-[#9af0b2]"
+              />
+              Processar worker agora ao produzir reel
+            </label>
           </div>
 
           <div className="mt-6 space-y-3">
@@ -5002,24 +5034,40 @@ export function ProjectStudio({
                     {oneClickRuns[0].mode} / {oneClickRuns[0].status}
                   </p>
                 </div>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/65">
-                  {oneClickRuns[0].renderJobId ?? "sem render job"}
-                </span>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/65">
+                    {oneClickRuns[0].renderJobId ?? "sem render job"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void refreshOneClickProduction(project);
+                    }}
+                    className="rounded-full border border-white/10 px-3 py-1 text-xs text-mist/70"
+                  >
+                    atualizar status
+                  </button>
+                </div>
               </div>
               <div className="mt-4 grid gap-2 md:grid-cols-2">
-                {oneClickRuns[0].steps.slice(0, 6).map((step) => (
+                {oneClickRuns[0].steps.map((step) => (
                   <div
                     key={step.id}
                     className="rounded-[1rem] border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-mist/70"
                   >
-                    <span className="text-white">{step.label}</span> /{" "}
-                    {step.status}
+                    <span className="text-white">{step.label}</span> / {step.status}
+                    <p className="mt-1 leading-5 text-mist/50">{step.message}</p>
                   </div>
                 ))}
               </div>
               {oneClickRuns[0].outputPath ? (
                 <p className="mt-3 text-xs leading-6 text-mist/65">
                   output {oneClickRuns[0].outputPath}
+                </p>
+              ) : null}
+              {oneClickRuns[0].errorMessage ? (
+                <p className="mt-3 rounded-[1rem] border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                  {oneClickRuns[0].errorMessage}
                 </p>
               ) : null}
             </div>

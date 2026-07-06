@@ -94,6 +94,7 @@ async function ensureBuildArtifacts() {
     "modules/channels/infrastructure/prisma-channel-repository.js",
     "modules/editorial-microclips/infrastructure/prisma-editorial-microclip-repository.js",
     "modules/hybrid-visual/infrastructure/prisma-visual-generation-job-repository.js",
+    "modules/intake/infrastructure/prisma-intake-repository.js",
     "modules/narration/infrastructure/prisma-narration-job-repository.js",
     "modules/projects/infrastructure/prisma-project-repository.js",
     "modules/projects/application/project-render-blueprint-service.js",
@@ -131,6 +132,7 @@ async function loadDependencies(apiBuildRoot, workerBuildRoot) {
     channelRepositoryModule,
     editorialMicroclipRepositoryModule,
     visualGenerationJobRepositoryModule,
+    intakeRepositoryModule,
     narrationJobRepositoryModule,
     projectRepositoryModule,
     renderBlueprintServiceModule,
@@ -149,6 +151,7 @@ async function loadDependencies(apiBuildRoot, workerBuildRoot) {
     importModule(apiArtifactPath(apiBuildRoot, "modules/channels/infrastructure/prisma-channel-repository.js")),
     importModule(apiArtifactPath(apiBuildRoot, "modules/editorial-microclips/infrastructure/prisma-editorial-microclip-repository.js")),
     importModule(apiArtifactPath(apiBuildRoot, "modules/hybrid-visual/infrastructure/prisma-visual-generation-job-repository.js")),
+    importModule(apiArtifactPath(apiBuildRoot, "modules/intake/infrastructure/prisma-intake-repository.js")),
     importModule(apiArtifactPath(apiBuildRoot, "modules/narration/infrastructure/prisma-narration-job-repository.js")),
     importModule(apiArtifactPath(apiBuildRoot, "modules/projects/infrastructure/prisma-project-repository.js")),
     importModule(apiArtifactPath(apiBuildRoot, "modules/projects/application/project-render-blueprint-service.js")),
@@ -174,6 +177,8 @@ async function loadDependencies(apiBuildRoot, workerBuildRoot) {
       editorialMicroclipRepositoryModule.createPrismaEditorialMicroclipRepository,
     createPrismaVisualGenerationJobRepository:
       visualGenerationJobRepositoryModule.createPrismaVisualGenerationJobRepository,
+    createPrismaIntakeRepository:
+      intakeRepositoryModule.createPrismaIntakeRepository,
     createPrismaNarrationJobRepository:
       narrationJobRepositoryModule.createPrismaNarrationJobRepository,
     createPrismaProjectRepository:
@@ -306,6 +311,7 @@ function createDependencies(deps) {
     characterRepository: deps.createPrismaCharacterRepository(),
     editorialMicroclipRepository:
       deps.createPrismaEditorialMicroclipRepository(),
+    intakeRepository: deps.createPrismaIntakeRepository(),
     narrationJobRepository: deps.createPrismaNarrationJobRepository(),
     projectRepository: deps.createPrismaProjectRepository(),
     renderJobRepository: deps.createPrismaRenderJobRepository(),

@@ -262,6 +262,7 @@ export function createApp({
           audioLibraryRepository,
           characterRepository,
           editorialMicroclipRepository,
+          intakeRepository,
           narrationJobRepository,
           projectRepository,
           renderJobRepository,

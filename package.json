@@ -72,7 +72,11 @@
     "smoke:editing-reference-presets": "node scripts/smoke-editing-reference-presets.mjs",
     "smoke:editing-reference-project-flow": "node scripts/smoke-editing-reference-project-flow.mjs",
     "smoke:one-click-production": "node scripts/smoke-one-click-production.mjs",
-    "smoke:one-click-render": "node scripts/smoke-one-click-render.mjs"
+    "smoke:one-click-render": "node scripts/smoke-one-click-render.mjs",
+    "smoke:one-click-dry-run": "node scripts/smoke-one-click-dry-run.mjs",
+    "smoke:one-click-prepare-assets": "node scripts/smoke-one-click-prepare-assets.mjs",
+    "smoke:one-click-candidate-gate": "node scripts/smoke-one-click-candidate-gate.mjs",
+    "smoke:one-click-render-runtime": "node scripts/smoke-one-click-render-runtime.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

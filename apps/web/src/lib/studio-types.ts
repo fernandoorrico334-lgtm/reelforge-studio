@@ -3217,7 +3217,13 @@ export interface ReelProductionChecklist {
   scenesTotal: number;
   scenesWithNarration: number;
   scenesWithVisual: number;
+  scenesWithMusic?: number;
   scenesWithMicroclips: number;
+  pendingMediaCandidates?: number;
+  unconfirmedCandidates?: number;
+  missingNarration?: number;
+  missingVisuals?: number;
+  missingMusic?: number;
   hasMusic: boolean;
   hasBeatSyncPlan: boolean;
   hasEditingReferencePreset: boolean;
@@ -3247,6 +3253,7 @@ export interface ReelProductionRun {
 
 export interface OneClickProductionPayload {
   mode: ReelProductionRunMode;
+  runWorkerOnce?: boolean;
   providerStrategy?: {
     visualProvider?: string | null;
     fallbackVisualProvider?: string | null;
@@ -3267,6 +3274,7 @@ export interface OneClickProductionPayload {
     useEditorialMicroclips?: boolean;
     createRenderJob?: boolean;
     runRender?: boolean;
+    runWorkerOnce?: boolean;
   };
 }
 
