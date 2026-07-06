@@ -145,3 +145,59 @@ export interface DiscoverySearchResponse {
   warnings: string[];
   assetsCreated: number;
 }
+
+export interface AssetVaultRecord {
+  id: string;
+  name: string;
+  niche: string;
+  description: string | null;
+  sourcePackId: string | null;
+  targetAssetTypes: string[];
+  tags: string[];
+  status: string;
+  candidateCount: number;
+  approvedCount: number;
+  importedCount: number;
+  rejectedCount: number;
+  missingCount: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SearchMissionRecord {
+  id: string;
+  vaultId: string | null;
+  projectId: string | null;
+  packageId: string | null;
+  topic: string;
+  niche: string;
+  sourcePackId: string | null;
+  providers: string[];
+  querySet: string[];
+  targetCount: number;
+  status: string;
+  candidateCount: number;
+  reviewRequiredCount: number;
+  approvedCount: number;
+  importedCount: number;
+  rejectedCount: number;
+  missingCount: number;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetVaultGapAnalysis {
+  missingByMediaType: Array<{
+    mediaType: string;
+    missingCount: number;
+    reason: string;
+  }>;
+  suggestedSearchMissions: Array<{
+    topic: string;
+    mediaType: string;
+    sourcePackId: string;
+    targetCount: number;
+  }>;
+}

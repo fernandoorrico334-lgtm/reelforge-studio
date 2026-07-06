@@ -42,13 +42,16 @@ import {
 } from "./project-video-blueprint";
 import type {
   ProductionDiscoveryCreatePayload,
+  AssetVaultGapAnalysis,
+  AssetVaultRecord,
   DiscoveryProviderActivationStatus,
   DiscoverySearchPayload,
   DiscoverySearchResponse,
   ProductionDiscoveryNicheProfile,
   ProductionDiscoveryPackage,
   ProductionDiscoveryProvider,
-  ProductionDiscoverySourcePack
+  ProductionDiscoverySourcePack,
+  SearchMissionRecord
 } from "./production-discovery-types";
 import type {
   AudioMoodPresetSummary,
@@ -1015,6 +1018,92 @@ export async function runDiscoverySearchRequest(payload: DiscoverySearchPayload)
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export async function listAssetVaultsRequest() {
+  return requestJson<AssetVaultRecord[]>("/asset-vault");
+}
+
+export async function createAssetVaultRequest(payload: {
+  name: string;
+  niche: string;
+  description?: string | null;
+  sourcePackId?: string | null;
+  targetAssetTypes?: string[];
+  tags?: string[];
+}) {
+  return requestJson<AssetVaultRecord>("/asset-vault", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function createAssetVaultSearchMissionRequest(
+  vaultId: string,
+  payload: {
+    topic: string;
+    sourcePackId?: string | null;
+    providers?: string[];
+    targetCount?: number;
+  }
+) {
+  return requestJson<SearchMissionRecord>(
+    `/asset-vault/${encodeURIComponent(vaultId)}/create-search-mission`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function runSearchMissionRequest(missionId: string) {
+  return requestJson<{
+    mission: SearchMissionRecord;
+    candidates: MediaCandidate[];
+    assetsCreated: number;
+  }>(`/discovery/search-missions/${encodeURIComponent(missionId)}/run`, {
+    method: "POST"
+  });
+}
+
+export async function getAssetVaultCandidatesRequest(vaultId: string) {
+  return requestJson<MediaCandidate[]>(
+    `/asset-vault/${encodeURIComponent(vaultId)}/candidates`
+  );
+}
+
+export async function getAssetVaultMissionsRequest(vaultId: string) {
+  return requestJson<SearchMissionRecord[]>(
+    `/asset-vault/${encodeURIComponent(vaultId)}/search-missions`
+  );
+}
+
+export async function analyzeAssetVaultGapsRequest(vaultId: string) {
+  return requestJson<AssetVaultGapAnalysis>(
+    `/asset-vault/${encodeURIComponent(vaultId)}/analyze-gaps`,
+    { method: "POST" }
+  );
+}
+
+export async function confirmDiscoveryCandidateUseRequest(candidateId: string) {
+  return requestJson<MediaCandidate>(
+    `/discovery/candidates/${encodeURIComponent(candidateId)}/confirm-use`,
+    { method: "POST", body: JSON.stringify({ note: "Confirmed in Asset Vault Builder" }) }
+  );
+}
+
+export async function importDiscoveryCandidateRequest(candidateId: string) {
+  return requestJson<unknown>(
+    `/discovery/candidates/${encodeURIComponent(candidateId)}/import`,
+    { method: "POST" }
+  );
+}
+
+export async function rejectDiscoveryCandidateRequest(candidateId: string) {
+  return requestJson<MediaCandidate>(
+    `/discovery/candidates/${encodeURIComponent(candidateId)}/reject`,
+    { method: "POST" }
+  );
 }
 
 export async function listProductionDiscoveryPackages() {

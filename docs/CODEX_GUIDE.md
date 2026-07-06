@@ -335,3 +335,22 @@ Quando a tarefa tocar em ComfyUI packs, qualidade de imagem ou Prompt Lab:
 7. Rodar `npm run smoke:comfy-workflow-pack:local` apenas quando
    `COMFYUI_ENABLED=true` e o servidor local estiver pronto.
 
+## Checklist operacional de Asset Vault
+
+Quando a tarefa tocar em vaults, Search Missions ou candidatos de descoberta:
+
+1. `GET /asset-vault` deve listar vaults sem exigir importacao.
+2. `POST /asset-vault/:id/create-search-mission` deve criar queries e
+   providers candidate-first.
+3. `POST /discovery/search-missions/:id/run` deve criar `MediaCandidate`, nao
+   `Asset`.
+4. `GET /asset-vault/:id/candidates` deve mostrar score, risco, fonte, preview
+   e aviso de duplicata quando houver.
+5. `POST /discovery/candidates/:id/confirm-use` deve marcar revisao manual.
+6. `POST /discovery/candidates/:id/import` so pode criar `Asset` se houver
+   confirmacao e path local autorizado.
+7. Rodar `npm run smoke:asset-vault-builder`,
+   `npm run smoke:search-missions`,
+   `npm run smoke:candidate-scoring-dedup` e
+   `npm run smoke:asset-vault-gap-analysis`.
+

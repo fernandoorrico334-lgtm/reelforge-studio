@@ -350,6 +350,20 @@ Entregue:
 - smoke `npm run smoke:one-click-production` e smoke opcional
   `npm run smoke:one-click-render`.
 
+## Etapa 11K.2 - Asset Vault Builder + Search Missions
+
+Entregue:
+
+- migration `asset_vault_builder_v1`;
+- modelos `AssetVault` e `SearchMission`;
+- endpoints `/asset-vault*`, `/discovery/search-missions*` e acoes de
+  candidato `confirm-use`, `import`, `reject` e `favorite`;
+- pagina `/asset-vault-builder` e card no dashboard;
+- engine com Search Missions, candidate scoring, deduplicacao sem descarte e
+  gap analysis por tipos de midia;
+- smokes `smoke:asset-vault-builder`, `smoke:search-missions`,
+  `smoke:candidate-scoring-dedup` e `smoke:asset-vault-gap-analysis`.
+
 ## Proxima etapa operacional sugerida
 
 - aprofundar a analise editorial por blocos, nao apenas por media global;

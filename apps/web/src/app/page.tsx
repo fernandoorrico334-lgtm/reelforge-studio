@@ -141,6 +141,13 @@ export default async function HomePage() {
           accent="#7be0ff"
         />
         <DashboardCard
+          href="/asset-vault-builder"
+          title="Asset Vault"
+          value="Vault"
+          description="Construa acervos por nicho com Search Missions, scoring, dedup e revisao manual."
+          accent="#ffcf70"
+        />
+        <DashboardCard
           href="/reels-factory"
           title="Reels Factory"
           value="Batch"

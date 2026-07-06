@@ -928,3 +928,17 @@ Persistencia real com Prisma:
 - O render blueprint continua lendo `generatedAssetId`/`effectiveAssetId`; a
   etapa nao muda o contrato de render.
 
+## Etapa 11K.2 - Asset Vault Builder e Search Missions
+
+- `AssetVault` agrupa uma biblioteca planejada por nicho, source pack e tipos
+  alvo sem importar midia automaticamente.
+- `SearchMission` registra providers, queries, contadores e status de revisao.
+- As rotas `/asset-vault*` e `/discovery/search-missions*` usam o catalogo
+  candidate-first do `production-discovery-engine`.
+- Candidatos continuam em `MediaCandidate`: score, dedup, risco e confirmacao
+  manual ficam em metadata/usage notes.
+- `POST /discovery/candidates/:id/import` so cria `Asset` quando o candidato
+  foi confirmado pelo usuario e aponta para um arquivo local autorizado.
+- A pagina `/asset-vault-builder` e uma bancada de revisao: cria vaults,
+  roda missoes, mostra gaps, abre fontes e deixa o usuario confirmar/importar.
+

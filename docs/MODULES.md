@@ -810,4 +810,20 @@ Observacao operacional:
   audio local.
 - a migration `production_flow_channel_defaults` transforma `Channel` em uma
   identidade editorial de producao para o wizard rapido.
+- a migration `asset_vault_builder_v1` adiciona `AssetVault` e
+  `SearchMission` para organizar discovery por nicho sem import automatico.
+
+## Asset Vault Builder
+
+Modulo de curadoria candidate-first para montar acervos por nicho.
+
+- pagina: `/asset-vault-builder`;
+- API: `/asset-vault`, `/asset-vault/:id/create-search-mission`,
+  `/asset-vault/:id/analyze-gaps`, `/discovery/search-missions/:id/run`;
+- engine: `packages/production-discovery-engine` com query planning, scoring,
+  dedup, gap analysis e import plan;
+- persistencia: `AssetVault`, `SearchMission` e candidatos em
+  `MediaCandidate`;
+- regra central: nenhum provider baixa ou importa midia sozinho. O usuario
+  revisa, confirma e so entao importa arquivo local/autorizado como `Asset`.
 

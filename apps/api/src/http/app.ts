@@ -19,6 +19,7 @@ import type { RenderJobRepository } from "../modules/render-jobs/application/ren
 import type { RenderStorage } from "../modules/render-jobs/application/render-storage.js";
 import { handleAssetMediaRoute } from "./routes/asset-media-routes.js";
 import { handleAssetRoute } from "./routes/assets-routes.js";
+import { handleAssetVaultRoute } from "./routes/asset-vault-routes.js";
 import { handleAudioLibraryRoute } from "./routes/audio-library-routes.js";
 import { handleAudioMasteringRoute } from "./routes/audio-mastering-routes.js";
 import { handleAudioMoodRoute } from "./routes/audio-mood-routes.js";
@@ -184,6 +185,20 @@ export function createApp({
           assetRepository,
           narrationJobRepository,
           projectRepository
+        }
+      )
+    ) {
+      return;
+    }
+
+    if (
+      await handleAssetVaultRoute(
+        request,
+        response,
+        url.pathname,
+        {
+          assetRepository,
+          intakeRepository
         }
       )
     ) {
@@ -509,8 +524,22 @@ export function createApp({
         "/health",
         "/studio/manifest",
         "/projects",
+        "/asset-vault",
+        "/asset-vault/:id",
+        "/asset-vault/:id/create-search-mission",
+        "/asset-vault/:id/analyze-gaps",
+        "/asset-vault/:id/search-missions",
+        "/asset-vault/:id/candidates",
         "/discovery/providers/status",
         "/discovery/search",
+        "/discovery/search-missions",
+        "/discovery/search-missions/:id",
+        "/discovery/search-missions/:id/run",
+        "/discovery/search-missions/:id/candidates",
+        "/discovery/candidates/:id/confirm-use",
+        "/discovery/candidates/:id/import",
+        "/discovery/candidates/:id/reject",
+        "/discovery/candidates/:id/favorite",
         "/production-discovery/niches",
         "/production-discovery/providers",
         "/production-discovery/source-packs",

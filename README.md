@@ -1212,6 +1212,10 @@ upload para manter os registros apos reiniciar a API.
 - Etapa 11F entregue: Music Library + Beat Sync Engine com perfis locais de
   trilha/SFX, pagina `/music-library`, auto-select no studio e blueprint
   ritmico por projeto.
+- Etapa 11K.2 entregue: Asset Vault Builder + Search Missions com vaults por
+  nicho, missoes de busca candidate-first, scoring, deduplicacao segura e gap
+  analysis. Busca nunca importa arquivos automaticamente; candidatos precisam
+  de revisao e confirmacao manual antes de virar `Asset`.
 - Proximo foco: refinamento de overlays, transicoes reais e composicao
   multi-faixa visual.
 - Evolucao futura do audio: automacao temporal mais fina, waveform tooling,

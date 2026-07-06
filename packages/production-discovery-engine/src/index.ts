@@ -271,6 +271,78 @@ export interface DiscoverySearchResult {
   assetsCreated: 0;
 }
 
+export interface SearchMissionQueryPlan {
+  topic: string;
+  niche: ProductionDiscoveryNiche;
+  sourcePackId: string;
+  providers: string[];
+  queries: string[];
+  targetCount: number;
+}
+
+export interface DiscoveryCandidateScoreInput {
+  title: string;
+  query: string;
+  mediaType: string;
+  recommendedUse?: string | null;
+  providerId: string;
+  previewUrl?: string | null;
+  sourceUrl?: string | null;
+  licenseStatus?: string | null;
+  riskLevel?: string | null;
+  width?: number | null;
+  height?: number | null;
+  duration?: number | null;
+}
+
+export interface DiscoveryCandidateScore {
+  relevanceScore: number;
+  qualityScore: number;
+  sceneFitScore: number;
+  licenseConfidence: number;
+  sourceReliabilityScore: number;
+  overallScore: number;
+  riskLevel: DiscoveryProviderRiskLevel;
+  whyThisCandidate: string;
+  lowResolutionWarning: string | null;
+  watermarkWarning: string | null;
+}
+
+export interface DedupCandidateInput {
+  id: string;
+  provider: string;
+  title: string;
+  sourceUrl?: string | null;
+  previewUrl?: string | null;
+  downloadUrl?: string | null;
+}
+
+export interface DedupCandidateResult extends DedupCandidateInput {
+  duplicateWarning: string | null;
+  possibleDuplicateOf: string | null;
+}
+
+export interface AssetVaultGapAnalysisInput {
+  niche: string;
+  targetAssetTypes: string[];
+  existingCounts: Record<string, number>;
+  candidateCounts?: Record<string, number>;
+}
+
+export interface AssetVaultGapAnalysis {
+  missingByMediaType: Array<{
+    mediaType: string;
+    missingCount: number;
+    reason: string;
+  }>;
+  suggestedSearchMissions: Array<{
+    topic: string;
+    mediaType: string;
+    sourcePackId: string;
+    targetCount: number;
+  }>;
+}
+
 function mediaProvider(input: DiscoveryMediaProvider): DiscoveryMediaProvider {
   return input;
 }
@@ -2310,5 +2382,242 @@ export function searchDiscoveryCandidates(
     providerResults,
     warnings,
     assetsCreated: 0
+  };
+}
+
+function normalizeLooseText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function domainFromUrl(value: string | null | undefined) {
+  if (!value?.startsWith("http")) {
+    return null;
+  }
+
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+export function buildSearchMissionQueries(input: {
+  topic: string;
+  niche?: string | null;
+  sourcePackId?: string | null;
+  providers?: string[] | null;
+  targetCount?: number | null;
+}): SearchMissionQueryPlan {
+  const niche = normalizeNiche(input.niche);
+  const sourcePack =
+    getDiscoverySourcePackById(input.sourcePackId) ??
+    getSourcePacksForNiche(niche)[0] ??
+    getDiscoverySourcePackById("generic_broll_source_pack");
+  const topic = cleanText(input.topic, "media reference");
+  const profile = getNicheProfileById(niche);
+  const providers = input.providers?.length
+    ? input.providers
+    : unique([
+        ...(sourcePack?.primaryProviderIds ?? []),
+        ...(sourcePack?.fallbackProviderIds ?? [])
+      ]).slice(0, 8);
+
+  return {
+    topic,
+    niche,
+    sourcePackId: sourcePack?.id ?? "generic_broll_source_pack",
+    providers,
+    queries: unique([
+      topic,
+      `${topic} ${profile.visualStyle}`,
+      ...profile.mediaNeeds.slice(0, 4).map((need) => `${topic} ${need}`),
+      `${topic} public domain`,
+      `${topic} authorized media`
+    ]),
+    targetCount: Math.max(input.targetCount ?? 10, 1)
+  };
+}
+
+export function scoreDiscoveryCandidate(
+  input: DiscoveryCandidateScoreInput
+): DiscoveryCandidateScore {
+  const provider = getDiscoveryMediaProviderById(input.providerId);
+  const title = normalizeLooseText(input.title);
+  const queryWords = normalizeLooseText(input.query).split(" ").filter(Boolean);
+  const matchedWords = queryWords.filter((word) => title.includes(word)).length;
+  const relevanceScore = Math.min(
+    100,
+    48 + matchedWords * 14 + (title.length > 0 ? 12 : 0)
+  );
+  const lowResolutionWarning =
+    input.width && input.height && (input.width < 720 || input.height < 720)
+      ? "Resolucao baixa para render vertical."
+      : null;
+  const qualityScore = Math.max(
+    20,
+    Math.min(
+      100,
+      58 +
+        (input.previewUrl ? 14 : 0) +
+        (input.sourceUrl ? 8 : 0) +
+        (input.width && input.height ? 10 : 0) -
+        (lowResolutionWarning ? 20 : 0)
+    )
+  );
+  const recommendedUse = normalizeLooseText(input.recommendedUse ?? "");
+  const sceneFitScore = recommendedUse.includes(normalizeLooseText(input.mediaType))
+    ? 88
+    : 68;
+  const licenseConfidence = provider?.supportsLicenseMetadata
+    ? 82
+    : input.licenseStatus && input.licenseStatus !== "unknown"
+      ? 68
+      : 38;
+  const sourceReliabilityScore =
+    provider?.group === "archives" || provider?.group === "museums_open_access"
+      ? 86
+      : provider?.group === "internal"
+        ? 78
+        : provider?.defaultRiskLevel === "low"
+          ? 76
+          : 62;
+  const riskLevel =
+    (input.riskLevel as DiscoveryProviderRiskLevel | null) ??
+    provider?.defaultRiskLevel ??
+    "unknown";
+  const riskPenalty =
+    riskLevel === "restricted"
+      ? 24
+      : riskLevel === "editorial_only" || riskLevel === "unknown"
+        ? 12
+        : 0;
+  const licensePenalty =
+    input.licenseStatus === "restricted" || input.licenseStatus === "unknown" ? 10 : 0;
+  const overallScore = Math.max(
+    1,
+    Math.min(
+      100,
+      Math.round(
+        relevanceScore * 0.25 +
+          qualityScore * 0.22 +
+          sceneFitScore * 0.2 +
+          licenseConfidence * 0.18 +
+          sourceReliabilityScore * 0.15 -
+          riskPenalty -
+          licensePenalty
+      )
+    )
+  );
+
+  return {
+    relevanceScore,
+    qualityScore,
+    sceneFitScore,
+    licenseConfidence,
+    sourceReliabilityScore,
+    overallScore,
+    riskLevel,
+    whyThisCandidate: `${input.title} recebeu score ${overallScore} por relevancia, qualidade, licenca e ajuste de cena.`,
+    lowResolutionWarning,
+    watermarkWarning: title.includes("watermark") ? "Possivel marca d'agua no titulo/metadata." : null
+  };
+}
+
+export function deduplicateCandidates(
+  candidates: DedupCandidateInput[]
+): DedupCandidateResult[] {
+  const seen = new Map<string, string>();
+
+  return candidates.map((candidate) => {
+    const normalizedTitle = normalizeLooseText(candidate.title);
+    const sourceDomain = domainFromUrl(candidate.sourceUrl);
+    const keys = [
+      candidate.sourceUrl,
+      candidate.previewUrl,
+      candidate.downloadUrl,
+      `${candidate.provider}:${normalizedTitle}`,
+      sourceDomain ? `${sourceDomain}:${normalizedTitle}` : null
+    ].filter((key): key is string => Boolean(key));
+    const duplicateKey = keys.find((key) => seen.has(key));
+
+    if (duplicateKey) {
+      return {
+        ...candidate,
+        duplicateWarning: "Possivel duplicado detectado; manter para revisao, nao apagar automaticamente.",
+        possibleDuplicateOf: seen.get(duplicateKey) ?? null
+      };
+    }
+
+    for (const key of keys) {
+      seen.set(key, candidate.id);
+    }
+
+    return {
+      ...candidate,
+      duplicateWarning: null,
+      possibleDuplicateOf: null
+    };
+  });
+}
+
+export function analyzeAssetVaultGaps(
+  input: AssetVaultGapAnalysisInput
+): AssetVaultGapAnalysis {
+  const niche = normalizeNiche(input.niche);
+  const sourcePack = getSourcePacksForNiche(niche)[0] ?? getDiscoverySourcePackById("generic_broll_source_pack");
+  const targetTypes = input.targetAssetTypes.length > 0
+    ? input.targetAssetTypes
+    : ["image", "video", "sfx"];
+  const missingByMediaType = targetTypes
+    .map((mediaType) => {
+      const existing = input.existingCounts[mediaType] ?? 0;
+      const pending = input.candidateCounts?.[mediaType] ?? 0;
+      const missingCount = Math.max(2 - existing - pending, 0);
+
+      return {
+        mediaType,
+        missingCount,
+        reason:
+          missingCount > 0
+            ? `Faltam ${missingCount} candidato(s)/asset(s) para ${mediaType}.`
+            : `${mediaType} esta coberto por assets ou candidatos.`
+      };
+    })
+    .filter((item) => item.missingCount > 0);
+
+  return {
+    missingByMediaType,
+    suggestedSearchMissions: missingByMediaType.map((gap) => ({
+      topic: `${niche} ${gap.mediaType} vault gap`,
+      mediaType: gap.mediaType,
+      sourcePackId: sourcePack?.id ?? "generic_broll_source_pack",
+      targetCount: Math.max(gap.missingCount * 3, 3)
+    }))
+  };
+}
+
+export function buildVaultImportPlan(input: {
+  candidateCount: number;
+  approvedCount: number;
+  importedCount: number;
+  rejectedCount: number;
+}) {
+  return {
+    pendingReviewCount: Math.max(
+      input.candidateCount - input.approvedCount - input.importedCount - input.rejectedCount,
+      0
+    ),
+    readyToImportCount: Math.max(input.approvedCount - input.importedCount, 0),
+    importRequiresConfirmation: true,
+    warnings: [
+      "Importacao nunca e automatica.",
+      "Discovery-only precisa virar arquivo local autorizado antes de importar."
+    ]
   };
 }
