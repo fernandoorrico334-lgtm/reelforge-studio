@@ -397,16 +397,27 @@ export function BeastStudio({
 
     startTransition(async () => {
       try {
+        const contentIntelligence = remixPlan?.videoAnalysis.contentIntelligence;
+        const contentContext: {
+          headline?: string;
+          domain?: string;
+          entities?: string[];
+        } = {};
+        if (contentIntelligence?.headline) {
+          contentContext.headline = contentIntelligence.headline;
+        }
+        if (contentIntelligence?.domain) {
+          contentContext.domain = contentIntelligence.domain;
+        }
+        const entities = contentIntelligence?.entities.map((entity) => entity.name);
+        if (entities?.length) {
+          contentContext.entities = entities;
+        }
+
         const result = await importRemixAssetsRequest({
           remixId: activeRemixPlan.remixId,
           candidates: selected,
-          contentContext: {
-            headline: remixPlan?.videoAnalysis.contentIntelligence?.headline,
-            domain: remixPlan?.videoAnalysis.contentIntelligence?.domain,
-            entities: remixPlan?.videoAnalysis.contentIntelligence?.entities.map(
-              (entity) => entity.name
-            )
-          },
+          contentContext,
           sceneRoles: activeRemixPlan.sceneStructure.segments.map((segment) => segment.role)
         });
 

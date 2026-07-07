@@ -16,12 +16,19 @@ tmp/
 temp/
 *.tmp
 *.temp
+terminals/
+agent-tools/
+packages/*/src/*.d.ts.map
 packages/cinematic-engine/src/index.js
 packages/cinematic-engine/src/index.d.ts
 packages/audio-engine/src/index.js
 packages/audio-engine/src/index.d.ts
 packages/audio-engine/src/mastering.js
 packages/audio-engine/src/mastering.d.ts
+packages/audio-engine/src/music-library.js
+packages/audio-engine/src/music-library.d.ts
+packages/narration-engine/src/index.js
+packages/narration-engine/src/index.d.ts
 
 storage/assets/*
 !storage/assets/.gitkeep
