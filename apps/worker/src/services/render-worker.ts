@@ -40,6 +40,7 @@ interface RenderOutputMetadata {
 }
 
 const maxCapturedCommandOutputChars = 200_000;
+const maxRenderLogBytes = Number(process.env.REELFORGE_RENDER_LOG_MAX_BYTES ?? 1_000_000);
 
 class WorkerCancellationError extends Error {
   readonly step: RenderPipelineStep;
@@ -125,6 +126,35 @@ function queueLogAppend(absoluteLogPath: string, contents: string) {
     .then(async () => {
       if (!contents) {
         return;
+      }
+
+      if (Number.isFinite(maxRenderLogBytes) && maxRenderLogBytes > 0) {
+        try {
+          const currentStats = await stat(absoluteLogPath);
+          if (currentStats.size >= maxRenderLogBytes) {
+            return;
+          }
+          const remainingBytes = maxRenderLogBytes - currentStats.size;
+          if (Buffer.byteLength(contents, "utf8") > remainingBytes) {
+            const marker = `\n[render-log-truncated] Log limit reached (${maxRenderLogBytes} bytes).\n`;
+            const markerBytes = Buffer.byteLength(marker, "utf8");
+            const contentBytes = Math.max(0, remainingBytes - markerBytes);
+            if (contentBytes <= 0) {
+              return;
+            }
+            const truncatedContents = Buffer.from(contents, "utf8")
+              .subarray(0, contentBytes)
+              .toString("utf8");
+            await appendFile(
+              absoluteLogPath,
+              `${truncatedContents}${marker}`,
+              "utf8"
+            );
+            return;
+          }
+        } catch {
+          // If the file does not exist yet, append normally.
+        }
       }
 
       await appendFile(absoluteLogPath, contents, "utf8");

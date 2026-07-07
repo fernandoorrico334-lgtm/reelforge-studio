@@ -29,6 +29,7 @@ import {
   toForwardSlashes,
   toRelativeStoragePath
 } from "./render-paths.js";
+import { validateRenderBlueprintAssets } from "./render-asset-validation.js";
 import {
   getFfmpegCommand
 } from "./ffmpeg-runtime.js";
@@ -68,6 +69,7 @@ type SceneVisualSegment =
   | SceneMicroclipVisualSegment;
 
 const maxCapturedCommandOutputChars = 200_000;
+const maxRenderLogBytes = Number(process.env.REELFORGE_RENDER_LOG_MAX_BYTES ?? 1_000_000);
 
 interface PlaceholderVisualConfig {
   primary: string;
@@ -176,6 +178,35 @@ function queueLogAppend(logPath: string, contents: string) {
     .then(async () => {
       if (!contents) {
         return;
+      }
+
+      if (Number.isFinite(maxRenderLogBytes) && maxRenderLogBytes > 0) {
+        try {
+          const currentStats = await stat(logPath);
+          if (currentStats.size >= maxRenderLogBytes) {
+            return;
+          }
+          const remainingBytes = maxRenderLogBytes - currentStats.size;
+          if (Buffer.byteLength(contents, "utf8") > remainingBytes) {
+            const marker = `\n[render-log-truncated] Log limit reached (${maxRenderLogBytes} bytes).\n`;
+            const markerBytes = Buffer.byteLength(marker, "utf8");
+            const contentBytes = Math.max(0, remainingBytes - markerBytes);
+            if (contentBytes <= 0) {
+              return;
+            }
+            const truncatedContents = Buffer.from(contents, "utf8")
+              .subarray(0, contentBytes)
+              .toString("utf8");
+            await appendFile(
+              logPath,
+              `${truncatedContents}${marker}`,
+              "utf8"
+            );
+            return;
+          }
+        } catch {
+          // Log file may not exist yet.
+        }
       }
 
       await appendFile(logPath, contents, "utf8");
@@ -1301,6 +1332,33 @@ export async function renderCinematicV2({
     baseContext,
     `Render mode cinematic_v2 with quality '${renderQuality}'. Blueprint project '${blueprint.projectId}' with ${blueprint.sceneCount} scene(s).`
   );
+  const assetValidation = await validateRenderBlueprintAssets({
+    blueprint,
+    projectRoot
+  });
+  await appendLog(
+    paths.logPath,
+    {
+      ...baseContext,
+      label: "asset-validation"
+    },
+    `Checked ${assetValidation.checkedAssets} asset path(s); ${assetValidation.issues.length} issue(s).`
+  );
+  for (const issue of assetValidation.issues) {
+    await appendLog(
+      paths.logPath,
+      {
+        ...baseContext,
+        label: "asset-validation"
+      },
+      `[${issue.severity}] scene ${issue.sceneOrder} '${issue.sceneTitle}' ${issue.assetRole} asset '${issue.assetId ?? "none"}': ${issue.message} Path: ${issue.path ?? "none"}.`
+    );
+  }
+  if (!assetValidation.readyForFfmpeg) {
+    throw new Error(
+      "Render asset validation failed before FFmpeg. Fix unsafe asset paths before rendering."
+    );
+  }
 
   await emitStep(onStep, "generating_subtitles");
   await emitProgress(onProgress, 15);

@@ -19,7 +19,6 @@ import type { RenderJobRepository } from "../modules/render-jobs/application/ren
 import type { RenderStorage } from "../modules/render-jobs/application/render-storage.js";
 import { handleAssetMediaRoute } from "./routes/asset-media-routes.js";
 import { handleAssetRoute } from "./routes/assets-routes.js";
-import { handleAssetVaultRoute } from "./routes/asset-vault-routes.js";
 import { handleAudioLibraryRoute } from "./routes/audio-library-routes.js";
 import { handleAudioMasteringRoute } from "./routes/audio-mastering-routes.js";
 import { handleAudioMoodRoute } from "./routes/audio-mood-routes.js";
@@ -192,18 +191,32 @@ export function createApp({
       return;
     }
 
-    if (
-      await handleAssetVaultRoute(
-        request,
-        response,
-        url.pathname,
-        {
-          assetRepository,
-          intakeRepository
-        }
-      )
-    ) {
-      return;
+    if (url.pathname.startsWith("/asset-vault")) {
+      if (repositoryMode !== "prisma") {
+        sendJson(response, 503, {
+          error:
+            "Asset Vault requires DATA_BACKEND=prisma because it persists search missions."
+        });
+        return;
+      }
+
+      const { handleAssetVaultRoute } = await import(
+        "./routes/asset-vault-routes.js"
+      );
+
+      if (
+        await handleAssetVaultRoute(
+          request,
+          response,
+          url.pathname,
+          {
+            assetRepository,
+            intakeRepository
+          }
+        )
+      ) {
+        return;
+      }
     }
 
     if (

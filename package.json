@@ -19,8 +19,10 @@
     "db:migrate:dev": "prisma migrate dev --schema prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "prisma db seed --schema prisma/schema.prisma",
-    "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run db:generate && npm run build:workspaces",
+    "build:workspaces": "npm run build --workspaces --if-present",
+    "typecheck": "npm run db:generate && npm run typecheck:workspaces",
+    "typecheck:workspaces": "npm run typecheck --workspaces --if-present",
     "doctor:ffmpeg": "node scripts/doctor-ffmpeg.mjs",
     "smoke:research": "node scripts/smoke-research.mjs",
     "smoke:intake": "node scripts/smoke-intake.mjs",
@@ -82,7 +84,8 @@
     "smoke:beast-http-render": "node scripts/smoke-beast-http-render.mjs",
     "smoke:one-click-prepare-assets": "node scripts/smoke-one-click-prepare-assets.mjs",
     "smoke:one-click-candidate-gate": "node scripts/smoke-one-click-candidate-gate.mjs",
-    "smoke:one-click-render-runtime": "node scripts/smoke-one-click-render-runtime.mjs"
+    "smoke:one-click-render-runtime": "node scripts/smoke-one-click-render-runtime.mjs",
+    "demo:golden-path": "node scripts/demo-golden-path.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"
