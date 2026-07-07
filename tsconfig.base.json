@@ -43,6 +43,9 @@
       "@reelforge/media-collector": [
         "packages/media-collector/src/index.ts"
       ],
+      "@reelforge/media-beast": [
+        "packages/media-beast/src/index.ts"
+      ],
       "@reelforge/cinematic-engine": [
         "packages/cinematic-engine/src/index.ts"
       ],

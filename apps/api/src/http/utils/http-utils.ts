@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
+import { RemixVideoDownloadError } from "@reelforge/media-beast";
 import {
   NotFoundError,
   PayloadTooLargeError,
@@ -164,6 +165,21 @@ export function handleRouteError(
 
   if (error instanceof NotFoundError) {
     sendJson(response, 404, { error: error.message });
+    return;
+  }
+
+  if (error instanceof RemixVideoDownloadError) {
+    sendJson(response, 422, { error: error.message });
+    return;
+  }
+
+  if (
+    error instanceof Error &&
+    (/^yt-dlp failed:/i.test(error.message) ||
+      /^Download falhou:/i.test(error.message) ||
+      /^Nao foi possivel/i.test(error.message))
+  ) {
+    sendJson(response, 422, { error: error.message });
     return;
   }
 

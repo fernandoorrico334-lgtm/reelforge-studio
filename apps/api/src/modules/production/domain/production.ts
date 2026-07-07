@@ -10,6 +10,7 @@ export interface CreateProductionFromScriptInput {
   script: string;
   durationTarget: number | null;
   sceneDuration: number | null;
+  maxScenes: number | null;
   format: string;
   status: ProjectStatus;
   applyChannelDefaults: boolean;
@@ -54,6 +55,23 @@ function readOptionalPositiveNumber(
   }
 
   return Math.round(value * 100) / 100;
+}
+
+function readOptionalPositiveInteger(
+  record: Record<string, unknown>,
+  fieldName: string
+) {
+  const value = record[fieldName];
+
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "number" || Number.isNaN(value) || value <= 0) {
+    throw new ValidationError(`${fieldName} must be a positive integer or null.`);
+  }
+
+  return Math.max(1, Math.round(value));
 }
 
 function readOptionalBoolean(
@@ -102,6 +120,7 @@ export function validateCreateProductionFromScriptInput(
     script: readRequiredString(record, "script"),
     durationTarget: readOptionalPositiveNumber(record, "durationTarget"),
     sceneDuration: readOptionalPositiveNumber(record, "sceneDuration"),
+    maxScenes: readOptionalPositiveInteger(record, "maxScenes"),
     format:
       typeof record.format === "string" && record.format.trim().length > 0
         ? record.format.trim()

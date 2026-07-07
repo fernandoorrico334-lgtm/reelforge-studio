@@ -155,6 +155,13 @@ export default async function HomePage() {
           accent="#ffe28a"
         />
         <DashboardCard
+          href="/beast-studio"
+          title="Beast Studio"
+          value="Premium"
+          description="Gere plano premium Media Beast por preset — visual, narracao, musica e edicao em um clique."
+          accent="#ff8a7a"
+        />
+        <DashboardCard
           href="/projects"
           title="One-Click Production"
           value="Ready"

@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -188,6 +189,73 @@ function baseInput(mode, extra = {}) {
 
 async function disconnect(deps) {
   await deps.prisma.$disconnect();
+}
+
+export async function runOneClickBeastPlanSmoke() {
+  const deps = await loadDependencies();
+
+  try {
+    const { projectId } = await createProject(deps.prisma);
+    const beforeJobs = await deps.prisma.renderJob.count({ where: { videoProjectId: projectId } });
+    const newModeResult = await deps.runOneClickReelProduction(
+      deps.createDependencies(),
+      projectId,
+      baseInput("dry_run", {
+        remixMode: "new",
+        intensity: "extreme",
+        newMusicPreset: "football_hype"
+      })
+    );
+
+    assert(newModeResult.beastPlan, "New mode should return beastPlan.");
+    assert(
+      newModeResult.beastPlan.planType === "premium_reel",
+      "New mode should return premium reel plan."
+    );
+    assert(
+      newModeResult.beastPlan.canRenderAutomatically === false,
+      "Beast plan must never auto-render."
+    );
+    assert(
+      newModeResult.beastProductionPlan?.visualPlan,
+      "Response should include full premium production plan."
+    );
+
+    const sampleVideoPath = join(projectRoot, "tmp", `one-click-remix-${runId()}.mp4`);
+    await writeFile(sampleVideoPath, "one-click-remix-placeholder");
+
+    const remixResult = await deps.runOneClickReelProduction(
+      deps.createDependencies(),
+      projectId,
+      baseInput("prepare_only", {
+        remixMode: "remix",
+        inputVideoPath: sampleVideoPath,
+        targetStyle: "hype_sports",
+        newMusicPreset: "football_hype",
+        addNarration: true,
+        intensity: "extreme"
+      })
+    );
+
+    assert(remixResult.beastPlan?.planType === "video_remix", "Remix mode should return video remix plan.");
+    assert(remixResult.renderJobId === null, "Beast remix must not create render job.");
+
+    const afterJobs = await deps.prisma.renderJob.count({ where: { videoProjectId: projectId } });
+    assert(beforeJobs === afterJobs, "Beast modes must not create render jobs.");
+
+    printSmokeSummary({
+      smoke: "one-click-beast-plan",
+      status: "completed",
+      projectId,
+      newPlanType: newModeResult.beastPlan.planType,
+      remixPlanType: remixResult.beastPlan.planType,
+      visualVariations: newModeResult.beastPlan.visualVariationCount,
+      candidateFirst: true,
+      renderJobsCreated: afterJobs - beforeJobs
+    });
+  } finally {
+    await disconnect(deps);
+  }
 }
 
 export async function runOneClickDryRunSmoke() {

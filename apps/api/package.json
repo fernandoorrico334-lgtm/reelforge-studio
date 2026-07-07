@@ -20,6 +20,7 @@
     "@reelforge/narration-engine": "file:../../packages/narration-engine",
     "@reelforge/prompt-engine": "file:../../packages/prompt-engine",
     "@reelforge/hybrid-visual-engine": "file:../../packages/hybrid-visual-engine",
+    "@reelforge/media-beast": "file:../../packages/media-beast",
     "@reelforge/media-collector": "file:../../packages/media-collector",
     "@reelforge/research-collector": "file:../../packages/research-collector",
     "@reelforge/story-engine": "file:../../packages/story-engine",

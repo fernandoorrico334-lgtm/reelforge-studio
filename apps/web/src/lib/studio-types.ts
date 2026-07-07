@@ -2837,6 +2837,7 @@ export interface CreateProductionFromScriptPayload {
   script: string;
   durationTarget: number | null;
   sceneDuration: number | null;
+  maxScenes?: number | null;
   format: string;
   status: ProjectStatus;
   autoCreateScenes?: boolean;
@@ -3276,6 +3277,31 @@ export interface OneClickProductionPayload {
     runRender?: boolean;
     runWorkerOnce?: boolean;
   };
+  remixMode?: "legacy" | "new" | "remix";
+  inputVideoPath?: string | null;
+  sourceUrl?: string | null;
+  targetStyle?: string | null;
+  intensity?: "medium" | "extreme";
+  addNarration?: boolean;
+  durationTarget?: number | null;
+  newMusicPreset?: string | null;
+  captionText?: string | null;
+  beastCandidate?: unknown;
+  planApproved?: boolean;
+  rightsConfirmed?: boolean;
+  approvedRemixAssetIds?: string[];
+}
+
+export interface OneClickBeastPlanSummary {
+  remixMode: "new" | "remix";
+  planType: "premium_reel" | "video_remix";
+  visualVariationCount: number;
+  musicPresetId: string;
+  masteringPresetId: string;
+  voicePackId: string | null;
+  requiresManualApproval: true;
+  canRenderAutomatically: false;
+  canRenderAfterManualApproval: boolean;
 }
 
 export interface OneClickProductionResponse {
@@ -3286,8 +3312,266 @@ export interface OneClickProductionResponse {
   renderJobId: string | null;
   outputPath: string | null;
   checklist: ReelProductionChecklist;
+  beastPlan: OneClickBeastPlanSummary | null;
+  beastProductionPlan: Record<string, unknown> | null;
   warnings: string[];
   nextActions: string[];
+}
+
+export interface MediaBeastNichePresetSummary {
+  id: string;
+  name: string;
+  description: string;
+  defaultKeywords: string[];
+  defaultIntensity: "medium" | "extreme";
+  channelTone: string;
+  visualBias: string[];
+  riskNotes: string[];
+}
+
+export interface MediaBeastCatalogResponse {
+  providers: Array<{
+    id: string;
+    name: string;
+    description: string;
+    capabilities: {
+      discoveryOnly: boolean;
+      importSupported: boolean;
+    };
+  }>;
+  nichePresets: MediaBeastNichePresetSummary[];
+  candidateFirst: boolean;
+}
+
+export interface MediaBeastCandidateSummary {
+  id: string;
+  providerId: string;
+  title: string;
+  sourceUrl: string;
+  previewUrl: string | null;
+  licenseStatus: string;
+  riskLevel: string;
+  score: number;
+  reasons: string[];
+  warnings: string[];
+  metadata: Record<string, string | number | boolean | null>;
+}
+
+export interface MediaBeastDiscoverResponse {
+  candidates: MediaBeastCandidateSummary[];
+  warnings: string[];
+  intensity?: string;
+}
+
+export interface VideoRemixSceneSegmentSummary {
+  sceneId: string;
+  order: number;
+  role: string;
+  startSeconds: number;
+  endSeconds: number;
+  sourceSegment: string;
+  transitionIn: string;
+  effects: string[];
+  captionHint: string;
+  comfyVariationId: string | null;
+}
+
+export interface VideoRemixPlanResponse {
+  remixId: string;
+  inputVideoPath: string;
+  inputVideoTitle: string;
+  targetStyle: string;
+  durationSeconds: number;
+  intensity: "medium" | "extreme";
+  sourceResolution: {
+    kind: "local_path" | "public_url";
+    sourceUrl: string | null;
+    localPath: string;
+    platform: string;
+    title: string;
+    download: {
+      localPath: string;
+      sourceUrl: string;
+      platform: string;
+      title: string;
+      durationSeconds: number | null;
+      fileSizeBytes: number | null;
+      downloadedAt: string;
+    } | null;
+  };
+  musicPlan: {
+    musicPresetId: string;
+    musicPresetName: string;
+    masteringPresetId: string;
+  };
+  narrationPlan: {
+    suggestedScript: string;
+    voicePackHint: string;
+    overlayCaptions: string[];
+  } | null;
+  captionPlan: {
+    style: { id: string; name: string };
+    scenes: Array<{ captionText: string; startSeconds: number; endSeconds: number }>;
+  };
+  visualPlan: {
+    comfyVariations: Array<{ variationId: string; workflowId: string; style: string; sourceMixMode: string }>;
+    cinematicEffects: Array<{ type: string; intensity: number }>;
+    colorGrade: { name: string };
+  };
+  sceneStructure: {
+    totalScenes: number;
+    originalFootprintRatio: number;
+    segments: VideoRemixSceneSegmentSummary[];
+    narrativeArc: string[];
+  };
+  aggressiveTransform: {
+    enabled: boolean;
+    comfyVariationCount: number;
+    originalFootprintRatio: number;
+  };
+  variationIndex: number;
+  variationLabel: string;
+  alternativePlans?: VideoRemixPlanResponse[];
+  videoAnalysis: {
+    sourceDurationSeconds: number;
+    outputDurationSeconds: number;
+    probeMethod: "ffprobe" | "metadata" | "estimated";
+    themeSummary: string;
+    contextKeywords: string[];
+    mainScenes: Array<{
+      sceneId: string;
+      order: number;
+      role: string;
+      startSeconds: number;
+      endSeconds: number;
+      label: string;
+      energy: string;
+      focusEntity?: string | null;
+      focusAction?: string | null;
+      visualHint?: string | null;
+      narrationAngle?: string | null;
+    }>;
+    narrativeArc: string[];
+    analysisNotes: string[];
+    contentIntelligence: {
+      headline: string;
+      summary: string;
+      domain: string;
+      entities: Array<{
+        id: string;
+        name: string;
+        type: string;
+        franchise?: string;
+        confidence: string;
+      }>;
+      actions: Array<{
+        id: string;
+        label: string;
+        verb: string;
+        confidence: string;
+      }>;
+      mood: string;
+      differentiationGoals: string[];
+      visualSearchQueries: string[];
+      comfyPromptFragments: string[];
+    };
+  };
+  assetDiscovery: {
+    enabled: boolean;
+    imageSearch: {
+      providerIds: string[];
+      queries: string[];
+      maxCandidatesPerQuery: number;
+      executed?: boolean;
+      defaultSelectedCandidateIds?: string[];
+      candidates?: Array<{
+        candidateId: string;
+        providerId: string;
+        title: string;
+        sourceUrl: string;
+        previewUrl?: string | null;
+        query: string;
+        score: number;
+        qualityScore?: number;
+        recommended?: boolean;
+        defaultSelected?: boolean;
+        importReady?: boolean;
+        purpose: string;
+        licenseStatus?: string;
+        riskLevel?: string;
+        providerTier?: string;
+      }>;
+    };
+    importPlan?: {
+      requiresExplicitApproval: boolean;
+      autoImportOnDiscovery: boolean;
+      maxSelectable: number;
+      recommendedCount: number;
+      storageRoot: string;
+    };
+    importedAssets?: Array<{
+      candidateId: string;
+      assetId: string;
+      localPath: string;
+      sceneRole: string | null;
+      importMethod: string;
+    }>;
+    comfyui: {
+      enabled: boolean;
+      variationCount: number;
+      workflowIds: string[];
+      variations: Array<{
+        variationId: string;
+        workflowId: string;
+        style: string;
+        sourceMixMode: string;
+      }>;
+      contextualPrompts?: Array<{
+        variationId: string;
+        workflowId: string;
+        positivePrompt: string;
+        contextEntity: string | null;
+        purpose: string;
+        styleTokens?: string[];
+      }>;
+    };
+    integrationNotes: string[];
+  };
+  approvalGate: {
+    candidateFirst: boolean;
+    requiresManualApproval: boolean;
+    canRenderAfterManualApproval: boolean;
+    reason: string;
+  };
+  productionNotes: string[];
+  warnings: string[];
+}
+
+export interface EditorialShortPackResponse {
+  query: string;
+  topicCaseId: string | null;
+  durationSeconds: number;
+  displayCandidates: MediaBeastCandidateSummary[];
+  shortAngles: string[];
+  narrationScript: string;
+  captions: string[];
+  voicePackId: string;
+  voicePackLabel: string;
+  voiceStyle: string;
+  music: {
+    presetId: string;
+    name: string;
+    description: string;
+    volume: number;
+    ducking: number;
+    copyrightSafePath: string;
+    moodReason: string;
+  };
+  sensitivityNotes: string[];
+  productionNotes: string[];
+  warnings: string[];
+  shortAngleCount: number;
+  candidateFirst: boolean;
 }
 
 export interface StudioProject {

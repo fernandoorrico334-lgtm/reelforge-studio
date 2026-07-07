@@ -122,6 +122,10 @@ import type {
   NarrationJob,
   NarrationProviderDescriptor,
   NarrationVoicePack,
+  MediaBeastCatalogResponse,
+  EditorialShortPackResponse,
+  VideoRemixPlanResponse,
+  MediaBeastDiscoverResponse,
   OneClickProductionPayload,
   OneClickProductionResponse,
   ResearchAnalyzeResponse,
@@ -2486,6 +2490,104 @@ export async function runOneClickProductionRequest(
       body: JSON.stringify(payload)
     }
   );
+}
+
+export async function getMediaBeastCatalogRequest() {
+  return requestJson<MediaBeastCatalogResponse>("/media-beast/providers");
+}
+
+export async function runMediaBeastDiscoverRequest(payload: {
+  query: string;
+  nichePresetId: string;
+  targetCount?: number;
+  intensity?: "medium" | "extreme";
+  language?: string;
+}) {
+  return requestJson<MediaBeastDiscoverResponse>("/media-beast/discover", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function runEditorialShortPackRequest(payload: {
+  query: string;
+  nichePresetId: string;
+  durationSeconds?: number;
+  targetCandidateCount?: number;
+  language?: string;
+}) {
+  return requestJson<EditorialShortPackResponse>("/media-beast/editorial-short", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function importRemixAssetsRequest(payload: {
+  remixId: string;
+  candidates: NonNullable<
+    VideoRemixPlanResponse["assetDiscovery"]["imageSearch"]["candidates"]
+  >;
+  contentContext?: {
+    headline?: string;
+    entities?: string[];
+    domain?: string;
+  };
+  sceneRoles?: string[];
+}) {
+  return requestJson<{
+    remixId: string;
+    importedCount: number;
+    failedCount: number;
+    importedAssets: NonNullable<VideoRemixPlanResponse["assetDiscovery"]["importedAssets"]>;
+    assets: Array<{
+      assetId: string;
+      candidateId: string;
+      path: string;
+      title: string;
+      importMethod: string;
+    }>;
+    errors: Array<{ candidateId: string; message: string }>;
+    candidateFirst: boolean;
+    note: string;
+  }>("/media-beast/remix-video/import-assets", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function runRemixVideoRequest(payload: {
+  sourceUrl?: string;
+  inputVideoPath?: string;
+  targetStyle: string;
+  intensity?: "medium" | "extreme";
+  addNarration?: boolean;
+  durationTarget?: number;
+  newMusicPreset?: string;
+  captionText?: string;
+  language?: string;
+  autoDownload?: boolean;
+  maxDownloadDurationSeconds?: number;
+  enableAssetDiscovery?: boolean;
+  executeAssetDiscovery?: boolean;
+  variationCount?: number;
+}) {
+  return requestJson<VideoRemixPlanResponse>("/media-beast/remix-video", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getMediaBeastCatalogSnapshot(): Promise<{
+  item: MediaBeastCatalogResponse | null;
+  source: DataSource;
+}> {
+  try {
+    const item = await getMediaBeastCatalogRequest();
+    return { item, source: "api" };
+  } catch (error) {
+    logServerFallback("media-beast-catalog", error);
+    return { item: null, source: "mock" };
+  }
 }
 
 export async function getOneClickProductionRunsRequest(projectId: string) {

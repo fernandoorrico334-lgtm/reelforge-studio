@@ -3,6 +3,7 @@
   "compilerOptions": {
     "composite": true,
     "declaration": true,
+    "declarationMap": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],

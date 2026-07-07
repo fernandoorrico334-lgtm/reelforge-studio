@@ -1,4 +1,6 @@
 import type { AppEnv } from "../../../config/env.js";
+import { access } from "node:fs/promises";
+import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { NotFoundError } from "../../../shared/errors.js";
 import type { AssetRepository } from "../../assets/application/asset-repository.js";
@@ -28,6 +30,7 @@ import type { RenderJobRepository } from "../../render-jobs/application/render-j
 import type { RenderStorage } from "../../render-jobs/application/render-storage.js";
 import type { ReelProductionRunRepository } from "./reel-production-run-repository.js";
 import type {
+  OneClickBeastProductionSummary,
   OneClickRunInput,
   OneClickRunResponse,
   ReelProductionChecklist,
@@ -37,6 +40,15 @@ import type {
   ReelProductionSceneChecklist,
   ReelProductionStep
 } from "../domain/reel-production.js";
+import {
+  buildBeastProductionPlan,
+  isBeastOneClickMode,
+  isBeastRenderAuthorized,
+  attachApprovedRemixAssetsToProject,
+  syncProjectFromBeastPlan,
+  validateBeastRenderAuthorization,
+  type OneClickBeastProductionResult
+} from "./beast-production-bridge.js";
 
 interface ReelProductionDependencies {
   appEnv: AppEnv;
@@ -55,6 +67,7 @@ interface ReelProductionDependencies {
 
 const stepDefinitions = [
   ["validate_project", "Validar projeto e cenas"],
+  ["build_beast_plan", "Gerar plano premium Media Beast"],
   ["generate_narration", "Gerar narracao local ausente"],
   ["generate_visuals", "Gerar visuals ausentes"],
   ["select_music", "Selecionar musica local"],
@@ -171,6 +184,45 @@ function sceneHasNarration(scene: ProjectScene) {
   return Boolean(scene.generatedNarrationAssetId || scene.narrationText?.trim());
 }
 
+async function assetPathExists(assetPath: string | null | undefined) {
+  if (!assetPath?.trim()) {
+    return false;
+  }
+
+  try {
+    await access(resolve(assetPath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function clearMissingBackgroundMusic(
+  projectRepository: ProjectRepository,
+  assetRepository: AssetRepository,
+  project: StudioProject,
+  warnings: string[]
+) {
+  if (!project.backgroundMusicAssetId) {
+    return project;
+  }
+
+  const musicAsset = await assetRepository.getById(project.backgroundMusicAssetId);
+  if (!musicAsset?.path || (await assetPathExists(musicAsset.path))) {
+    return project;
+  }
+
+  warnings.push(
+    `Musica '${musicAsset.path}' ausente no disco — render segue sem trilha de fundo.`
+  );
+
+  return (
+    (await projectRepository.update(project.id, {
+      backgroundMusicAssetId: null
+    })) ?? project
+  );
+}
+
 function countUnconfirmedCandidates(candidates: Awaited<ReturnType<IntakeRepository["listCandidates"]>>) {
   return candidates.filter((candidate) => {
     if (candidate.status !== "pending" && candidate.status !== "approved") {
@@ -213,7 +265,10 @@ async function runWorkerOnceForQueuedJob(renderJobId: string) {
     try {
       child = spawn(command, args, {
         cwd: process.cwd(),
-        env: process.env,
+        env: {
+          ...process.env,
+          DATA_BACKEND: process.env.DATA_BACKEND ?? "prisma"
+        },
         windowsHide: true
       });
     } catch (error) {
@@ -526,7 +581,7 @@ export async function runOneClickReelProduction(
   projectId: string,
   input: OneClickRunInput
 ): Promise<OneClickRunResponse> {
-  const project = await requireProject(dependencies.projectRepository, projectId);
+  let project = await requireProject(dependencies.projectRepository, projectId);
   const defaults = resolveProductionDefaults(project, input);
   let steps = createInitialSteps();
   const startedAt = now();
@@ -545,6 +600,13 @@ export async function runOneClickReelProduction(
   const warnings: string[] = [];
   let renderJobId: string | null = null;
   let outputPath: string | null = null;
+  let beastPlan: OneClickBeastProductionSummary | null = null;
+  let beastProductionPlan: Record<string, unknown> | null = null;
+  let beastResultPayload: OneClickBeastProductionResult | null = null;
+  const beastMode = isBeastOneClickMode(input);
+  const beastRenderAuthorized = isBeastRenderAuthorized(input);
+  const runProductionPipeline =
+    input.mode !== "dry_run" && (!beastMode || beastRenderAuthorized);
 
   steps = startStep(steps, "validate_project");
   let checklist = await buildReelProductionChecklist(dependencies, project.id);
@@ -552,16 +614,124 @@ export async function runOneClickReelProduction(
     projectId: project.id
   });
 
-  if (input.mode === "dry_run") {
+  if (beastMode) {
+    if (input.mode === "render" && !beastRenderAuthorized) {
+      warnings.push(
+        "Render bloqueado: aprove o plano e confirme os direitos autorais antes de renderizar."
+      );
+    }
+
+    steps = startStep(steps, "build_beast_plan");
+    try {
+      const beastResult = await buildBeastProductionPlan(
+        project,
+        dependencies.intakeRepository,
+        input,
+        {
+          musicPresetId: defaults.musicPresetId,
+          voicePackId: defaults.voicePackId
+        }
+      );
+      beastPlan = {
+        remixMode: beastResult.remixMode,
+        planType: beastResult.planType,
+        visualVariationCount: beastResult.visualVariationCount,
+        musicPresetId: beastResult.musicPresetId,
+        masteringPresetId: beastResult.masteringPresetId,
+        voicePackId: beastResult.voicePackId,
+        requiresManualApproval: true,
+        canRenderAutomatically: false,
+        canRenderAfterManualApproval: beastResult.canRenderAfterManualApproval
+      };
+      beastProductionPlan = structuredClone(
+        beastResult.plan as unknown as Record<string, unknown>
+      );
+      beastResultPayload = beastResult;
+      steps = completeStep(
+        steps,
+        "build_beast_plan",
+        beastResult.planType === "video_remix"
+          ? `Plano de remix '${input.remixMode}' gerado.`
+          : `Plano premium '${input.remixMode}' gerado.`,
+        {
+          remixMode: beastResult.remixMode,
+          planType: beastResult.planType
+        }
+      );
+      if (!beastRenderAuthorized) {
+        warnings.push(
+          "Beast production plan requires manual approval before any render.",
+          ...beastResult.plan.warnings.slice(0, 2)
+        );
+      } else {
+        warnings.push(
+          "Beast render autorizado apos aprovacao manual e confirmacao de direitos.",
+          ...beastResult.plan.warnings.slice(0, 1)
+        );
+      }
+    } catch (error) {
+      steps = failStep(steps, "build_beast_plan", getErrorMessage(error));
+      warnings.push(getErrorMessage(error));
+    }
+  } else {
+    steps = skipStep(
+      steps,
+      "build_beast_plan",
+      "Modo legacy: plano Media Beast nao solicitado."
+    );
+  }
+
+  if (!runProductionPipeline) {
+    if (beastMode) {
+      steps = skipStep(
+        steps,
+        "generate_narration",
+        "Beast plan mode keeps narration as planning payload only."
+      );
+      steps = skipStep(
+        steps,
+        "generate_visuals",
+        "Beast plan mode keeps visuals as planning payload only."
+      );
+      steps = skipStep(steps, "select_music", "Beast plan mode defines music in audio score plan.");
+      steps = skipStep(steps, "build_beat_sync", "Beast plan mode includes beat sync in premium plan.");
+      steps = skipStep(steps, "validate_microclips", "Microclips optional for beast plan mode.");
+      steps = skipStep(
+        steps,
+        "build_blueprint",
+        "Beast plan mode returns premium/remix blueprint instead of legacy render blueprint."
+      );
+      steps = skipStep(steps, "create_render_job", "Candidate-first: beast plan awaiting manual approval.");
+      steps = skipStep(steps, "process_render_job", "Candidate-first: beast plan awaiting manual approval.");
+    } else if (input.mode === "dry_run") {
     steps = skipStep(steps, "generate_narration", "Dry run nao altera narracao.");
     steps = skipStep(steps, "generate_visuals", "Dry run nao gera visuals.");
     steps = skipStep(steps, "select_music", "Dry run nao seleciona musica.");
     steps = skipStep(steps, "build_beat_sync", "Dry run nao cria plano persistente.");
     steps = completeStep(steps, "validate_microclips", "Microclips verificados.");
     steps = skipStep(steps, "build_blueprint", "Dry run nao prepara blueprint.");
-    steps = skipStep(steps, "create_render_job", "Dry run nao cria RenderJob.");
-    steps = skipStep(steps, "process_render_job", "Dry run nao renderiza.");
+      steps = skipStep(steps, "create_render_job", "Dry run nao cria RenderJob.");
+      steps = skipStep(steps, "process_render_job", "Dry run nao renderiza.");
+    }
   } else {
+    if (beastRenderAuthorized && beastResultPayload) {
+      validateBeastRenderAuthorization(input, {
+        dataBackend: dependencies.appEnv.dataBackend
+      });
+      project = await syncProjectFromBeastPlan(
+        dependencies.projectRepository,
+        project,
+        beastResultPayload
+      );
+      if (input.approvedRemixAssetIds.length > 0) {
+        project = await attachApprovedRemixAssetsToProject(
+          dependencies.projectRepository,
+          project,
+          input.approvedRemixAssetIds
+        );
+      }
+    }
+
     if (input.options.generateMissingNarration) {
       steps = startStep(steps, "generate_narration");
       const generatedIds: string[] = [];
@@ -617,10 +787,12 @@ export async function runOneClickReelProduction(
           readString(recipe?.suggestedWorkflowPackId) ?? defaults.workflowPackId;
         try {
           const provider =
-            dependencies.appEnv.comfyUiEnabled &&
-            defaults.visualProvider === "comfyui-local"
-              ? "comfyui-local"
-              : defaults.fallbackVisualProvider;
+            beastRenderAuthorized
+              ? defaults.fallbackVisualProvider ?? "mock-svg"
+              : dependencies.appEnv.comfyUiEnabled &&
+                  defaults.visualProvider === "comfyui-local"
+                ? "comfyui-local"
+                : defaults.fallbackVisualProvider;
           const result = await generateVisualForScene(
             dependencies.projectRepository,
             dependencies.assetRepository,
@@ -673,6 +845,12 @@ export async function runOneClickReelProduction(
     }
 
     let refreshedProject = await requireProject(dependencies.projectRepository, project.id);
+    refreshedProject = await clearMissingBackgroundMusic(
+      dependencies.projectRepository,
+      dependencies.assetRepository,
+      refreshedProject,
+      warnings
+    );
 
     if (input.options.selectMusic) {
       steps = startStep(steps, "select_music");
@@ -694,14 +872,22 @@ export async function runOneClickReelProduction(
         });
 
         if (selection.selectedMusicAsset?.asset.id) {
-          refreshedProject =
-            (await dependencies.projectRepository.update(refreshedProject.id, {
-              backgroundMusicAssetId: selection.selectedMusicAsset.asset.id,
-              musicPresetId: defaults.musicPresetId
-            })) ?? refreshedProject;
-          steps = completeStep(steps, "select_music", selection.reason, {
-            assetId: selection.selectedMusicAsset.asset.id
-          });
+          const musicPath = selection.selectedMusicAsset.asset.path;
+          if (await assetPathExists(musicPath)) {
+            refreshedProject =
+              (await dependencies.projectRepository.update(refreshedProject.id, {
+                backgroundMusicAssetId: selection.selectedMusicAsset.asset.id,
+                musicPresetId: defaults.musicPresetId
+              })) ?? refreshedProject;
+            steps = completeStep(steps, "select_music", selection.reason, {
+              assetId: selection.selectedMusicAsset.asset.id
+            });
+          } else {
+            warnings.push(
+              `Musica sugerida '${musicPath ?? selection.selectedMusicAsset.asset.id}' ausente no disco.`
+            );
+            steps = skipStep(steps, "select_music", "Musica sugerida indisponivel no disco.");
+          }
         } else {
           warnings.push(...selection.warnings, "Nenhuma musica compativel encontrada.");
           steps = skipStep(steps, "select_music", "Sem musica local compativel.");
@@ -753,6 +939,13 @@ export async function runOneClickReelProduction(
     });
 
     if (input.mode === "render" && input.options.createRenderJob) {
+      refreshedProject = await clearMissingBackgroundMusic(
+        dependencies.projectRepository,
+        dependencies.assetRepository,
+        refreshedProject,
+        warnings
+      );
+
       steps = startStep(steps, "create_render_job");
       const renderJob = await createRenderJobForProject(
         dependencies.renderJobRepository,
@@ -772,7 +965,11 @@ export async function runOneClickReelProduction(
       steps = completeStep(steps, "create_render_job", "RenderJob criado e enfileirado.", {
         renderJobId
       });
-      if (input.runWorkerOnce || input.options.runWorkerOnce) {
+      if (
+        input.runWorkerOnce ||
+        input.options.runWorkerOnce ||
+        input.options.runRender
+      ) {
         steps = startStep(steps, "process_render_job");
         const workerResult = await runWorkerOnceForQueuedJob(renderJob.id);
         const processedJob = await dependencies.renderJobRepository.getById(renderJob.id);
@@ -821,9 +1018,28 @@ export async function runOneClickReelProduction(
       defaults,
       checklist,
       warnings,
-      mode: input.mode
+      mode: input.mode,
+      remixMode: input.remixMode,
+      beastPlan,
+      beastProductionPlan
     }
   });
+
+  const mergedWarnings = [...new Set([...warnings, ...checklist.warnings])];
+  const nextActions = beastPlan
+    ? renderJobId
+      ? ["monitor_render_job", "review_render_output", "confirm_distribution_rights"]
+      : beastRenderAuthorized
+        ? ["monitor_render_job", "review_render_output"]
+        : [
+            "review_beast_production_plan",
+            "confirm_source_rights",
+            "approve_plan_and_rights",
+            ...(beastPlan.canRenderAfterManualApproval
+              ? ["approve_and_render"]
+              : ["confirm_remix_rights_then_render"])
+          ]
+    : checklist.nextActions;
 
   return {
     runId: run.id,
@@ -833,7 +1049,9 @@ export async function runOneClickReelProduction(
     renderJobId: run.renderJobId,
     outputPath: run.outputPath,
     checklist,
-    warnings: [...new Set([...warnings, ...checklist.warnings])],
-    nextActions: checklist.nextActions
+    beastPlan,
+    beastProductionPlan,
+    warnings: mergedWarnings,
+    nextActions
   };
 }

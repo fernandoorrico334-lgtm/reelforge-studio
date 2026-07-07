@@ -33,6 +33,7 @@ import { handleEditingReferenceRoute } from "./routes/editing-reference-routes.j
 import { handleHybridVisualRoute } from "./routes/hybrid-visual-routes.js";
 import { handleIntakeRoute } from "./routes/intake-routes.js";
 import { handleMediaCollectorRoute } from "./routes/media-collector-routes.js";
+import { handleMediaBeastRoute } from "./routes/media-beast-routes.js";
 import { handleMicroclipSelectorRoute } from "./routes/microclip-selector-routes.js";
 import { handleNarrationRoute } from "./routes/narration-routes.js";
 import { handleProductionRoute } from "./routes/production-routes.js";
@@ -286,6 +287,14 @@ export function createApp({
           projectRepository
         }
       )
+    ) {
+      return;
+    }
+
+    if (
+      await handleMediaBeastRoute(request, response, url.pathname, {
+        assetRepository
+      })
     ) {
       return;
     }
@@ -638,6 +647,13 @@ export function createApp({
         "/intake/candidates/:id/reject",
         "/intake/import-approved",
         "/media-collector/providers",
+        "/media-beast/providers",
+        "/media-beast/discover",
+        "/media-beast/editorial-short",
+        "/media-beast/transform-plan",
+        "/media-beast/daily-batch",
+        "/media-beast/remix-video",
+        "/media-beast/remix-video/import-assets",
         "/media-collector/manual-url",
         "/media-collections",
         "/media-collections/:id",

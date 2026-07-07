@@ -98,12 +98,29 @@ export interface OneClickOptions {
   runWorkerOnce?: boolean;
 }
 
+export const oneClickRemixModes = ["legacy", "new", "remix"] as const;
+
+export type OneClickRemixMode = (typeof oneClickRemixModes)[number];
+
 export interface OneClickRunInput {
   mode: ReelProductionRunMode;
   runWorkerOnce: boolean;
   providerStrategy: OneClickProviderStrategy;
   defaults: OneClickDefaults;
   options: OneClickOptions;
+  remixMode: OneClickRemixMode;
+  inputVideoPath: string | null;
+  sourceUrl: string | null;
+  targetStyle: string | null;
+  intensity: "medium" | "extreme";
+  addNarration: boolean;
+  durationTarget: number | null;
+  newMusicPreset: string | null;
+  captionText: string | null;
+  beastCandidate: unknown;
+  planApproved: boolean;
+  rightsConfirmed: boolean;
+  approvedRemixAssetIds: string[];
 }
 
 export interface ReelProductionSceneChecklist {
@@ -141,6 +158,18 @@ export interface ReelProductionChecklist {
   nextActions: string[];
 }
 
+export interface OneClickBeastProductionSummary {
+  remixMode: "new" | "remix";
+  planType: "premium_reel" | "video_remix";
+  visualVariationCount: number;
+  musicPresetId: string;
+  masteringPresetId: string;
+  voicePackId: string | null;
+  requiresManualApproval: true;
+  canRenderAutomatically: false;
+  canRenderAfterManualApproval: boolean;
+}
+
 export interface OneClickRunResponse {
   runId: string;
   status: ReelProductionRunStatus;
@@ -149,6 +178,8 @@ export interface OneClickRunResponse {
   renderJobId: string | null;
   outputPath: string | null;
   checklist: ReelProductionChecklist;
+  beastPlan: OneClickBeastProductionSummary | null;
+  beastProductionPlan: Record<string, unknown> | null;
   warnings: string[];
   nextActions: string[];
 }
@@ -189,6 +220,55 @@ function readOptionalBoolean(value: unknown, fieldName: string) {
   return value;
 }
 
+function readStringArray(value: unknown, fieldName: string) {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new ValidationError(`${fieldName} must be an array of strings.`);
+  }
+
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
+}
+
+function readOptionalPositiveInteger(value: unknown, fieldName: string) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ValidationError(`${fieldName} must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
+function normalizeRemixMode(value: unknown): OneClickRemixMode {
+  const mode = readOptionalString(value, "remixMode") ?? "legacy";
+
+  if (!oneClickRemixModes.includes(mode as OneClickRemixMode)) {
+    throw new ValidationError(
+      `remixMode must be one of: ${oneClickRemixModes.join(", ")}.`
+    );
+  }
+
+  return mode as OneClickRemixMode;
+}
+
+function normalizeIntensity(value: unknown): "medium" | "extreme" {
+  const intensity = readOptionalString(value, "intensity") ?? "extreme";
+
+  if (intensity !== "medium" && intensity !== "extreme") {
+    throw new ValidationError("intensity must be 'medium' or 'extreme'.");
+  }
+
+  return intensity;
+}
+
 function normalizeMode(value: unknown): ReelProductionRunMode {
   const mode = readOptionalString(value, "mode") ?? "prepare_only";
 
@@ -213,10 +293,25 @@ export function validateOneClickRunInput(payload: unknown): OneClickRunInput {
     readOptionalBoolean(record.runWorkerOnce, "runWorkerOnce") ??
     readOptionalBoolean(options.runWorkerOnce, "options.runWorkerOnce") ??
     false;
+  const remixMode = normalizeRemixMode(record.remixMode);
+  const beastMode = remixMode === "new" || remixMode === "remix";
+  const mode = normalizeMode(record.mode);
+  const planApproved =
+    readOptionalBoolean(record.planApproved, "planApproved") ?? false;
+  const rightsConfirmed =
+    readOptionalBoolean(record.rightsConfirmed, "rightsConfirmed") ?? false;
+  const beastRenderAuthorized =
+    beastMode && mode === "render" && planApproved && rightsConfirmed;
+  const requestedCreateRenderJob =
+    readOptionalBoolean(options.createRenderJob, "options.createRenderJob") ?? true;
+  const requestedRunRender =
+    readOptionalBoolean(options.runRender, "options.runRender") ??
+    readOptionalBoolean(record.runWorkerOnce, "runWorkerOnce") ??
+    (beastRenderAuthorized ? true : false);
 
   return {
-    mode: normalizeMode(record.mode),
-    runWorkerOnce,
+    mode,
+    runWorkerOnce: beastRenderAuthorized ? requestedRunRender : beastMode ? false : runWorkerOnce,
     providerStrategy: {
       visualProvider: readOptionalString(
         providerStrategy.visualProvider,
@@ -270,13 +365,34 @@ export function validateOneClickRunInput(payload: unknown): OneClickRunInput {
           options.useEditorialMicroclips,
           "options.useEditorialMicroclips"
         ) ?? true,
-      createRenderJob:
-        readOptionalBoolean(
-          options.createRenderJob,
-          "options.createRenderJob"
-        ) ?? true,
-      runRender: readOptionalBoolean(options.runRender, "options.runRender") ?? false,
-      runWorkerOnce
-    }
+      createRenderJob: beastRenderAuthorized
+        ? requestedCreateRenderJob
+        : beastMode
+          ? false
+          : requestedCreateRenderJob,
+      runRender: beastRenderAuthorized
+        ? requestedRunRender
+        : beastMode
+          ? false
+          : requestedRunRender,
+      runWorkerOnce: beastRenderAuthorized ? requestedRunRender : beastMode ? false : runWorkerOnce
+    },
+    remixMode,
+    inputVideoPath: readOptionalString(record.inputVideoPath, "inputVideoPath"),
+    sourceUrl: readOptionalString(record.sourceUrl, "sourceUrl"),
+    targetStyle: readOptionalString(record.targetStyle, "targetStyle"),
+    intensity: normalizeIntensity(record.intensity),
+    addNarration:
+      readOptionalBoolean(record.addNarration, "addNarration") ?? false,
+    durationTarget: readOptionalPositiveInteger(record.durationTarget, "durationTarget"),
+    newMusicPreset: readOptionalString(record.newMusicPreset, "newMusicPreset"),
+    captionText: readOptionalString(record.captionText, "captionText"),
+    beastCandidate: record.beastCandidate ?? record.candidate ?? null,
+    planApproved,
+    rightsConfirmed,
+    approvedRemixAssetIds: readStringArray(
+      record.approvedRemixAssetIds,
+      "approvedRemixAssetIds"
+    )
   };
 }

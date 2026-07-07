@@ -9,6 +9,7 @@ const navigation = [
   { href: "/production-discovery", label: "Discovery", short: "PD" },
   { href: "/asset-vault-builder", label: "Asset Vault", short: "AV" },
   { href: "/reels-factory", label: "Reels Factory", short: "RF" },
+  { href: "/beast-studio", label: "Beast Studio", short: "BS" },
   { href: "/intake", label: "Intake", short: "IN" },
   { href: "/media-collector", label: "Media Collector", short: "MC" },
   { href: "/research", label: "Research", short: "RS" },

@@ -394,6 +394,7 @@ export async function createProductionFromScript(
   const sceneDrafts = createScenesFromScript(input.script, {
     durationTarget: effectiveDurationTarget,
     defaultSceneDuration: effectiveSceneDuration,
+    maxScenes: input.maxScenes,
     defaultVisualPreset:
       input.applyChannelDefaults ? channel.defaultVisualPreset : null,
     defaultCaptionStyle:
