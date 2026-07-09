@@ -9,22 +9,31 @@ import {
   beatsToScript,
   buildNarrationContentContext,
   buildNarrationEnginePrompt,
+  buildNarrationVoiceVariations,
   buildRemixNarrationBeats,
   buildWordBudget,
+  ensureNarrationBeatsSafe,
   estimateScriptDurationSeconds,
   finalizeNarrationBeats,
   hasConcreteCuriosity,
   resolveNarrationPacingForDuration,
   sanitizeTitle,
+  validateNarrationScript,
   type NarrationBeatDraft
 } from "./narration-curiosity-engine.js";
+import { clampShortDuration } from "./short-production-limits.js";
 import {
   getNicheProductionProfile,
   resolveProductionEmotion,
   type ProductionEmotion
 } from "./niche-production-profiles.js";
 import type { NarrationOverlayPlan } from "./narration-overlay.js";
+import type { RemixContentDomain } from "./remix-content-intelligence.js";
 import type { RemixTargetStyle } from "./remix-types.js";
+import {
+  injectResearchCuriositiesIntoBeats,
+  type RemixResearchDossier
+} from "./remix-research-bridge.js";
 import type { VideoRemixAnalysis } from "./remix-video-analyzer.js";
 
 const supportedVoicePackIds = [
@@ -75,6 +84,10 @@ function buildAnalysisCandidate(analysis: VideoRemixAnalysis): MediaBeastCandida
       remixContentDomain: intel.domain,
       remixContentHeadline: intel.headline,
       remixContentSummary: intel.summary,
+      remixNarrativeBrief: intel.narrativeBrief,
+      remixNarrativeHook: intel.narrativeHook,
+      remixCuriosityAngle: intel.curiosityAngle,
+      remixSetting: intel.setting,
       remixEntities: intel.entities.map((entity) => entity.name).join(", "),
       remixPrimaryAction: intel.actions[0]?.label ?? null,
       remixMood: intel.mood
@@ -100,7 +113,7 @@ function ensureClimaxCuriosity(
   const lead = analysis.contentIntelligence.entities[0]?.name ?? sanitizeTitle(analysis.title);
   const action = analysis.contentIntelligence.actions[0]?.label ?? "destaque";
 
-  const fallback = `Curiosidade: ${lead} viraliza nesse trecho porque ${action.toLowerCase()} esconde um contexto que o clipe original não explica.`;
+  const fallback = `${lead} viraliza aqui. ${action} esconde um contexto que o clipe original não mostra.`;
 
   return beats.map((beat, index) =>
     index === climaxIndex
@@ -118,8 +131,11 @@ export function buildRemixNarrationOverlayPlan(input: {
   analysis: VideoRemixAnalysis;
   channelDNA: ChannelDNA;
   targetStyle: RemixTargetStyle;
+  variationIndex?: number;
   maxDurationSeconds: number;
   narrationBias?: string;
+  researchDossier?: RemixResearchDossier | null;
+  selectedCuriosityIds?: string[];
 }): NarrationOverlayPlan {
   const language = input.channelDNA.language ?? "pt-BR";
   const channelTone = input.channelDNA.tone;
@@ -128,20 +144,23 @@ export function buildRemixNarrationOverlayPlan(input: {
     input.channelDNA.niche,
     channelTone
   ) as ProductionEmotion;
+  const maxDurationSeconds = clampShortDuration(input.maxDurationSeconds);
   const pacing = resolveNarrationPacingForDuration(
-    input.maxDurationSeconds,
+    maxDurationSeconds,
     profile.narrationPacing ?? "balanced"
   );
   const voicePackHint = resolveVoicePackId(
     input.narrationBias ?? input.channelDNA.narrationBias ?? profile.narrationVoicePackId
   );
   const voicePack = getVoicePackById(voicePackHint);
-  const seed = `${input.analysis.title}:${input.targetStyle}:${input.analysis.sourceDurationSeconds}`;
+  const variationIndex = input.variationIndex ?? 0;
+  const seed = `${input.analysis.title}:${input.targetStyle}:v${variationIndex}:${input.analysis.sourceDurationSeconds}`;
   const candidate = buildAnalysisCandidate(input.analysis);
-  const wordBudget = buildWordBudget(input.maxDurationSeconds, pacing, {
+  const wordBudget = buildWordBudget(maxDurationSeconds, pacing, {
     fillRatio: 0.94,
-    minTotalWords: Math.round(input.maxDurationSeconds * 2.05)
+    minTotalWords: Math.round(maxDurationSeconds * 2.05)
   });
+  const subject = sanitizeTitle(input.analysis.title);
 
   const rawBeats = buildRemixNarrationBeats({
     title: input.analysis.title,
@@ -149,13 +168,57 @@ export function buildRemixNarrationOverlayPlan(input: {
     contextKeywords: input.analysis.contextKeywords,
     contentIntelligence: input.analysis.contentIntelligence,
     emotion: productionEmotion,
-    seed
+    seed,
+    targetStyle: input.targetStyle,
+    variationIndex
   });
 
-  const narrationBeats = ensureClimaxCuriosity(
-    finalizeNarrationBeats(rawBeats, wordBudget, sanitizeTitle(input.analysis.title)),
-    input.analysis,
+  const researchDossier = input.researchDossier ?? input.analysis.researchDossier;
+  const lead =
+    input.analysis.contentIntelligence.entities[0]?.name ?? subject;
+  const finalizeOptions: {
+    emotion: ProductionEmotion;
+    lead: string;
+    seed: string;
+    action?: string;
+    domain?: RemixContentDomain;
+  } = {
+    emotion: productionEmotion,
+    lead,
     seed
+  };
+  const primaryAction = input.analysis.contentIntelligence.actions[0]?.label;
+  if (primaryAction) {
+    finalizeOptions.action = primaryAction;
+  }
+  finalizeOptions.domain = input.analysis.contentIntelligence.domain;
+
+  const finalizedBeats = ensureNarrationBeatsSafe(
+    ensureClimaxCuriosity(
+      finalizeNarrationBeats(rawBeats, wordBudget, subject, finalizeOptions),
+      input.analysis,
+      seed
+    ),
+    subject
+  );
+  const injectedBeats = injectResearchCuriositiesIntoBeats(
+    finalizedBeats,
+    researchDossier,
+    input.targetStyle,
+    input.selectedCuriosityIds ?? researchDossier?.selectedCuriosityIds,
+    input.analysis,
+    variationIndex
+  );
+  const narrationBeats = finalizeNarrationBeats(
+    injectedBeats.map((beat) => ({
+      role: beat.role,
+      text: beat.text,
+      curiosityTag: beat.curiosityTag,
+      ...(beat.prosody ? { prosody: beat.prosody } : {})
+    })),
+    wordBudget,
+    subject,
+    finalizeOptions
   ).map((beat) => ({
     ...beat,
     caption: beat.caption || buildCaptionFromLine(beat.text),
@@ -167,17 +230,22 @@ export function buildRemixNarrationOverlayPlan(input: {
 
   const suggestedScript = beatsToScript(narrationBeats);
   const estimatedDurationSeconds = estimateScriptDurationSeconds(suggestedScript, pacing);
+  const narrationQuality = validateNarrationScript(suggestedScript);
 
   const narrationContext = buildNarrationContentContext({
     candidate,
     niche: input.channelDNA.niche,
     emotion: productionEmotion,
-    durationSeconds: input.maxDurationSeconds,
+    durationSeconds: maxDurationSeconds,
     pacing,
     videoHints: {
       domain: input.analysis.contentIntelligence.domain,
       headline: input.analysis.contentIntelligence.headline,
       summary: input.analysis.contentIntelligence.summary,
+      narrativeBrief: input.analysis.contentIntelligence.narrativeBrief,
+      narrativeHook: input.analysis.contentIntelligence.narrativeHook,
+      curiosityAngle: input.analysis.contentIntelligence.curiosityAngle,
+      setting: input.analysis.contentIntelligence.setting,
       entities: input.analysis.contentIntelligence.entities.map((entity) => entity.name),
       ...(input.analysis.contentIntelligence.actions[0]?.label
         ? { primaryAction: input.analysis.contentIntelligence.actions[0].label }
@@ -221,21 +289,14 @@ export function buildRemixNarrationOverlayPlan(input: {
     provider: "mock-tts",
     productionEmotion,
     pacing,
-    voiceVariations: narrationBeats.map((beat, index) => ({
-      variationId: `remix-beat-${index + 1}`,
+    voiceVariations: buildNarrationVoiceVariations({
       voicePackId: voicePackHint,
-      tone: `${channelTone} remix`,
+      channelTone: `${channelTone} remix`,
       emotion: productionEmotion,
       pacing,
-      rateShift: index === 0 ? 3 : index === 2 ? 5 : 0,
-      emphasis: beat.role,
-      line: beat.text,
-      curiosityTag: beat.curiosityTag,
-      estimatedDurationSeconds: Math.max(
-        estimateScriptDurationSeconds(beat.text, pacing),
-        beat.role === "cta" ? 2 : 3
-      )
-    })),
+      beats: narrationBeats,
+      script: suggestedScript
+    }),
     hookLine: narrationBeats[0]?.text ?? input.analysis.title,
     narrationBeats,
     narrationContext,
@@ -252,18 +313,56 @@ export function buildRemixNarrationOverlayPlan(input: {
       beatMap: narrationBeats.map((beat) => ({
         role: beat.role,
         text: beat.text,
-        curiosityTag: beat.curiosityTag
+        curiosityTag: beat.curiosityTag,
+        ...(beat.prosody ? { prosody: beat.prosody } : {})
       }))
     },
     narrationEnginePlan,
     cautionNotes: [
       "Narração reescrita a partir da análise do vídeo — confirme fatos antes de publicar.",
-      `Tema: ${input.analysis.themeSummary}`,
+      narrationQuality.valid
+        ? "Script narrativo validado sem metadados ou instruções de sistema."
+        : `Revisar script: ${narrationQuality.issues.slice(0, 2).join(" | ")}`,
+      `Brief: ${input.analysis.contentIntelligence.narrativeBrief}`,
+      researchDossier?.rankedCuriosities.length
+        ? `Research Collector: ${researchDossier.rankedCuriosities.length} curiosidades (${researchDossier.researchMode}${researchDossier.cacheHit ? ", cache" : ""}).`
+        : "Research Collector: sem curiosidades ranqueadas.",
+      researchDossier?.selectedCuriosityIds.length
+        ? `Curiosidades injetadas: ${researchDossier.selectedCuriosityIds.join(", ")}.`
+        : null,
       `Entidades: ${input.analysis.contentIntelligence.entities.map((entity) => entity.name).join(", ") || "não identificadas"}.`,
-      `Duração alvo: ${input.maxDurationSeconds}s (estimativa: ${estimatedDurationSeconds.toFixed(1)}s).`,
+      `Duração alvo: ${maxDurationSeconds}s (estimativa: ${estimatedDurationSeconds.toFixed(1)}s).`,
       voicePack
         ? `Voice pack '${voicePack.name}' para tom '${voicePack.tone}'.`
         : "Voice pack documental padrão."
-    ]
+    ].filter((note): note is string => Boolean(note))
   };
+}
+
+export function rebuildRemixNarrationWithResearch(input: {
+  analysis: VideoRemixAnalysis;
+  channelDNA: ChannelDNA;
+  targetStyle: RemixTargetStyle;
+  maxDurationSeconds: number;
+  researchDossier: RemixResearchDossier;
+  selectedCuriosityIds?: string[];
+  narrationBias?: string;
+}): NarrationOverlayPlan {
+  return buildRemixNarrationOverlayPlan({
+    analysis: {
+      ...input.analysis,
+      researchDossier: input.researchDossier
+    },
+    channelDNA: input.channelDNA,
+    targetStyle: input.targetStyle,
+    maxDurationSeconds: input.maxDurationSeconds,
+    ...(input.narrationBias ? { narrationBias: input.narrationBias } : {}),
+    researchDossier: input.researchDossier,
+    ...(input.selectedCuriosityIds || input.researchDossier.selectedCuriosityIds.length
+      ? {
+          selectedCuriosityIds:
+            input.selectedCuriosityIds ?? input.researchDossier.selectedCuriosityIds
+        }
+      : {})
+  });
 }

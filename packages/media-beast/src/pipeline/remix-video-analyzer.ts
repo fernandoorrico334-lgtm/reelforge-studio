@@ -11,6 +11,11 @@ import {
   buildRemixContentIntelligence,
   type RemixStructuredContentDescription
 } from "./remix-content-intelligence.js";
+import {
+  collectRemixResearch,
+  type RemixResearchDossier,
+  type RemixResearchOptions
+} from "./remix-research-bridge.js";
 import type { RemixSceneRole } from "./remix-scene-restructure.js";
 
 const execFileAsync = promisify(execFile);
@@ -41,6 +46,7 @@ export interface VideoRemixAnalysis {
   narrativeArc: string[];
   analysisNotes: string[];
   contentIntelligence: RemixStructuredContentDescription;
+  researchDossier: RemixResearchDossier | null;
 }
 
 const ROLE_SEQUENCE: RemixSceneRole[] = ["hook", "context", "evidence", "climax", "outro"];
@@ -86,8 +92,11 @@ function normalizeRemixTitle(rawTitle: string): string {
   return (
     rawTitle
       .replace(/\.(mp4|mov|webm|avi|mkv|m4v)$/i, "")
+      .replace(/#[\p{L}\p{N}_]+/gu, " ")
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, " ")
       .replace(/[-_]+/g, " ")
       .replace(/\b\d{8,}\b/g, " ")
+      .replace(/!+/g, " ")
       .replace(/\s+/g, " ")
       .trim() || rawTitle.trim()
   );
@@ -121,8 +130,11 @@ function resolveAnalysisTitle(title: string, topicHint?: string | null): string 
 }
 
 function extractKeywords(title: string, platform: string): string[] {
+  const hashtagTokens = [...title.matchAll(/#([\p{L}\p{N}_]+)/gu)].map((match) => match[1]!);
   const cleaned = title
+    .replace(/#[\p{L}\p{N}_]+/gu, " ")
     .replace(/[#@]|shorts?|reels?|tiktok|viral/gi, "")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -136,11 +148,11 @@ function extractKeywords(title: string, platform: string): string[] {
         !/^\d+$/.test(token)
     );
 
-  const meaningful = [...new Set(tokens)];
+  const meaningful = [...new Set([...tokens, ...hashtagTokens.map((tag) => tag.toLowerCase())])];
   const platformToken =
     platform !== "local" && !FILENAME_NOISE.has(platform) ? [platform] : [];
 
-  return [...platformToken, ...meaningful].slice(0, 8);
+  return [...platformToken, ...meaningful].slice(0, 10);
 }
 
 function inferThemeSummary(title: string, platform: string, keywords: string[]): string {
@@ -251,6 +263,7 @@ export async function analyzeRemixSourceVideo(input: {
   metadataDurationSeconds?: number | null;
   targetOutputSeconds?: number | null;
   intensity?: "medium" | "extreme";
+  researchOptions?: RemixResearchOptions;
 }): Promise<VideoRemixAnalysis> {
   const intensity = input.intensity ?? "extreme";
   const probed = await probeDurationWithFfprobe(input.localPath);
@@ -276,24 +289,57 @@ export async function analyzeRemixSourceVideo(input: {
 
   const resolvedTitle = resolveAnalysisTitle(input.title, input.topicHint);
   const contentIntelligence = buildRemixContentIntelligence({
-    title: resolvedTitle,
+    title: input.title,
     platform: input.platform,
     topicHint: input.topicHint ?? null,
     outputDurationSeconds,
     intensity
   });
   const contextKeywords = [
-    ...contentIntelligence.entities.map((entity) => entity.name.toLowerCase()),
-    ...extractKeywords(resolvedTitle, input.platform)
+    ...contentIntelligence.entities.map((entity) => entity.name),
+    contentIntelligence.setting,
+    contentIntelligence.actions[0]?.label,
+    ...extractKeywords(input.title, input.platform)
   ]
-    .filter(Boolean)
-    .slice(0, 8);
+    .filter((keyword): keyword is string => Boolean(keyword))
+    .map((keyword) => keyword.toLowerCase())
+    .slice(0, 10);
   const uniqueKeywords = [...new Set(contextKeywords)];
   const themeSummary =
-    contentIntelligence.entities.length > 0
-      ? `${contentIntelligence.headline} — ${contentIntelligence.summary}`
-      : inferThemeSummary(resolvedTitle, input.platform, uniqueKeywords);
+    contentIntelligence.narrativeBrief ||
+    (contentIntelligence.entities.length > 0
+      ? contentIntelligence.headline
+      : inferThemeSummary(resolvedTitle, input.platform, uniqueKeywords));
   const mainScenes = buildMainScenes(outputDurationSeconds, intensity, contentIntelligence);
+  const preliminaryAnalysis: VideoRemixAnalysis = {
+    sourceDurationSeconds,
+    outputDurationSeconds,
+    probeMethod,
+    platform: input.platform,
+    title: resolvedTitle,
+    themeSummary,
+    contextKeywords: uniqueKeywords,
+    mainScenes,
+    narrativeArc: [],
+    analysisNotes: [],
+    contentIntelligence,
+    researchDossier: null
+  };
+  const researchDossier = collectRemixResearch(preliminaryAnalysis, {
+    enabled: input.researchOptions?.enabled !== false,
+    deepResearch: input.researchOptions?.deepResearch === true,
+    ...(input.researchOptions?.selectedCuriosityIds
+      ? { selectedCuriosityIds: input.researchOptions.selectedCuriosityIds }
+      : {}),
+    ...(input.researchOptions?.bypassCache
+      ? { bypassCache: input.researchOptions.bypassCache }
+      : {}),
+    ...(input.researchOptions?.targetStyle
+      ? { targetStyle: input.researchOptions.targetStyle }
+      : {}),
+    language: input.researchOptions?.language ?? "pt-BR",
+    niche: input.researchOptions?.niche ?? contentIntelligence.domain
+  });
 
   const analysisNotes = [
     `Duração da fonte: ${sourceDurationSeconds}s (${probeMethod}).`,
@@ -305,6 +351,12 @@ export async function analyzeRemixSourceVideo(input: {
       : "Entidades: inferência limitada — forneça título/legenda mais descritivos.",
     contentIntelligence.actions.length
       ? `Ações: ${contentIntelligence.actions.map((action) => action.label).join(", ")}.`
+      : null,
+    researchDossier.rankedCuriosities.length
+      ? `Research Collector: ${researchDossier.rankedCuriosities.length} curiosidades ranqueadas (${researchDossier.researchMode}${researchDossier.cacheHit ? ", cache" : ""}).`
+      : "Research Collector: pesquisa automática sem curiosidades ranqueadas.",
+    researchDossier.selectedCuriosityIds.length
+      ? `Curiosidades selecionadas para narração: ${researchDossier.selectedCuriosityIds.length}.`
       : null
   ].filter((note): note is string => Boolean(note));
 
@@ -324,13 +376,14 @@ export async function analyzeRemixSourceVideo(input: {
     contextKeywords: uniqueKeywords,
     mainScenes,
     narrativeArc: [
-      contentIntelligence.headline,
-      ...contentIntelligence.sceneInsights.map(
-        (insight) => `${insight.role}: ${insight.narrationAngle}`
-      ),
+      contentIntelligence.narrativeHook,
+      contentIntelligence.narrativeBrief,
+      ...contentIntelligence.sceneInsights.map((insight) => insight.narrationAngle),
+      contentIntelligence.curiosityAngle,
       ...contentIntelligence.differentiationGoals.slice(0, 2)
     ],
     analysisNotes,
-    contentIntelligence
+    contentIntelligence,
+    researchDossier
   };
 }

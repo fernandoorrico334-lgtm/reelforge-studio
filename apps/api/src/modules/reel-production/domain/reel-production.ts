@@ -121,6 +121,7 @@ export interface OneClickRunInput {
   planApproved: boolean;
   rightsConfirmed: boolean;
   approvedRemixAssetIds: string[];
+  beastProductionPlan: Record<string, unknown> | null;
 }
 
 export interface ReelProductionSceneChecklist {
@@ -393,6 +394,12 @@ export function validateOneClickRunInput(payload: unknown): OneClickRunInput {
     approvedRemixAssetIds: readStringArray(
       record.approvedRemixAssetIds,
       "approvedRemixAssetIds"
-    )
+    ),
+    beastProductionPlan:
+      record.beastProductionPlan &&
+      typeof record.beastProductionPlan === "object" &&
+      !Array.isArray(record.beastProductionPlan)
+        ? (record.beastProductionPlan as Record<string, unknown>)
+        : null
   };
 }

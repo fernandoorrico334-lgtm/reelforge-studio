@@ -283,6 +283,55 @@ export function isBeastRenderAuthorized(input: OneClickRunInput) {
   );
 }
 
+function isCachedRemixPlan(plan: Record<string, unknown>): boolean {
+  return (
+    typeof plan.remixId === "string" &&
+    typeof plan.durationSeconds === "number" &&
+    Boolean(plan.approvalGate) &&
+    Boolean(plan.captionPlan)
+  );
+}
+
+function isCachedPremiumPlan(plan: Record<string, unknown>): boolean {
+  return (
+    Boolean(plan.editingBlueprint) &&
+    Boolean(plan.narrationPlan) &&
+    Boolean(plan.visualPlan)
+  );
+}
+
+export function resolveBeastPlanFromCache(
+  remixMode: "new" | "remix",
+  cachedPlan: Record<string, unknown>
+): OneClickBeastProductionResult {
+  if (remixMode === "remix") {
+    if (!isCachedRemixPlan(cachedPlan)) {
+      throw new ValidationError(
+        "beastProductionPlan invalido para remix — gere o plano novamente antes de renderizar."
+      );
+    }
+    return summarizeBeastPlan("remix", cachedPlan as unknown as VideoRemixPlan);
+  }
+
+  if (!isCachedPremiumPlan(cachedPlan)) {
+    throw new ValidationError(
+      "beastProductionPlan invalido para premium reel — gere o plano novamente antes de renderizar."
+    );
+  }
+
+  return summarizeBeastPlan("new", cachedPlan as unknown as PremiumReelProductionPlan);
+}
+
+export function assertBeastPlanRenderReady(beastResult: OneClickBeastProductionResult) {
+  if (!beastResult.canRenderAfterManualApproval) {
+    throw new ValidationError(
+      beastResult.planType === "video_remix"
+        ? "Remix sem fonte local disponivel. Baixe o video ou informe um caminho local antes de renderizar."
+        : "Plano premium ainda nao elegivel para render apos aprovacao manual."
+    );
+  }
+}
+
 export function validateBeastRenderAuthorization(
   input: OneClickRunInput,
   options?: { dataBackend?: "memory" | "prisma" }
@@ -390,8 +439,12 @@ async function normalizeProjectScenes(
 
 function buildRemixSceneBeats(plan: VideoRemixPlan): BeastSceneBeat[] {
   const captionScenes = plan.captionPlan.scenes.slice(0, SHORT_MAX_SCENES);
+  const beatLines =
+    plan.narrationPlan?.narrationBeats?.map((beat) => beat.text).filter(Boolean) ?? [];
   const narrationLines = limitNarrationLines(
-    plan.narrationPlan?.suggestedScript.split("\n").filter(Boolean) ?? [],
+    beatLines.length
+      ? beatLines
+      : (plan.narrationPlan?.suggestedScript.split("\n").filter(Boolean) ?? []),
     SHORT_MAX_SCENES
   );
   const voicePackId = plan.narrationPlan?.voicePackHint ?? null;
@@ -508,6 +561,14 @@ export async function buildBeastProductionPlan(
   input: OneClickRunInput,
   defaults: { musicPresetId: string; voicePackId: string }
 ): Promise<OneClickBeastProductionResult> {
+  if (input.beastProductionPlan && (input.remixMode === "new" || input.remixMode === "remix")) {
+    const cached = resolveBeastPlanFromCache(input.remixMode, input.beastProductionPlan);
+    if (input.mode === "render") {
+      assertBeastPlanRenderReady(cached);
+    }
+    return cached;
+  }
+
   const channelDNA = buildChannelDNAFromProject(project, defaults);
   const intensity = input.intensity ?? "extreme";
   const durationSeconds =
@@ -554,7 +615,11 @@ export async function buildBeastProductionPlan(
       }
     );
 
-    return summarizeBeastPlan("remix", remixPlan);
+    const summarized = summarizeBeastPlan("remix", remixPlan);
+    if (input.mode === "render") {
+      assertBeastPlanRenderReady(summarized);
+    }
+    return summarized;
   }
 
   const candidate = await resolveBeastCandidateForNewMode(
@@ -569,5 +634,9 @@ export async function buildBeastProductionPlan(
     durationSeconds
   });
 
-  return summarizeBeastPlan("new", premiumPlan);
+  const summarized = summarizeBeastPlan("new", premiumPlan);
+  if (input.mode === "render") {
+    assertBeastPlanRenderReady(summarized);
+  }
+  return summarized;
 }

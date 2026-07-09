@@ -50,7 +50,14 @@ export interface RemixStructuredSceneInsight {
 
 export interface RemixStructuredContentDescription {
   headline: string;
+  /** Resumo técnico para pipeline e metadados — não narrar diretamente. */
   summary: string;
+  /** Resumo narrativo em linguagem natural para guiar a narração. */
+  narrativeBrief: string;
+  /** Sugestão de abertura/gancho em tom de narrador. */
+  narrativeHook: string;
+  /** Ângulo de curiosidade sugerido para o clímax. */
+  curiosityAngle: string;
   domain: RemixContentDomain;
   entities: RemixDetectedEntity[];
   actions: RemixDetectedAction[];
@@ -60,7 +67,7 @@ export interface RemixStructuredContentDescription {
   sceneInsights: RemixStructuredSceneInsight[];
   visualSearchQueries: string[];
   comfyPromptFragments: string[];
-  analysisVersion: "phase2-v1";
+  analysisVersion: "phase2-v2";
 }
 
 export interface RemixContentIntelligenceInput {
@@ -176,6 +183,102 @@ const ENTITY_CATALOG: EntityCatalogEntry[] = [
     franchise: "Dragon Ball",
     domain: "anime",
     aliases: ["goku", "dragon ball", "saiyan"]
+  },
+  {
+    id: "iron_man",
+    name: "Homem de Ferro",
+    type: "character",
+    franchise: "Marvel",
+    domain: "comics_superhero",
+    aliases: ["iron man", "homem de ferro", "tony stark", "stark"]
+  },
+  {
+    id: "joker",
+    name: "Coringa",
+    type: "character",
+    franchise: "DC",
+    domain: "comics_superhero",
+    aliases: ["joker", "coringa"]
+  },
+  {
+    id: "scorpion",
+    name: "Scorpion",
+    type: "character",
+    franchise: "Mortal Kombat",
+    domain: "gaming",
+    aliases: ["scorpion", "mortal kombat"]
+  },
+  {
+    id: "sub_zero",
+    name: "Sub-Zero",
+    type: "character",
+    franchise: "Mortal Kombat",
+    domain: "gaming",
+    aliases: ["sub-zero", "sub zero"]
+  },
+  {
+    id: "luffy",
+    name: "Luffy",
+    type: "character",
+    franchise: "One Piece",
+    domain: "anime",
+    aliases: ["luffy", "one piece", "monkey d luffy"]
+  },
+  {
+    id: "mbappe",
+    name: "Kylian Mbappé",
+    type: "person",
+    franchise: "Futebol",
+    domain: "sports",
+    aliases: ["mbappe", "mbappé", "kylian mbappe"]
+  },
+  {
+    id: "haaland",
+    name: "Erling Haaland",
+    type: "person",
+    franchise: "Futebol",
+    domain: "sports",
+    aliases: ["haaland", "erling haaland"]
+  },
+  {
+    id: "liverpool",
+    name: "Liverpool",
+    type: "team",
+    franchise: "Premier League",
+    domain: "sports",
+    aliases: ["liverpool", "lfc", "reds"]
+  },
+  {
+    id: "barcelona",
+    name: "Barcelona",
+    type: "team",
+    franchise: "La Liga",
+    domain: "sports",
+    aliases: ["barcelona", "barça", "barca", "fc barcelona"]
+  },
+  {
+    id: "real_madrid",
+    name: "Real Madrid",
+    type: "team",
+    franchise: "La Liga",
+    domain: "sports",
+    aliases: ["real madrid", "madrid", "merengues"]
+  },
+  {
+    id: "champions_league",
+    name: "Champions League",
+    type: "event",
+    franchise: "UEFA",
+    domain: "sports",
+    aliases: ["champions league", "liga dos campeoes", "ucl"]
+  },
+  {
+    id: "world_cup",
+    name: "Copa do Mundo",
+    type: "event",
+    franchise: "FIFA",
+    domain: "sports",
+    aliases: ["world cup", "copa do mundo", "mundial"]
   }
 ];
 
@@ -192,7 +295,43 @@ const ACTION_PATTERNS: Array<{
   { id: "chase_escape", label: "Perseguição / fuga", verb: "fugir", pattern: /\b(persegui|chase|fuga|escape|corre)\b/i },
   { id: "transformation", label: "Transformação", verb: "transformar", pattern: /\b(transforma|muta|evolui|power\s*up)\b/i },
   { id: "interview_quote", label: "Declaração / entrevista", verb: "declarar", pattern: /\b(entrevista|declara|disse|fala|quote)\b/i },
-  { id: "tutorial_howto", label: "Explicação / tutorial", verb: "explicar", pattern: /\b(como|tutorial|dica|hack|review|explica)\b/i }
+  { id: "tutorial_howto", label: "Explicação / tutorial", verb: "explicar", pattern: /\b(como|tutorial|dica|hack|review|explica)\b/i },
+  { id: "dribble_skill", label: "Drible / habilidade", verb: "driblar", pattern: /\b(drible|dribble|skill|finta|caneta)\b/i },
+  { id: "assist_pass", label: "Assistência / passe", verb: "assistir", pattern: /\b(assist|assistencia|passe|pass|cross|cruzamento)\b/i },
+  { id: "goalkeeper_save", label: "Defesa do goleiro", verb: "defender", pattern: /\b(defesa|save|goleiro|keeper|parada)\b/i },
+  { id: "knockout_finish", label: "Nocaute / finalização", verb: "nocautear", pattern: /\b(knockout|nocaute|ko|finaliza|finish)\b/i },
+  { id: "celebration", label: "Comemoração", verb: "comemorar", pattern: /\b(comemora|celebration|celebra|danca)\b/i },
+  { id: "emotional_moment", label: "Momento emocional", verb: "emocionar", pattern: /\b(emocion|choro|lágrima|lagrima|tributo|homenagem)\b/i },
+  {
+    id: "perfect_partner",
+    label: "Parceiro ideal / simbiose",
+    verb: "encontrar o par perfeito",
+    pattern: /\b(parceiro\s*perfeito|perfect\s*partner|dupla\s*perfeita|match\s*perfeito)\b/i
+  },
+  {
+    id: "discovery_meet",
+    label: "Encontro / descoberta",
+    verb: "encontrar",
+    pattern: /\b(encontrou|achou|descobriu|found|meet|conheceu|apresentou)\b/i
+  },
+  {
+    id: "symbiosis_bond",
+    label: "Simbiose / vínculo",
+    verb: "se fundir",
+    pattern: /\b(simbiose|simbiote|simbionte|symbiote|bond|vinculo|vínculo|fusion|fusao|fusão)\b/i
+  },
+  {
+    id: "team_up",
+    label: "Dupla / parceria",
+    verb: "formar dupla",
+    pattern: /\b(dupla|parceria|team\s*up|together|juntos|aliado|sidekick)\b/i
+  },
+  {
+    id: "action_scene",
+    label: "Cena de ação",
+    verb: "entrar em ação",
+    pattern: /\b(acao|ação|action|fight|luta|confronto|battle|batalha)\b/i
+  }
 ];
 
 const ROLE_SEQUENCE: RemixSceneRole[] = ["hook", "context", "evidence", "climax", "outro"];
@@ -206,37 +345,131 @@ function normalizeText(value: string) {
     .trim();
 }
 
-function buildCorpus(input: RemixContentIntelligenceInput) {
-  const hint = input.topicHint?.trim().split("|")[0]?.trim();
-  const parts = [input.title, hint].filter(Boolean);
+export interface RemixTitleSemantics {
+  cleanTitle: string;
+  hookPhrase: string | null;
+  subjectPhrase: string | null;
+  hashtags: string[];
+}
+
+function extractHashtags(rawTitle: string): string[] {
+  return [...rawTitle.matchAll(/#([\p{L}\p{N}_]+)/gu)].map((match) => match[1]!.toLowerCase());
+}
+
+function stripTitleDecorations(rawTitle: string): string {
+  return rawTitle
+    .replace(/#[\p{L}\p{N}_]+/gu, " ")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, " ")
+    .replace(/!+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function parseVideoTitleSemantics(rawTitle: string): RemixTitleSemantics {
+  const hashtags = extractHashtags(rawTitle);
+  const cleanTitle = stripTitleDecorations(rawTitle);
+
+  let hookPhrase: string | null = null;
+  let subjectPhrase: string | null = null;
+
+  const partnershipMatch = cleanTitle.match(
+    /(?:o|a)\s+(.+?)\s+(?:encontrou|achou|descobriu|revela|mostra|apresenta)\s+(?:o|a|seu|sua)\s+(.+)/i
+  );
+  if (partnershipMatch) {
+    subjectPhrase = partnershipMatch[1]!.trim();
+    hookPhrase = partnershipMatch[2]!.trim();
+  }
+
+  const invertedMatch = cleanTitle.match(
+    /(.+?)\s+(?:encontrou|achou|descobriu)\s+(?:o|a)\s+(.+)/i
+  );
+  if (!hookPhrase && invertedMatch) {
+    subjectPhrase = invertedMatch[1]!.replace(/^(o|a)\s+/i, "").trim();
+    hookPhrase = invertedMatch[2]!.trim();
+  }
+
+  if (!hookPhrase && cleanTitle.length > 10) {
+    hookPhrase = cleanTitle.replace(/^(o|a|os|as)\s+/i, "").trim();
+  }
+
   return {
-    raw: parts.join(" — "),
-    normalized: normalizeText(parts.join(" "))
+    cleanTitle,
+    hookPhrase,
+    subjectPhrase,
+    hashtags
   };
 }
 
-function detectEntities(corpus: string): RemixDetectedEntity[] {
-  const found: RemixDetectedEntity[] = [];
+function buildCorpus(input: RemixContentIntelligenceInput) {
+  const hint = input.topicHint?.trim().split("|")[0]?.trim();
+  const semantics = parseVideoTitleSemantics(input.title);
+  const hashtagText = semantics.hashtags.join(" ");
+  const parts = [semantics.cleanTitle, hint, hashtagText].filter(Boolean);
+  return {
+    raw: parts.join(" — "),
+    normalized: normalizeText(parts.join(" ")),
+    semantics
+  };
+}
 
-  for (const entry of ENTITY_CATALOG) {
-    const matched = entry.aliases.some((alias) => corpus.includes(normalizeText(alias)));
-    if (!matched) continue;
+function aliasMatchesCorpus(corpus: string, alias: string): boolean {
+  const normalizedAlias = normalizeText(alias);
+  if (normalizedAlias.length < 3) {
+    return false;
+  }
+  if (normalizedAlias.includes(" ")) {
+    return corpus.includes(normalizedAlias);
+  }
+  const pattern = new RegExp(`(?:^|[\\s,.:;!?\\-])${normalizedAlias}(?:$|[\\s,.:;!?\\-])`);
+  return pattern.test(` ${corpus} `);
+}
+
+function detectEntities(
+  corpus: string,
+  rawCorpus: string,
+  hashtags: string[] = [],
+  subjectPhrase: string | null = null
+): RemixDetectedEntity[] {
+  const found: RemixDetectedEntity[] = [];
+  const extendedCorpus = normalizeText(`${corpus} ${hashtags.join(" ")}`);
+  const sortedCatalog = [...ENTITY_CATALOG].sort(
+    (left, right) =>
+      Math.max(...right.aliases.map((alias) => alias.length)) -
+      Math.max(...left.aliases.map((alias) => alias.length))
+  );
+
+  const normalizeTagAlias = (alias: string) => alias.replace(/[\s-]+/g, "").toLowerCase();
+
+  for (const entry of sortedCatalog) {
+    const matchedAlias = entry.aliases.find(
+      (alias) =>
+        aliasMatchesCorpus(extendedCorpus, alias) ||
+        hashtags.some((tag) => tag === normalizeTagAlias(alias))
+    );
+    if (!matchedAlias) continue;
+
+    const fromHashtag = hashtags.some((tag) =>
+      entry.aliases.some(
+        (alias) => tag === normalizeTagAlias(alias) || tag.includes(normalizeTagAlias(alias))
+      )
+    );
 
     found.push({
       id: entry.id,
       name: entry.name,
       type: entry.type,
       ...(entry.franchise ? { franchise: entry.franchise } : {}),
-      confidence: entry.aliases.some((alias) => corpus.includes(normalizeText(alias)) && alias.length > 5)
-        ? "high"
-        : "medium",
+      confidence:
+        fromHashtag || matchedAlias.length > 6 || entry.type === "person" || entry.type === "character"
+          ? "high"
+          : "medium",
       aliases: entry.aliases
     });
   }
 
   if (found.length === 0) {
-    const properNouns = inputProperNouns(corpus);
-    for (const noun of properNouns.slice(0, 2)) {
+    const properNouns = inputProperNouns(rawCorpus);
+    for (const noun of properNouns.slice(0, 3)) {
       found.push({
         id: `entity-${noun.toLowerCase().replace(/\s+/g, "-")}`,
         name: noun,
@@ -251,7 +484,47 @@ function detectEntities(corpus: string): RemixDetectedEntity[] {
   for (const entity of found) {
     unique.set(entity.id, entity);
   }
-  return [...unique.values()];
+
+  const ranked = [...unique.values()].sort((left, right) => {
+    const typeWeight: Record<RemixEntityType, number> = {
+      person: 4,
+      character: 4,
+      team: 3,
+      event: 2,
+      franchise: 2,
+      place: 1
+    };
+    const confidenceWeight = { high: 3, medium: 2, low: 1 };
+    const leftScore = typeWeight[left.type] * confidenceWeight[left.confidence];
+    const rightScore = typeWeight[right.type] * confidenceWeight[right.confidence];
+    return rightScore - leftScore;
+  });
+
+  return prioritizeTitleSubjectEntity(ranked, subjectPhrase);
+}
+
+function prioritizeTitleSubjectEntity(
+  entities: RemixDetectedEntity[],
+  subjectPhrase: string | null
+): RemixDetectedEntity[] {
+  if (!subjectPhrase || entities.length < 2) return entities;
+
+  const normalizedSubject = normalizeText(subjectPhrase);
+  const matchIndex = entities.findIndex(
+    (entity) =>
+      normalizeText(entity.name) === normalizedSubject ||
+      entity.aliases.some(
+        (alias) =>
+          normalizedSubject.includes(normalizeText(alias)) ||
+          normalizeText(alias).includes(normalizedSubject)
+      )
+  );
+
+  if (matchIndex <= 0) return entities;
+
+  const reordered = [...entities];
+  const [match] = reordered.splice(matchIndex, 1);
+  return match ? [match, ...reordered] : entities;
 }
 
 function inputProperNouns(corpus: string) {
@@ -262,7 +535,7 @@ function inputProperNouns(corpus: string) {
     .slice(0, 4);
 }
 
-function detectActions(corpus: string): RemixDetectedAction[] {
+function detectActions(corpus: string, domain: RemixContentDomain): RemixDetectedAction[] {
   const actions: RemixDetectedAction[] = [];
 
   for (const pattern of ACTION_PATTERNS) {
@@ -277,15 +550,181 @@ function detectActions(corpus: string): RemixDetectedAction[] {
   }
 
   if (actions.length === 0) {
-    actions.push({
-      id: "highlight_moment",
-      label: "Momento de destaque",
-      verb: "destacar",
-      confidence: "medium"
-    });
+    const domainFallback: Partial<Record<RemixContentDomain, RemixDetectedAction>> = {
+      sports: {
+        id: "highlight_moment",
+        label: "Lance decisivo",
+        verb: "decidir o lance",
+        confidence: "medium"
+      },
+      gaming: {
+        id: "highlight_moment",
+        label: "Jogada de highlight",
+        verb: "converter a jogada",
+        confidence: "medium"
+      },
+      comics_superhero: {
+        id: "highlight_moment",
+        label: "Cena de ação",
+        verb: "entrar em ação",
+        confidence: "medium"
+      },
+      anime: {
+        id: "highlight_moment",
+        label: "Momento épico",
+        verb: "virar o confronto",
+        confidence: "medium"
+      }
+    };
+    actions.push(
+      domainFallback[domain] ?? {
+        id: "highlight_moment",
+        label: "Momento de destaque",
+        verb: "marcar o instante",
+        confidence: "medium"
+      }
+    );
   }
 
   return actions.slice(0, 4);
+}
+
+function detectSetting(
+  corpus: string,
+  entities: RemixDetectedEntity[],
+  platform: RemixVideoPlatform | "local"
+): string | null {
+  const eventEntity = entities.find((entity) => entity.type === "event");
+  if (eventEntity) {
+    return eventEntity.name;
+  }
+
+  const teamEntities = entities.filter((entity) => entity.type === "team");
+  if (teamEntities.length >= 2) {
+    return `${teamEntities[0]!.name} x ${teamEntities[1]!.name}`;
+  }
+  if (teamEntities.length === 1) {
+    return teamEntities[0]!.name;
+  }
+
+  if (/champions\s*league|liga\s*dos\s*campeoes|ucl/i.test(corpus)) {
+    return "Champions League";
+  }
+  if (/world\s*cup|copa\s*do\s*mundo|mundial/i.test(corpus)) {
+    return "Copa do Mundo";
+  }
+  if (/libertadores/i.test(corpus)) {
+    return "Libertadores";
+  }
+  if (/premier\s*league/i.test(corpus)) {
+    return "Premier League";
+  }
+  if (/brasileir[aã]o/i.test(corpus)) {
+    return "Brasileirão";
+  }
+
+  return platform !== "local" ? platform : null;
+}
+
+function buildNarrativeContent(input: {
+  lead: string;
+  action: string;
+  actionVerb: string;
+  domain: RemixContentDomain;
+  setting: string | null;
+  entities: RemixDetectedEntity[];
+  title: string;
+  titleSemantics: RemixTitleSemantics;
+}): {
+  narrativeBrief: string;
+  narrativeHook: string;
+  curiosityAngle: string;
+} {
+  const settingHint = input.setting ? ` em ${input.setting}` : "";
+  const secondary =
+    input.entities[1]?.type === "team" || input.entities[1]?.type === "event"
+      ? input.entities[1].name
+      : null;
+  const hookPhrase = input.titleSemantics.hookPhrase;
+  const hasPartnershipHook =
+    Boolean(hookPhrase) &&
+    /parceiro|partner|simbiose|simbiote|simbionte|dupla|bond|match/i.test(
+      `${hookPhrase} ${input.titleSemantics.cleanTitle}`
+    );
+
+  if (hasPartnershipHook && input.domain === "comics_superhero") {
+    const partnerLabel = (hookPhrase ?? "o par perfeito").toLowerCase();
+    return {
+      narrativeHook: `${input.lead} encontra ${partnerLabel} — e o short inteiro gira em torno dessa dupla.`,
+      narrativeBrief: `O clipe mostra ${input.lead} encontrando ${partnerLabel}. Não é só ação: é a fantasia da combinação certa — simbiose, química visual e o momento em que os fãs reconhecem a dupla ideal.`,
+      curiosityAngle: `O que torna essa dupla "perfeita" vem dos quadrinhos — e raramente aparece explicado no recorte de 60 segundos.`
+    };
+  }
+
+  if (hookPhrase && hookPhrase.length > 8 && input.titleSemantics.cleanTitle.length > 12) {
+    return {
+      narrativeHook: `Parece só mais um short — mas o gancho é "${hookPhrase}".`,
+      narrativeBrief: `${input.titleSemantics.cleanTitle}. ${input.lead} ${input.actionVerb}${settingHint}${secondary ? ` com ${secondary}` : ""}. O vídeo entrega o momento; a narração precisa explicar por que esse gancho prende.`,
+      curiosityAngle: `O detalhe por trás de "${hookPhrase}" é o que separa quem assiste de quem comenta.`
+    };
+  }
+
+  switch (input.domain) {
+    case "sports":
+      return {
+        narrativeHook: `Esse lance de ${input.lead}${settingHint} parece simples — até você ver o instante anterior.`,
+        narrativeBrief: `${input.lead} protagoniza ${input.action.toLowerCase()}${settingHint}${secondary ? ` contra ${secondary}` : ""}. O vídeo mostra o golpe final, mas o contexto tático é o que transforma o trecho em memória coletiva.`,
+        curiosityAngle: `O detalhe antes de ${input.actionVerb} muda completamente a leitura do lance.`
+      };
+    case "comics_superhero":
+      return {
+        narrativeHook: `Essa cena com ${input.lead} parece só ação — mas ela paga uma dívida visual com os quadrinhos.`,
+        narrativeBrief: `${input.lead} entra em ${input.action.toLowerCase()}${settingHint}. O frame que viraliza costuma copiar composição de painel clássico — luz, enquadramento e timing fazem o short parecer maior do que é.`,
+        curiosityAngle: `A referência de HQ escondida nesse frame é o que separa fã de espectador casual.`
+      };
+    case "gaming":
+      return {
+        narrativeHook: `Esse highlight de ${input.lead} parece reflexo puro — mas é leitura de jogo.`,
+        narrativeBrief: `${input.lead} ${input.actionVerb}${settingHint}. O clipe mostra o resultado bonito; a narrativa precisa explicar a decisão que tornou a jogada possível.`,
+        curiosityAngle: `Frame data e matchup explicam por que essa jogada não foi sorte.`
+      };
+    case "anime":
+      return {
+        narrativeHook: `Esse momento de ${input.lead} prende porque o storyboard antecipa o impacto.`,
+        narrativeBrief: `${input.lead} vive ${input.action.toLowerCase()}${settingHint}. Em anime, o clímax costuma nascer do silêncio antes do golpe — o short precisa recuperar essa tensão.`,
+        curiosityAngle: `O painel ou capítulo que inspirou esse frame raramente aparece no clipe original.`
+      };
+    case "true_crime":
+      return {
+        narrativeHook: `Esse recorte sobre ${input.lead} parece direto — o arquivo conta outra sequência.`,
+        narrativeBrief: `O caso envolvendo ${input.lead}${settingHint} ganha outra dimensão quando datas, locais e depoimentos entram na ordem certa.`,
+        curiosityAngle: `O detalhe investigativo que a internet resume costuma ser o elo que faltava.`
+      };
+    case "horror":
+      return {
+        narrativeHook: `Esse trecho de ${input.lead} assusta mais pelo que esconde do que pelo que mostra.`,
+        narrativeBrief: `${input.title.slice(0, 80)}${settingHint}. Terror eficaz usa espaço negativo e som — o vídeo precisa de contexto para não virar só jump scare.`,
+        curiosityAngle: `O que a câmera recusa mostrar por um segundo a mais é o que fica na memória.`
+      };
+    case "science":
+      return {
+        narrativeHook: `Esse fenômeno parece óbvio — até você ver o mecanismo por trás.`,
+        narrativeBrief: `${input.lead} ilustra ${input.action.toLowerCase()}${settingHint}. Ciência em short funciona quando traduz abstração em imagem mental concreta.`,
+        curiosityAngle: `O princípio contraintuitivo por trás disso é mais surpreendente que o título.`
+      };
+    case "documentary":
+      return {
+        narrativeHook: `Esse arquivo sobre ${input.lead} muda quando você vê como a época percebeu o fato.`,
+        narrativeBrief: `${input.lead}${settingHint}: ${input.action.toLowerCase()} com peso histórico. Documentário premium usa contexto, não só imagem bonita.`,
+        curiosityAngle: `O que ficou fora do corte original costuma ser a camada que dá peso emocional.`
+      };
+    default:
+      return {
+        narrativeHook: `Esse trecho sobre ${input.lead} prende porque antecipa a explicação.`,
+        narrativeBrief: `${input.lead} em ${input.action.toLowerCase()}${settingHint}. O clipe mostra o momento; a narração precisa entregar o porquê.`,
+        curiosityAngle: `A surpresa está no que acontece um segundo antes do que todo mundo compartilha.`
+      };
+  }
 }
 
 function inferDomain(
@@ -374,11 +813,24 @@ function buildVisualSearchQueries(
   domain: RemixContentDomain,
   entities: RemixDetectedEntity[],
   actions: RemixDetectedAction[],
-  title: string
+  title: string,
+  hookPhrase?: string | null
 ): string[] {
   const lead = entities[0]?.name ?? title.slice(0, 60);
   const action = actions[0]?.label ?? "highlight";
   const queries: string[] = [];
+
+  if (hookPhrase && hookPhrase.length > 4) {
+    queries.push(`${lead} ${hookPhrase} comic art`, `${lead} ${hookPhrase} illustration`);
+  }
+
+  for (const entity of entities.slice(1, 3)) {
+    queries.push(
+      `${entity.name} comic art reference`,
+      `${lead} ${entity.name} comic panel`,
+      `${entity.name} ${entities[0]?.franchise ?? "Marvel"} illustration`
+    );
+  }
 
   switch (domain) {
     case "comics_superhero":
@@ -387,6 +839,21 @@ function buildVisualSearchQueries(
         `${lead} official art reference editorial`,
         `${entities[0]?.franchise ?? "Marvel"} ${lead} golden age comics public domain`
       );
+      if (entities[1]) {
+        queries.push(
+          `${lead} ${entities[1].name} marvel comics`,
+          `${entities[1].name} ${lead} symbiote`
+        );
+      }
+      if (/parceiro|partner|simbiose|symbiote/i.test(`${hookPhrase ?? ""} ${action}`)) {
+        queries.push(
+          `${lead} symbiote bond comic panel`,
+          `${entities[0]?.franchise ?? "Marvel"} ${lead} partnership comic art`
+        );
+        if (entities[1]) {
+          queries.push(`${lead} ${entities[1].name} partnership comic art`);
+        }
+      }
       break;
     case "sports":
       queries.push(
@@ -417,7 +884,7 @@ function buildVisualSearchQueries(
       );
   }
 
-  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))].slice(0, 8);
+  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))].slice(0, 12);
 }
 
 function buildComfyPromptFragments(
@@ -482,6 +949,9 @@ function buildSceneInsights(input: {
   entities: RemixDetectedEntity[];
   actions: RemixDetectedAction[];
   domain: RemixContentDomain;
+  setting: string | null;
+  narrativeHook: string;
+  curiosityAngle: string;
 }): RemixStructuredSceneInsight[] {
   const sceneCount = Math.min(
     ROLE_SEQUENCE.length,
@@ -489,16 +959,26 @@ function buildSceneInsights(input: {
   );
   const lead = input.entities[0]?.name ?? "o assunto";
   const action = input.actions[0]?.label ?? "momento de destaque";
+  const actionVerb = input.actions[0]?.verb ?? "acontecer";
+  const settingHint = input.setting ? ` em ${input.setting}` : "";
   const durationStep = input.outputDurationSeconds / sceneCount;
   let cursor = 0;
 
   const roleAngles: Record<RemixSceneRole, string> = {
-    hook: `Gancho imediato com ${lead} — antecipar ${action.toLowerCase()}.`,
-    context: `Contexto editorial: por que ${lead} importa neste recorte.`,
-    evidence: `Prova visual: detalhe que sustenta a leitura de ${action.toLowerCase()}.`,
-    tension: `Tensão narrativa antes do pico com ${lead}.`,
-    climax: `Clímax: ${action} com curiosidade sobre ${lead}.`,
-    outro: `Fechamento com CTA curto ligado a ${lead}.`
+    hook: input.narrativeHook,
+    context:
+      input.domain === "sports"
+        ? `Para entender ${action.toLowerCase()} de ${lead}${settingHint}, olhe pressão, marcação e ritmo da partida.`
+        : input.domain === "gaming"
+          ? `Antes de ${actionVerb}, ${lead} já leu o padrão do oponente — o highlight esconde essa decisão.`
+          : `O recorte de ${lead} só ganha peso quando você conecta o instante ao que veio antes.`,
+    evidence:
+      input.domain === "comics_superhero"
+        ? `O frame remete a painel clássico — composição e luz antecipam ${action.toLowerCase()}.`
+        : `O detalhe visual que sustenta ${action.toLowerCase()} aparece nos segundos que o corte original ignora.`,
+    tension: `A tensão sobe quando ${lead} se aproxima do pico — o espectador precisa sentir que algo vai virar.`,
+    climax: input.curiosityAngle,
+    outro: `Fechamento curto: convide o espectador a comentar o que mais surpreendeu em ${lead}.`
   };
 
   const roleVisuals: Record<RemixSceneRole, string> = {
@@ -540,26 +1020,47 @@ export function buildRemixContentIntelligence(
 ): RemixStructuredContentDescription {
   const corpus = buildCorpus(input);
   const topicCase = detectTopicCase(corpus.raw);
-  const entities = detectEntities(corpus.normalized);
-  const actions = detectActions(corpus.normalized);
+  const entities = detectEntities(
+    corpus.normalized,
+    corpus.raw,
+    corpus.semantics.hashtags,
+    corpus.semantics.subjectPhrase
+  );
   const domain = inferDomain(corpus.normalized, entities, topicCase);
+  const actions = detectActions(corpus.normalized, domain);
   const mood = buildMood(domain);
-  const lead = entities[0]?.name ?? input.title;
+  const lead = entities[0]?.name ?? corpus.semantics.subjectPhrase ?? corpus.semantics.cleanTitle;
   const action = actions[0]?.label ?? "momento editorial";
+  const actionVerb = actions[0]?.verb ?? "acontecer";
+  const setting = detectSetting(corpus.normalized, entities, input.platform);
+  const narrativeContent = buildNarrativeContent({
+    lead,
+    action,
+    actionVerb,
+    domain,
+    setting,
+    entities,
+    title: corpus.semantics.cleanTitle,
+    titleSemantics: corpus.semantics
+  });
 
   const sceneInsights = buildSceneInsights({
     outputDurationSeconds: input.outputDurationSeconds,
     intensity: input.intensity ?? "extreme",
     entities,
     actions,
-    domain
+    domain,
+    setting,
+    narrativeHook: narrativeContent.narrativeHook,
+    curiosityAngle: narrativeContent.curiosityAngle
   });
 
   const visualSearchQueries = buildVisualSearchQueries(
     domain,
     entities,
     actions,
-    input.title
+    corpus.semantics.cleanTitle,
+    corpus.semantics.hookPhrase
   );
   const comfyPromptFragments = buildComfyPromptFragments(domain, entities, actions, mood);
 
@@ -581,16 +1082,19 @@ export function buildRemixContentIntelligence(
   return {
     headline,
     summary,
+    narrativeBrief: narrativeContent.narrativeBrief,
+    narrativeHook: narrativeContent.narrativeHook,
+    curiosityAngle: narrativeContent.curiosityAngle,
     domain,
     entities,
     actions,
-    setting: topicCase?.location ?? (input.platform !== "local" ? input.platform : null),
+    setting: topicCase?.location ?? setting,
     mood,
     differentiationGoals: buildDifferentiationGoals(domain, entities),
     sceneInsights,
     visualSearchQueries,
     comfyPromptFragments,
-    analysisVersion: "phase2-v1"
+    analysisVersion: "phase2-v2"
   };
 }
 
@@ -602,8 +1106,12 @@ export function enrichCandidateWithContentIntelligence(
     ...metadata,
     remixContentDomain: intelligence.domain,
     remixContentHeadline: intelligence.headline,
+    remixNarrativeBrief: intelligence.narrativeBrief,
+    remixNarrativeHook: intelligence.narrativeHook,
+    remixCuriosityAngle: intelligence.curiosityAngle,
     remixEntities: intelligence.entities.map((entity) => entity.name).join(", "),
     remixPrimaryAction: intelligence.actions[0]?.label ?? null,
+    remixSetting: intelligence.setting,
     remixComfyPromptFragments: intelligence.comfyPromptFragments.join(" | "),
     remixVisualSearchQueries: intelligence.visualSearchQueries.join(" | ")
   };

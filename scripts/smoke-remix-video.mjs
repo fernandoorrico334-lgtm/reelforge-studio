@@ -74,6 +74,10 @@ async function main() {
     throw new Error("Expected Phase 2 content intelligence.");
   }
 
+  if (!plan.videoAnalysis.researchDossier?.rankedCuriosities?.length) {
+    throw new Error("Expected Research Collector dossier with ranked curiosities.");
+  }
+
   if (!plan.assetDiscovery.comfyui.contextualPrompts?.length) {
     throw new Error("Expected ComfyUI contextual prompts.");
   }

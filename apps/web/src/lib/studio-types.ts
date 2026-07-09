@@ -3290,6 +3290,7 @@ export interface OneClickProductionPayload {
   planApproved?: boolean;
   rightsConfirmed?: boolean;
   approvedRemixAssetIds?: string[];
+  beastProductionPlan?: Record<string, unknown> | null;
 }
 
 export interface OneClickBeastPlanSummary {
@@ -3453,9 +3454,42 @@ export interface VideoRemixPlanResponse {
     }>;
     narrativeArc: string[];
     analysisNotes: string[];
+    researchDossier?: {
+      dossierId: string;
+      cacheKey: string;
+      cacheHit: boolean;
+      researchMode: "automatic" | "deep";
+      topic: string;
+      entities: string[];
+      rankedCuriosities: Array<{
+        id: string;
+        text: string;
+        source: string;
+        confidence: "high" | "medium" | "low";
+        scores: {
+          relevance: number;
+          surprise: number;
+          narrative: number;
+          total: number;
+        };
+        suggestedBeat: "hook" | "context" | "tension" | "climax" | "cta";
+        tags: string[];
+        entityId?: string;
+        entityName?: string;
+      }>;
+      selectedCuriosityIds: string[];
+      autoInjectedCuriosityIds: string[];
+      narrativeBrief: string;
+      researchNotes: string[];
+      sourceCount: number;
+      createdAt: string;
+    } | null;
     contentIntelligence: {
       headline: string;
       summary: string;
+      narrativeBrief?: string;
+      narrativeHook?: string;
+      curiosityAngle?: string;
       domain: string;
       entities: Array<{
         id: string;
@@ -3478,6 +3512,14 @@ export interface VideoRemixPlanResponse {
   };
   assetDiscovery: {
     enabled: boolean;
+    discoveryProfile?: {
+      domain: string;
+      domainLabel: string;
+      niche?: string;
+      strategyId: string;
+      providerIds: string[];
+      queryCount: number;
+    };
     imageSearch: {
       providerIds: string[];
       queries: string[];
@@ -3493,10 +3535,14 @@ export interface VideoRemixPlanResponse {
         query: string;
         score: number;
         qualityScore?: number;
+        relevanceScore?: number;
+        combinedScore?: number;
         recommended?: boolean;
         defaultSelected?: boolean;
         importReady?: boolean;
+        previewAvailable?: boolean;
         purpose: string;
+        suggestedSceneRole?: string;
         licenseStatus?: string;
         riskLevel?: string;
         providerTier?: string;

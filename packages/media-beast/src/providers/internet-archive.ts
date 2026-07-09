@@ -1,6 +1,6 @@
+import { searchInternetArchiveImages, simplifyAssetQuery } from "./asset-api-clients.js";
 import {
   buildArchiveOrgSearchUrl,
-  buildGoogleSearchUrl,
   buildKeywordBase,
   buildSubstantiveQuery,
   createDiscoveryCandidate,
@@ -18,16 +18,6 @@ function buildArchivePlans(input: MediaBeastSearchQuery): DiscoveryQueryPlan[] {
 
   return [
     {
-      label: "Archive film and video items",
-      query: `${quoteArchiveQuery(base)} AND mediatype:movies`,
-      lens: "past",
-      intent: "archive_film",
-      score: 64,
-      kind: "video",
-      licenseStatus: "unknown",
-      extraMetadata: { mediatype: "movies", archiveSurface: "search" }
-    },
-    {
       label: "Historical image collections",
       query: `${quoteArchiveQuery(base)} AND mediatype:image`,
       lens: "past",
@@ -37,38 +27,11 @@ function buildArchivePlans(input: MediaBeastSearchQuery): DiscoveryQueryPlan[] {
       extraMetadata: { mediatype: "image", archiveSurface: "search" }
     },
     {
-      label: "Document and text scans",
-      query: `${quoteArchiveQuery(base)} AND mediatype:texts`,
-      lens: "past",
-      intent: "archive_text",
-      score: 60,
-      kind: "document",
-      extraMetadata: { mediatype: "texts", archiveSurface: "search" }
-    },
-    {
-      label: "Audio and radio archive",
-      query: `${quoteArchiveQuery(base)} AND mediatype:audio`,
-      lens: "past",
-      intent: "archive_audio",
-      score: 58,
-      kind: "audio",
-      extraMetadata: { mediatype: "audio", archiveSurface: "search" }
-    },
-    {
-      label: "Public domain collection",
-      query: `${quoteArchiveQuery(base)} collection "public domain"`,
-      lens: "past",
-      intent: "public_domain_collection",
-      score: 57,
-      licenseStatus: "public_domain",
-      extraMetadata: { mediatype: "movies", archiveSurface: "search" }
-    },
-    {
       label: "Deep item discovery via Google",
       query: buildSubstantiveQuery({
         phrase: base,
         site: "archive.org/details",
-        angle: "documentary footage scan",
+        angle: "documentary photograph scan",
         niche: input.niche,
         temporal: "past"
       }),
@@ -76,15 +39,6 @@ function buildArchivePlans(input: MediaBeastSearchQuery): DiscoveryQueryPlan[] {
       intent: "archive_item_page",
       score: 66,
       extraMetadata: { substantiveUrl: true, archiveSurface: "details" }
-    },
-    {
-      label: "News and TV archive",
-      query: `${quoteArchiveQuery(base)} AND mediatype:movies AND collection:news`,
-      lens: "past",
-      intent: "news_archive",
-      score: 56,
-      kind: "video",
-      extraMetadata: { mediatype: "movies", archiveSurface: "search" }
     }
   ];
 }
@@ -96,7 +50,7 @@ function quoteArchiveQuery(text: string): string {
 
 function buildArchiveSourceUrl(plan: DiscoveryQueryPlan): string {
   if (plan.extraMetadata?.archiveSurface === "details") {
-    return buildGoogleSearchUrl(plan.query);
+    return `https://archive.org/search?query=${encodeURIComponent(plan.query)}`;
   }
 
   const mediatype =
@@ -112,7 +66,7 @@ export const internetArchiveProvider: MediaBeastProvider = {
     id: "internet-archive",
     name: "Internet Archive Candidate Search",
     description:
-      "Candidate-first planner for archive materials with mediatype filters and deep /details item discovery.",
+      "Real archive image items via Internet Archive API with direct thumbnails.",
     enabled: true,
     capabilities: {
       supportsImages: true,
@@ -122,7 +76,7 @@ export const internetArchiveProvider: MediaBeastProvider = {
       supportsDateFilters: true,
       supportsLicenseMetadata: true,
       discoveryOnly: false,
-      importSupported: false,
+      importSupported: true,
       requiresApiKey: false,
       setupInstructions:
         "Review item pages, collection terms and file metadata manually before importing local copies."
@@ -137,7 +91,15 @@ export const internetArchiveProvider: MediaBeastProvider = {
     return limitQueryPlans(buildArchivePlans(input)).map((plan) => plan.query);
   },
   async searchCandidates(input: MediaBeastSearchQuery) {
-    return mapQueryPlansToCandidates(
+    const maxCandidates = input.maxCandidates ?? 6;
+    const base = simplifyAssetQuery(buildKeywordBase(input), 4);
+    const apiCandidates = base.length > 2 ? await searchInternetArchiveImages(base, maxCandidates) : [];
+
+    if (apiCandidates.length >= Math.min(2, maxCandidates)) {
+      return apiCandidates.slice(0, maxCandidates);
+    }
+
+    const fallback = mapQueryPlansToCandidates(
       "internet-archive",
       buildArchivePlans(input),
       (plan) =>
@@ -146,28 +108,26 @@ export const internetArchiveProvider: MediaBeastProvider = {
           plan,
           title: `Internet Archive ${plan.lens}: ${plan.label}`,
           sourceUrl: buildArchiveSourceUrl(plan),
-          reasons: [
-            `Query com filtro mediatype para conteudo arquivado real (${plan.intent}).`,
-            "Colecoes do Archive costumam ter titulo, descricao e metadados de licenca.",
-            plan.intent === "archive_item_page"
-              ? "Busca site:archive.org/details para paginas de item em vez de indice vazio."
-              : "Busca no Archive com operadores AND mediatype para reduzir ruido."
-          ],
+          reasons: ["Fallback search surface — prefer API results when available."],
           warnings: [
-            "Manual license review required before download/import.",
-            "Do not assume public accessibility equals public-domain reuse.",
-            "Paginas /search listam itens — abra o item /details antes de importar."
+            "Search surface only — no direct image URL.",
+            "Manual license review required before download/import."
           ],
           metadata: {
             sourcePackHint: input.niche,
-            substantiveQuery: true,
-            mediatype:
-              typeof plan.extraMetadata?.mediatype === "string"
-                ? plan.extraMetadata.mediatype
-                : null
+            searchSurface: true,
+            substantiveQuery: false
           }
         }),
-      input.maxCandidates ?? 6
-    );
+      Math.max(1, maxCandidates - apiCandidates.length)
+    ).map((candidate) => ({
+      ...candidate,
+      score: Math.max(8, candidate.score - 40),
+      previewUrl: null
+    }));
+
+    return [...apiCandidates, ...fallback]
+      .sort((left, right) => right.score - left.score)
+      .slice(0, maxCandidates);
   }
 };

@@ -1,3 +1,4 @@
+import { isDirectImageUrl } from "../providers/asset-api-clients.js";
 import type { MediaBeastCandidate } from "../providers/types.js";
 
 export type ContentSignalType =
@@ -300,11 +301,25 @@ export function scoreCandidateWithSignals(
   queryTerms: string[]
 ): number {
   let adjusted = candidate.score;
+  const previewUrl = candidate.previewUrl;
+  const hasDirectPreview =
+    Boolean(previewUrl) &&
+    (isDirectImageUrl(previewUrl!) ||
+      candidate.metadata.directImage === true ||
+      candidate.metadata.searchSurface === false);
+
+  if (hasDirectPreview) {
+    adjusted += 28;
+  }
 
   if (signals.searchSurface) {
-    adjusted -= 34;
+    adjusted -= 52;
   } else {
     adjusted += Math.round((signals.substantiveScore - 40) * 0.35);
+  }
+
+  if (!candidate.previewUrl && signals.searchSurface) {
+    adjusted -= 24;
   }
 
   const combinedText = `${signals.pageTitle ?? ""} ${signals.pageDescription ?? ""} ${candidate.title}`;
@@ -442,14 +457,61 @@ export async function enrichAndScoreCandidates(
   });
 
   const sorted = enriched.sort((left, right) => right.score - left.score);
-  let filtered = sorted;
+  const isDirectAsset = (candidate: MediaBeastCandidate) =>
+    Boolean(candidate.previewUrl) &&
+    candidate.metadata.searchSurface !== true &&
+    !isSearchSurfaceUrl(candidate.sourceUrl) &&
+    (candidate.metadata.directImage === true ||
+      isDirectImageUrl(candidate.previewUrl ?? "") ||
+      String(candidate.previewUrl).includes("wikimedia.org") ||
+      String(candidate.previewUrl).includes("openverse.org"));
+
+  const withDirectImages = sorted.filter(isDirectAsset);
+  const withoutSearchSurfaces = sorted.filter(
+    (candidate) =>
+      candidate.metadata.searchSurface !== true && !isSearchSurfaceUrl(candidate.sourceUrl)
+  );
+
+  const passesScoreGate = (candidate: MediaBeastCandidate) =>
+    candidate.metadata.directImage === true
+      ? candidate.score >= Math.min(minScore, 14)
+      : candidate.score >= minScore;
+
+  let filtered =
+    withDirectImages.length >= 8
+      ? withDirectImages
+      : withDirectImages.length >= 3
+        ? withDirectImages
+        : withoutSearchSurfaces.length >= 3
+          ? withoutSearchSurfaces
+          : sorted;
 
   if (minScore > 0) {
-    filtered = sorted.filter((candidate) => candidate.score >= minScore);
-    const minimumKeep = Math.min(5, Math.ceil(candidates.length * 0.45));
-    if (filtered.length < minimumKeep) {
-      filtered = sorted.slice(0, minimumKeep);
+    const scoreFiltered = filtered.filter(passesScoreGate);
+    const minimumAcceptable = Math.min(8, Math.max(3, withDirectImages.length));
+    if (scoreFiltered.length >= minimumAcceptable) {
+      filtered = scoreFiltered;
     }
+  }
+
+  const targetPool = Math.min(16, Math.max(8, withDirectImages.length || 8));
+  const minimumKeep = Math.min(targetPool, Math.max(8, withDirectImages.length));
+  if (withDirectImages.length >= 8) {
+    filtered = withDirectImages.filter(passesScoreGate).slice(0, 12);
+  } else if (filtered.length < minimumKeep) {
+    filtered = [
+      ...withDirectImages.filter(passesScoreGate),
+      ...sorted
+        .filter(
+          (candidate) =>
+            candidate.metadata.searchSurface !== true && !isDirectAsset(candidate)
+        )
+        .filter(passesScoreGate)
+    ]
+      .slice(0, minimumKeep);
+  }
+  if (filtered.length === 0) {
+    filtered = sorted.slice(0, Math.min(8, minimumKeep));
   }
 
   const dropped = enriched.length - filtered.length;

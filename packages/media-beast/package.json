@@ -19,7 +19,8 @@
     "@reelforge/audio-engine": "file:../audio-engine",
     "@reelforge/caption-engine": "file:../caption-engine",
     "@reelforge/cinematic-engine": "file:../cinematic-engine",
-    "@reelforge/narration-engine": "file:../narration-engine"
+    "@reelforge/narration-engine": "file:../narration-engine",
+    "@reelforge/research-collector": "file:../research-collector"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

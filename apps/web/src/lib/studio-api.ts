@@ -2570,8 +2570,32 @@ export async function runRemixVideoRequest(payload: {
   enableAssetDiscovery?: boolean;
   executeAssetDiscovery?: boolean;
   variationCount?: number;
+  enableResearch?: boolean;
+  deepResearch?: boolean;
+  selectedCuriosityIds?: string[];
 }) {
   return requestJson<VideoRemixPlanResponse>("/media-beast/remix-video", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function runRemixDeepResearchRequest(payload: {
+  videoAnalysis: VideoRemixPlanResponse["videoAnalysis"];
+  deepResearch?: boolean;
+  rebuildNarration?: boolean;
+  selectedCuriosityIds?: string[];
+  targetStyle?: string;
+  channelDNA?: Record<string, unknown>;
+  maxDurationSeconds?: number;
+  language?: string;
+}) {
+  return requestJson<{
+    researchDossier: NonNullable<VideoRemixPlanResponse["videoAnalysis"]["researchDossier"]>;
+    narrationPlan: VideoRemixPlanResponse["narrationPlan"];
+    candidateFirst: boolean;
+    note: string;
+  }>("/media-beast/remix-video/research", {
     method: "POST",
     body: JSON.stringify(payload)
   });

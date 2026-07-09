@@ -1,8 +1,24 @@
 import { enrichAndScoreCandidates, isSearchSurfaceUrl } from "../discovery/candidate-enrichment.js";
+import {
+  isDirectImageUrl,
+  searchDirectAssetBundle,
+  simplifyAssetQuery
+} from "../providers/asset-api-clients.js";
 import { listMediaBeastProviders } from "../providers/index.js";
 import type { MediaBeastCandidate, MediaBeastNiche, MediaBeastProviderId } from "../providers/types.js";
 import type { VideoRemixAnalysis } from "./remix-video-analyzer.js";
 import type { BeastComfyVariation } from "./visual-transformer.js";
+import {
+  buildEntityAwareAssetQueries,
+  buildStrategyAssetQueries,
+  resolvePurposeForCandidate,
+  resolveRemixAssetDiscoveryStrategy,
+  scoreAssetDomainRelevance,
+  suggestSceneRoleForPurpose,
+  type RemixAssetPurpose
+} from "./remix-asset-discovery-strategies.js";
+
+export type { RemixAssetPurpose };
 
 export interface RemixAssetSearchCandidate {
   candidateId: string;
@@ -13,10 +29,14 @@ export interface RemixAssetSearchCandidate {
   query: string;
   score: number;
   qualityScore: number;
+  relevanceScore: number;
+  combinedScore: number;
   recommended: boolean;
   defaultSelected: boolean;
   importReady: boolean;
-  purpose: "archive_reference" | "comic_panel" | "sports_photo" | "broll_mood" | "differentiation";
+  previewAvailable: boolean;
+  purpose: RemixAssetPurpose;
+  suggestedSceneRole: string;
   licenseStatus: string;
   riskLevel: string;
   providerTier: "premium_archive" | "editorial_photo" | "comic_reference" | "generic_lead";
@@ -41,9 +61,19 @@ export interface RemixComfyContextualPrompt {
   styleTokens: string[];
 }
 
+export interface RemixAssetDiscoveryProfile {
+  domain: string;
+  domainLabel: string;
+  niche?: MediaBeastNiche;
+  strategyId: string;
+  providerIds: MediaBeastProviderId[];
+  queryCount: number;
+}
+
 export interface RemixAssetDiscoveryPlan {
   enabled: true;
   candidateFirst: true;
+  discoveryProfile: RemixAssetDiscoveryProfile;
   imageSearch: {
     providerIds: Array<"google-images" | "internet-archive" | "flickr" | "comics-archive" | "sports-archive" | "generic-web">;
     queries: string[];
@@ -77,22 +107,16 @@ export interface RemixAssetDiscoveryPlan {
   integrationNotes: string[];
 }
 
-const PROVIDER_QUALITY_WEIGHT: Record<string, number> = {
-  "internet-archive": 18,
-  flickr: 16,
-  "comics-archive": 15,
-  "sports-archive": 14,
-  "google-images": 8,
-  "generic-web": 6
-};
-
 const PROVIDER_TIER: Record<string, RemixAssetSearchCandidate["providerTier"]> = {
   "internet-archive": "premium_archive",
   flickr: "editorial_photo",
   "comics-archive": "comic_reference",
   "sports-archive": "editorial_photo",
   "google-images": "generic_lead",
-  "generic-web": "generic_lead"
+  "generic-web": "generic_lead",
+  pinterest: "editorial_photo",
+  reddit: "generic_lead",
+  "old-forums": "premium_archive"
 };
 
 function sanitizeTitle(title: string): string {
@@ -103,128 +127,106 @@ function sanitizeTitle(title: string): string {
     .slice(0, 80);
 }
 
-function resolveProviderIds(
-  domain: string,
-  enableImageSearch: boolean
-): RemixAssetDiscoveryPlan["imageSearch"]["providerIds"] {
-  if (!enableImageSearch) {
-    return [];
-  }
-
-  switch (domain) {
-    case "comics_superhero":
-      return ["comics-archive", "internet-archive", "flickr", "google-images"];
-    case "sports":
-      return ["sports-archive", "internet-archive", "flickr", "google-images"];
-    case "gaming":
-    case "anime":
-      return ["internet-archive", "flickr", "google-images", "generic-web"];
-    case "true_crime":
-    case "documentary":
-      return ["internet-archive", "flickr", "google-images", "generic-web"];
-    default:
-      return ["internet-archive", "flickr", "google-images"];
-  }
-}
-
-function buildPrioritizedQueries(analysis: VideoRemixAnalysis): string[] {
-  const intelligence = analysis.contentIntelligence;
-  const lead = intelligence.entities[0]?.name ?? sanitizeTitle(analysis.title);
-  const franchise = intelligence.entities[0]?.franchise ?? null;
-  const action = intelligence.actions[0]?.label ?? "highlight";
-  const domain = intelligence.domain;
-
-  const domainQueries: string[] = [];
-
-  switch (domain) {
-    case "comics_superhero":
-      domainQueries.push(
-        `${lead} comic book panel high resolution`,
-        `${franchise ?? lead} official art reference`,
-        `${lead} golden age comics archive scan`,
-        `${lead} comic halftone poster editorial`
-      );
-      break;
-    case "sports":
-      domainQueries.push(
-        `${lead} match action sports photography`,
-        `${lead} stadium editorial archive photo`,
-        `${lead} ${action} press photo`,
-        `${lead} sports documentary b-roll`
-      );
-      break;
-    case "anime":
-      domainQueries.push(
-        `${lead} anime key visual reference`,
-        `${lead} manga panel composition`,
-        `${lead} anime action frame study`
-      );
-      break;
-    case "gaming":
-      domainQueries.push(
-        `${lead} game character concept art`,
-        `${lead} fighting game arcade poster`,
-        `${lead} esports highlight still`
-      );
-      break;
-    default:
-      domainQueries.push(
-        `${lead} editorial archive photograph`,
-        `${lead} documentary reference still`,
-        `${lead} news photo high quality`
-      );
-  }
-
-  const queries = [
-    ...intelligence.visualSearchQueries,
-    ...domainQueries,
-    ...analysis.contextKeywords.map((keyword) => `${keyword} archive photo HQ`),
-    `${lead} remix vertical b-roll reference`
-  ]
-    .map((query) => query.trim())
-    .filter(Boolean);
-
-  return [...new Set(queries)].slice(0, 10);
-}
-
-function mapCandidatePurpose(
-  domain: string,
-  providerId: string
-): RemixAssetSearchCandidate["purpose"] {
-  if (providerId === "comics-archive") return "comic_panel";
-  if (providerId === "sports-archive") return "sports_photo";
-  if (domain === "documentary" || domain === "true_crime") return "archive_reference";
-  return "differentiation";
-}
-
-function computeQualityScore(candidate: MediaBeastCandidate, purpose: RemixAssetSearchCandidate["purpose"]) {
+function computeQualityScore(
+  candidate: MediaBeastCandidate,
+  purpose: RemixAssetPurpose,
+  strategyWeights: Partial<Record<MediaBeastProviderId, number>>
+) {
   let score = candidate.score;
-  score += PROVIDER_QUALITY_WEIGHT[candidate.providerId] ?? 0;
+  score += strategyWeights[candidate.providerId] ?? 6;
 
-  if (candidate.previewUrl) score += 12;
+  if (candidate.previewUrl && isDirectImageUrl(candidate.previewUrl)) score += 28;
+  else if (candidate.previewUrl) score += 10;
   if (!isSearchSurfaceUrl(candidate.sourceUrl)) score += 8;
+  if (isSearchSurfaceUrl(candidate.sourceUrl)) score -= 45;
+  if (candidate.metadata.searchSurface === true) score -= 35;
   if (candidate.licenseStatus === "public_domain" || candidate.licenseStatus === "creative_commons") {
     score += 10;
   }
   if (candidate.riskLevel === "low") score += 6;
   if (candidate.riskLevel === "high") score -= 8;
-  if (purpose === "comic_panel" || purpose === "archive_reference") score += 4;
+  if (purpose === "comic_panel" || purpose === "archive_reference" || purpose === "documentary_still") {
+    score += 4;
+  }
 
   return Math.max(0, Math.round(score));
 }
 
+function applyDefaultAssetSelection(ranked: RemixAssetSearchCandidate[]): void {
+  const previewPool = ranked.filter((candidate) => candidate.previewAvailable);
+  const defaultCount = previewPool.length >= 8 ? 4 : Math.min(4, ranked.length);
+
+  for (const item of ranked) {
+    item.defaultSelected = false;
+  }
+
+  for (let index = 0; index < defaultCount; index += 1) {
+    const item = previewPool[index] ?? ranked[index];
+    if (item) {
+      item.defaultSelected = true;
+      item.recommended = true;
+    }
+  }
+}
+
+function selectTopAssetCandidates(
+  ranked: RemixAssetSearchCandidate[],
+  minTarget = 8,
+  maxTarget = 12
+): RemixAssetSearchCandidate[] {
+  const withPreview = ranked.filter((candidate) => candidate.previewAvailable);
+  const substantive = ranked.filter(
+    (candidate) => candidate.importReady && !isSearchSurfaceUrl(candidate.sourceUrl)
+  );
+  const pool =
+    withPreview.length >= minTarget
+      ? withPreview
+      : substantive.length >= 3
+        ? substantive
+        : ranked;
+  return pool.slice(0, maxTarget);
+}
+
 export function rankRemixAssetCandidates(
   candidates: MediaBeastCandidate[],
-  analysis: VideoRemixAnalysis
+  analysis: VideoRemixAnalysis,
+  options?: {
+    niche?: MediaBeastNiche;
+    queryPurposeByText?: Map<string, RemixAssetPurpose>;
+  }
 ): RemixAssetSearchCandidate[] {
-  const domain = analysis.contentIntelligence.domain;
+  const intelligence = analysis.contentIntelligence;
+  const strategy = resolveRemixAssetDiscoveryStrategy({
+    domain: intelligence.domain,
+    ...(options?.niche ? { niche: options.niche } : {})
+  });
+  const queryPurposeByText = options?.queryPurposeByText ?? new Map();
 
   const ranked: RemixAssetSearchCandidate[] = candidates
-    .map((candidate) => {
-      const purpose = mapCandidatePurpose(domain, candidate.providerId);
-      const qualityScore = computeQualityScore(candidate, purpose);
+    .map((candidate, index) => {
+      const query = String(candidate.metadata?.query ?? candidate.title);
+      const purpose = resolvePurposeForCandidate(
+        strategy,
+        candidate.providerId,
+        queryPurposeByText.get(query.toLowerCase())
+      );
+      const qualityScore = computeQualityScore(candidate, purpose, strategy.providerWeights);
+      const relevanceScore = scoreAssetDomainRelevance({
+        title: candidate.title,
+        query,
+        providerId: candidate.providerId,
+        analysis,
+        strategy,
+        purpose
+      });
+      const combinedScore = Math.round(qualityScore * 0.55 + relevanceScore * 0.45);
+      const previewAvailable = Boolean(
+        candidate.previewUrl &&
+          (isDirectImageUrl(candidate.previewUrl) || candidate.metadata.directImage === true)
+      );
       const importReady = Boolean(
-        candidate.previewUrl || !isSearchSurfaceUrl(candidate.sourceUrl)
+        previewAvailable ||
+          (candidate.previewUrl && !isSearchSurfaceUrl(candidate.sourceUrl))
       );
 
       return {
@@ -233,47 +235,35 @@ export function rankRemixAssetCandidates(
         title: candidate.title,
         sourceUrl: candidate.sourceUrl,
         previewUrl: candidate.previewUrl,
-        query: String(candidate.metadata?.query ?? candidate.title),
+        query,
         score: candidate.score,
         qualityScore,
-        recommended: qualityScore >= 70,
+        relevanceScore,
+        combinedScore,
+        recommended: combinedScore >= 68 && previewAvailable,
         defaultSelected: false,
         importReady,
+        previewAvailable,
         purpose,
+        suggestedSceneRole: suggestSceneRoleForPurpose(strategy, purpose, index),
         licenseStatus: candidate.licenseStatus,
         riskLevel: candidate.riskLevel,
         providerTier: PROVIDER_TIER[candidate.providerId] ?? "generic_lead"
       };
     })
-    .sort((left, right) => right.qualityScore - left.qualityScore);
+    .sort((left, right) => right.combinedScore - left.combinedScore);
 
-  const defaultCount = Math.min(3, ranked.length);
-  for (let index = 0; index < defaultCount; index += 1) {
-    const item = ranked[index];
-    if (item) {
-      item.defaultSelected = true;
-      item.recommended = true;
-    }
-  }
+  applyDefaultAssetSelection(ranked);
 
   return ranked;
 }
 
-function buildStyleTokens(domain: string, franchise: string | null): string[] {
-  switch (domain) {
-    case "comics_superhero":
-      return ["comic halftone", "cinematic poster", franchise ?? "superhero", "vertical 9:16"];
-    case "sports":
-      return ["sports photography", "stadium energy", "dynamic action", "broadcast grade"];
-    case "anime":
-      return ["anime key visual", "cel shading", "speed lines", "dramatic lighting"];
-    case "gaming":
-      return ["arcade neon", "character pose", "HUD accents", "competitive mood"];
-    case "true_crime":
-      return ["noir documentary", "archive texture", "investigative mood"];
-    default:
-      return ["editorial documentary", "premium lens", "vertical short-form"];
-  }
+function buildStyleTokens(domain: VideoRemixAnalysis["contentIntelligence"]["domain"], franchise: string | null): string[] {
+  const strategy = resolveRemixAssetDiscoveryStrategy({ domain });
+  return strategy.visualKeywords.slice(0, 4).concat(
+    franchise ? [franchise] : [],
+    ["vertical 9:16", "premium editorial"]
+  );
 }
 
 function buildComfyContextualPrompts(
@@ -322,20 +312,35 @@ export function buildRemixAssetDiscoveryPlan(input: {
   analysis: VideoRemixAnalysis;
   comfyVariations: BeastComfyVariation[];
   enableImageSearch?: boolean;
+  niche?: MediaBeastNiche;
   discoveredCandidates?: MediaBeastCandidate[];
   importedAssets?: RemixImportedAssetBinding[];
 }): RemixAssetDiscoveryPlan {
   const intelligence = input.analysis.contentIntelligence;
-  const uniqueQueries = buildPrioritizedQueries(input.analysis);
-  const providerIds = resolveProviderIds(
-    intelligence.domain,
-    input.enableImageSearch !== false
+  const strategy = resolveRemixAssetDiscoveryStrategy({
+    domain: intelligence.domain,
+    ...(input.niche ? { niche: input.niche } : {})
+  });
+  const strategyQueries = buildStrategyAssetQueries(input.analysis, strategy, 14);
+  const uniqueQueries = strategyQueries.map((entry) => entry.query);
+  const queryPurposeByText = new Map(
+    strategyQueries.map((entry) => [entry.query.toLowerCase(), entry.purpose])
   );
 
-  const searchCandidates = rankRemixAssetCandidates(
+  const providerIds = (
+    input.enableImageSearch !== false ? strategy.providerIds : []
+  ) as RemixAssetDiscoveryPlan["imageSearch"]["providerIds"];
+
+  const rankedSearchCandidates = rankRemixAssetCandidates(
     input.discoveredCandidates ?? [],
-    input.analysis
-  ).slice(0, 20);
+    input.analysis,
+    {
+      ...(input.niche ? { niche: input.niche } : {}),
+      queryPurposeByText
+    }
+  );
+  const searchCandidates = selectTopAssetCandidates(rankedSearchCandidates, 8, 12);
+  applyDefaultAssetSelection(searchCandidates);
 
   const defaultSelectedCandidateIds = searchCandidates
     .filter((candidate) => candidate.defaultSelected)
@@ -344,13 +349,23 @@ export function buildRemixAssetDiscoveryPlan(input: {
   const contextualPrompts = buildComfyContextualPrompts(input.analysis, input.comfyVariations);
   const importedAssets = input.importedAssets ?? [];
 
+  const discoveryProfile: RemixAssetDiscoveryProfile = {
+    domain: intelligence.domain,
+    domainLabel: strategy.label,
+    ...(input.niche ? { niche: input.niche } : {}),
+    strategyId: strategy.domain,
+    providerIds: strategy.providerIds,
+    queryCount: uniqueQueries.length
+  };
+
   return {
     enabled: true,
     candidateFirst: true,
+    discoveryProfile,
     imageSearch: {
       providerIds,
       queries: uniqueQueries,
-      maxCandidatesPerQuery: 4,
+      maxCandidatesPerQuery: 6,
       purpose: "differentiate_visuals_from_source",
       executed: searchCandidates.length > 0,
       candidates: searchCandidates,
@@ -359,7 +374,7 @@ export function buildRemixAssetDiscoveryPlan(input: {
     importPlan: {
       requiresExplicitApproval: true,
       autoImportOnDiscovery: false,
-      maxSelectable: 6,
+      maxSelectable: 12,
       recommendedCount: defaultSelectedCandidateIds.length,
       storageRoot: "storage/assets/remix-imports"
     },
@@ -381,6 +396,7 @@ export function buildRemixAssetDiscoveryPlan(input: {
     importedAssets,
     integrationNotes: [
       "Selecione candidatos e clique em importar — download + registro em storage/assets/remix-imports.",
+      `Perfil de descoberta: ${strategy.label} (${strategy.providerIds.slice(0, 3).join(", ")}).`,
       "ComfyUI usa prompts contextuais com entidade, ação e tokens de estilo por domínio.",
       `${input.comfyVariations.length} variações visuais planejadas para diferenciar o remix.`,
       intelligence.entities.length
@@ -412,18 +428,91 @@ export async function discoverRemixAssetCandidates(input: {
   warnings: string[];
 }> {
   const intelligence = input.analysis.contentIntelligence;
-  const queries = buildPrioritizedQueries(input.analysis).slice(0, input.maxQueries ?? 6);
+  const strategy = resolveRemixAssetDiscoveryStrategy({
+    domain: intelligence.domain,
+    niche: input.niche
+  });
+  const maxQueries = input.maxQueries ?? 14;
+  const maxCandidatesPerQuery = input.maxCandidatesPerQuery ?? 6;
+  const strategyQueries = buildStrategyAssetQueries(input.analysis, strategy, maxQueries);
+  const queryPurposeByText = new Map(
+    strategyQueries.map((entry) => [entry.query.toLowerCase(), entry.purpose])
+  );
+  const queries = strategyQueries.map((entry) => entry.query);
+
+  const SEARCH_SURFACE_PROVIDERS = new Set<MediaBeastProviderId>([
+    "google-images",
+    "generic-web"
+  ]);
   const providerIds: MediaBeastProviderId[] =
-    input.providerIds ??
-    (resolveProviderIds(intelligence.domain, true) as MediaBeastProviderId[]);
+    input.providerIds ?? strategy.providerIds;
 
   const providers = listMediaBeastProviders().filter(
     (provider) =>
-      provider.descriptor.enabled && providerIds.includes(provider.descriptor.id)
+      provider.descriptor.enabled &&
+      providerIds.includes(provider.descriptor.id) &&
+      !SEARCH_SURFACE_PROVIDERS.has(provider.descriptor.id)
   );
 
   const warnings: string[] = [];
   const candidateMap = new Map<string, MediaBeastCandidate>();
+  const entityTerms = [
+    ...new Set(
+      intelligence.entities.flatMap((entity) =>
+        [entity.name, ...entity.aliases]
+          .map((term) => term.toLowerCase().trim())
+          .filter((term) => term.length > 2)
+      )
+    )
+  ];
+
+  const entityCoreQueries = intelligence.entities.flatMap((entity) => [
+    entity.name,
+    `${entity.name} comic art`,
+    `${entity.name} illustration`
+  ]);
+
+  const directQuerySeeds = [
+    ...entityCoreQueries,
+    ...buildEntityAwareAssetQueries(input.analysis).map((entry) => entry.query),
+    ...queries
+  ]
+    .map((query) => simplifyAssetQuery(query, 5) || query.trim())
+    .filter((query) => query.length > 4);
+
+  const uniqueDirectQueries: string[] = [];
+  const seenDirectQueries = new Set<string>();
+  for (const query of directQuerySeeds) {
+    const key = query.toLowerCase();
+    if (seenDirectQueries.has(key)) continue;
+    seenDirectQueries.add(key);
+    uniqueDirectQueries.push(query);
+    if (uniqueDirectQueries.length >= 10) break;
+  }
+
+  const directBundles = await Promise.all(
+    uniqueDirectQueries.map((query) =>
+      searchDirectAssetBundle({
+        query,
+        maxPerSource: 5,
+        entityTerms,
+        includeFlickr: true
+      })
+    )
+  );
+
+  for (const group of directBundles) {
+    for (const candidate of group) {
+      const query = String(candidate.metadata.query ?? uniqueDirectQueries[0] ?? queries[0] ?? "");
+      candidateMap.set(candidate.id, {
+        ...candidate,
+        metadata: {
+          ...candidate.metadata,
+          query
+        }
+      });
+    }
+  }
 
   for (const query of queries) {
     const groups = await Promise.all(
@@ -431,7 +520,7 @@ export async function discoverRemixAssetCandidates(input: {
         provider.searchCandidates({
           keywords: query.split(/\s+/).filter((token) => token.length > 2),
           niche: input.niche,
-          maxCandidates: input.maxCandidatesPerQuery ?? 3
+          maxCandidates: maxCandidatesPerQuery
         })
       )
     );
@@ -452,18 +541,31 @@ export async function discoverRemixAssetCandidates(input: {
   const rawCandidates = [...candidateMap.values()];
   const enrichment = await enrichAndScoreCandidates(rawCandidates, {
     query: intelligence.headline,
-    minScore: 10,
+    minScore: 20,
     enrichRemote: true,
-    maxRemoteFetches: 8
+    maxRemoteFetches: 20
   });
 
   warnings.push(...enrichment.warnings);
 
   const candidates = enrichment.candidates.sort((left, right) => right.score - left.score);
-  const rankedCandidates = rankRemixAssetCandidates(candidates, input.analysis);
+  const rankedCandidates = selectTopAssetCandidates(
+    rankRemixAssetCandidates(candidates, input.analysis, {
+      niche: input.niche,
+      queryPurposeByText
+    }),
+    8,
+    12
+  );
+  applyDefaultAssetSelection(rankedCandidates);
 
   if (candidates.length === 0) {
-    warnings.push("Nenhum candidato visual retornado — revise queries ou providers.");
+    warnings.push(`Nenhum candidato visual retornado para ${strategy.label} — revise queries ou providers.`);
+  } else {
+    const withPreview = rankedCandidates.filter((candidate) => candidate.previewAvailable).length;
+    warnings.push(
+      `Pool final: ${rankedCandidates.length} candidatos ranqueados (${withPreview} com preview direto).`
+    );
   }
 
   return {
@@ -474,12 +576,49 @@ export async function discoverRemixAssetCandidates(input: {
   };
 }
 
-export function buildSceneAssetBindings(input: {
-  analysis: VideoRemixAnalysis;
+export function bindImportedAssetsToScenes(input: {
   importedAssets: RemixImportedAssetBinding[];
+  candidates: RemixAssetSearchCandidate[];
+  sceneRoles?: string[];
 }): RemixImportedAssetBinding[] {
   if (input.importedAssets.length === 0) {
     return [];
+  }
+
+  const candidateById = new Map(
+    input.candidates.map((candidate) => [candidate.candidateId, candidate])
+  );
+  const roleSequence = ["hook", "context", "evidence", "climax", "outro"];
+
+  return input.importedAssets.map((asset, index) => {
+    const candidate = candidateById.get(asset.candidateId);
+    const suggestedRole = candidate?.suggestedSceneRole;
+    const fallbackRole =
+      input.sceneRoles?.[index] ?? roleSequence[index] ?? roleSequence.at(-1) ?? null;
+
+    return {
+      ...asset,
+      sceneRole: suggestedRole ?? asset.sceneRole ?? fallbackRole
+    };
+  });
+}
+
+export function buildSceneAssetBindings(input: {
+  analysis: VideoRemixAnalysis;
+  importedAssets: RemixImportedAssetBinding[];
+  candidates?: RemixAssetSearchCandidate[];
+}): RemixImportedAssetBinding[] {
+  if (input.importedAssets.length === 0) {
+    return [];
+  }
+
+  if (input.candidates?.length) {
+    const scenes = input.analysis.mainScenes;
+    return bindImportedAssetsToScenes({
+      importedAssets: input.importedAssets,
+      candidates: input.candidates,
+      sceneRoles: scenes.map((scene) => scene.role)
+    });
   }
 
   const scenes = input.analysis.mainScenes;

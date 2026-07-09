@@ -1,4 +1,5 @@
 import {
+  bindImportedAssetsToScenes,
   importRemixAssetCandidatesToDisk,
   type RemixAssetSearchCandidate,
   type RemixImportedAssetBinding
@@ -39,7 +40,10 @@ function mapPurposeToCategory(purpose: RemixAssetSearchCandidate["purpose"]): As
     case "sports_photo":
       return "REFERENCE";
     case "archive_reference":
+    case "documentary_still":
       return "REFERENCE";
+    case "character_art":
+      return "CHARACTER";
     case "broll_mood":
       return "BROLL";
     default:
@@ -120,7 +124,8 @@ export async function importApprovedRemixAssets(
         "remix-import",
         `remix:${input.remixId}`,
         candidate.providerId,
-        candidate.purpose
+        candidate.purpose,
+        candidate.suggestedSceneRole
       ],
       licenseType: mapLicense(candidate.licenseStatus),
       copyrightRisk: mapRiskLevel(candidate.riskLevel),
@@ -139,6 +144,7 @@ export async function importApprovedRemixAssets(
         remixCandidateId: candidate.candidateId,
         importMethod: disk.importMethod,
         query: candidate.query,
+        suggestedSceneRole: candidate.suggestedSceneRole,
         approvedByUser: true
       })
     });
@@ -147,7 +153,7 @@ export async function importApprovedRemixAssets(
       candidateId: candidate.candidateId,
       assetId: created.id,
       localPath: created.path,
-      sceneRole: input.sceneRoles?.[index] ?? null,
+      sceneRole: candidate.suggestedSceneRole ?? input.sceneRoles?.[index] ?? null,
       importMethod: disk.importMethod
     });
 
@@ -160,11 +166,11 @@ export async function importApprovedRemixAssets(
     });
   }
 
-  const roleSequence = ["hook", "context", "evidence", "climax", "outro"];
-  const bound = importedAssets.map((asset, index) => ({
-    ...asset,
-    sceneRole: input.sceneRoles?.[index] ?? roleSequence[index] ?? roleSequence.at(-1) ?? null
-  }));
+  const bound = bindImportedAssetsToScenes({
+    importedAssets,
+    candidates: input.candidates,
+    ...(input.sceneRoles ? { sceneRoles: input.sceneRoles } : {})
+  });
 
   return {
     remixId: input.remixId,

@@ -1,3 +1,4 @@
+import { searchOpenverseImages, simplifyAssetQuery } from "./asset-api-clients.js";
 import {
   buildKeywordBase,
   buildNicheQueryPlans,
@@ -34,7 +35,7 @@ function buildFlickrPlans(input: MediaBeastSearchQuery): DiscoveryQueryPlan[] {
   const corePlans: DiscoveryQueryPlan[] = [
     {
       label: "Historical CC photo lead",
-      query: `${base} ${input.niche} ${hints.past[0]}`,
+      query: `${base} ${input.niche} ${hints.past[0]} archive photograph`,
       lens: "past",
       intent: "historical_cc",
       score: 60,
@@ -43,112 +44,33 @@ function buildFlickrPlans(input: MediaBeastSearchQuery): DiscoveryQueryPlan[] {
       extraMetadata: { licenseFilter: true, photoEra: "historical" }
     },
     {
-      label: "Archive photograph trail",
-      query: `${base} ${input.niche} archive photograph vintage`,
-      lens: "past",
-      intent: "archive_photo",
-      score: 58,
-      licenseStatus: "unknown",
-      riskLevel: "medium",
-      extraMetadata: { licenseFilter: true, photoEra: "vintage" }
-    },
-    {
-      label: "Museum and collection lead",
-      query: `${base} ${input.niche} museum collection flickr`,
-      lens: "past",
-      intent: "collection_lead",
-      score: 57,
-      licenseStatus: "creative_commons",
-      riskLevel: "medium",
-      extraMetadata: { licenseFilter: true, photoEra: "collection" }
-    },
-    {
       label: "Press and editorial archive",
-      query: `${base} ${input.niche} press photo editorial archive`,
+      query: `${base} ${input.niche} press photo editorial`,
       lens: "past",
       intent: "press_archive",
       score: 55,
       licenseStatus: "editorial_only",
       riskLevel: "medium",
       extraMetadata: { licenseFilter: true, photoEra: "press" }
-    },
-    {
-      label: "1970s decade filter",
-      query: `${base} ${input.niche} 1970s documentary photograph`,
-      lens: "past",
-      intent: "decade_archive",
-      score: 54,
-      licenseStatus: "creative_commons",
-      riskLevel: "medium",
-      extraMetadata: { licenseFilter: true, photoEra: "1970s" }
-    },
-    {
-      label: "1980s decade filter",
-      query: `${base} ${input.niche} 1980s archive photograph`,
-      lens: "past",
-      intent: "decade_archive",
-      score: 53,
-      licenseStatus: "creative_commons",
-      riskLevel: "medium",
-      extraMetadata: { licenseFilter: true, photoEra: "1980s" }
-    },
-    {
-      label: "Current editorial reference",
-      query: `${base} ${input.niche} ${hints.present[0]} documentary photo`,
-      lens: "present",
-      intent: "editorial_photo",
-      score: 50,
-      extraMetadata: { licenseFilter: true, photoEra: "current" }
-    },
-    {
-      label: "Photojournalism lead",
-      query: `${base} ${input.niche} photojournalism documentary flickr`,
-      lens: "present",
-      intent: "photojournalism",
-      score: 49,
-      licenseStatus: "editorial_only",
-      riskLevel: "medium",
-      extraMetadata: { licenseFilter: true, photoEra: "current" }
-    },
-    {
-      label: "Emerging visual motif",
-      query: `${base} ${input.niche} ${hints.future[0]} photography trend`,
-      lens: "future",
-      intent: "visual_signal",
-      score: 45,
-      extraMetadata: { licenseFilter: false, signalStrength: "weak" }
-    },
-    {
-      label: "Rising aesthetic pattern",
-      query: `${base} ${input.niche} ${hints.future[1]} visual style photography`,
-      lens: "future",
-      intent: "aesthetic_signal",
-      score: 43,
-      extraMetadata: { licenseFilter: false, signalStrength: "emerging" }
     }
   ];
 
-  const collectionPlans = angles.flickrCollections.map((collection, index) => ({
+  const collectionPlans = angles.flickrCollections.slice(0, 2).map((collection, index) => ({
     label: `Collection: ${collection}`,
     query: `${base} ${input.niche} ${collection}`,
-    lens: (index < 2 ? "past" : index < 4 ? "present" : "future") as
-      | "past"
-      | "present"
-      | "future",
+    lens: (index < 1 ? "past" : "present") as "past" | "present" | "future",
     intent: "niche_collection",
     score: 56 - index,
-    licenseStatus: (index < 3 ? "creative_commons" : "unknown") as
-      | "creative_commons"
-      | "unknown",
+    licenseStatus: "creative_commons" as const,
     riskLevel: "medium" as const,
-    extraMetadata: { licenseFilter: index < 3, collection, photoEra: "collection" }
+    extraMetadata: { licenseFilter: true, collection, photoEra: "collection" }
   }));
 
   const nichePlans = buildNicheQueryPlans(base, input.niche, (angle, lens) => ({
     label: `Flickr ${lens}: ${angle}`,
     querySuffix: `${angle} flickr`,
     intent: "niche_photo_angle",
-    score: lens === "past" ? 52 : lens === "present" ? 48 : 42,
+    score: lens === "past" ? 52 : 48,
     licenseStatus: lens === "past" ? "creative_commons" : "unknown",
     riskLevel: "medium",
     extraMetadata: { licenseFilter: lens === "past", nicheAngle: angle }
@@ -162,7 +84,7 @@ export const flickrProvider: MediaBeastProvider = {
     id: "flickr",
     name: "Flickr Archive Discovery",
     description:
-      "Photo-archive discovery with Creative Commons filter hints for historical, editorial, museum collection and decade-specific visual leads.",
+      "Real Flickr photos via Openverse API with direct image URLs and CC metadata.",
     enabled: true,
     capabilities: {
       supportsImages: true,
@@ -171,25 +93,46 @@ export const flickrProvider: MediaBeastProvider = {
       supportsDocuments: false,
       supportsDateFilters: true,
       supportsLicenseMetadata: true,
-      discoveryOnly: true,
-      importSupported: false,
+      discoveryOnly: false,
+      importSupported: true,
       requiresApiKey: false,
       setupInstructions:
-        "Open Flickr search URLs with license filters. Read each photo page license badge and attribution requirements before import."
+        "Open Flickr photo pages with license filters. Read each photo page license badge and attribution requirements before import."
     },
     riskNotes: [
       "Creative Commons on Flickr still requires attribution and license compliance.",
       "Not all historical photos are rights-safe for commercial shorts.",
-      "Verify whether CC terms match your distribution channel before import.",
-      "Discovery URLs do not download or import media automatically.",
-      "Press and editorial collections may be view-only or no-derivatives."
+      "Verify whether CC terms match your distribution channel before import."
     ]
   },
   buildQueries(input: MediaBeastSearchQuery) {
     return limitQueryPlans(buildFlickrPlans(input)).map((plan) => plan.query);
   },
   async searchCandidates(input: MediaBeastSearchQuery) {
-    return mapQueryPlansToCandidates(
+    const maxCandidates = input.maxCandidates ?? DEFAULT_PROVIDER_MAX_CANDIDATES;
+    const base = simplifyAssetQuery(buildKeywordBase(input), 4);
+    const queries = [base, `${base} editorial photograph`].filter((query) => query.length > 4);
+
+    const candidateMap = new Map<string, Awaited<ReturnType<typeof searchOpenverseImages>>[number]>();
+
+    for (const query of queries) {
+      const results = await searchOpenverseImages(query, {
+        providerId: "flickr",
+        source: "flickr",
+        maxResults: Math.ceil(maxCandidates / queries.length)
+      });
+      for (const candidate of results) {
+        candidateMap.set(candidate.id, candidate);
+      }
+    }
+
+    const apiCandidates = [...candidateMap.values()].sort((left, right) => right.score - left.score);
+
+    if (apiCandidates.length >= Math.min(2, maxCandidates)) {
+      return apiCandidates.slice(0, maxCandidates);
+    }
+
+    const fallback = mapQueryPlansToCandidates(
       "flickr",
       buildFlickrPlans(input),
       (plan) => {
@@ -204,29 +147,24 @@ export const flickrProvider: MediaBeastProvider = {
             license: useLicenseFilter,
             historical: isHistorical
           }),
-          previewUrl: buildFlickrUrl(plan.query, { license: useLicenseFilter }),
-          reasons: [
-            `Strong ${plan.lens} photo discovery with clearer license metadata than generic image search.`,
-            `Intent '${plan.intent}' helps locate archive-quality references for manual review.`,
-            "Flickr collections often expose attribution and license badges on item pages.",
-            "Niche collection angles surface museum and press archives missed by broad image search."
-          ],
-          warnings: [
-            "Discovery-only: no automatic download despite CC filter hints.",
-            "CC license type must be confirmed on the individual photo page.",
-            "Some museum uploads are editorial-only or no-derivatives.",
-            "Decade filters are planning hints — verify actual upload date and rights on page."
-          ],
+          reasons: ["Fallback search surface — prefer Openverse Flickr results."],
+          warnings: ["Search surface only — no direct image URL."],
           metadata: {
             sourcePackHint: input.niche,
-            licenseFilterEnabled: useLicenseFilter,
-            attributionRequired: plan.licenseStatus === "creative_commons",
             searchSurface: true,
-            substantiveQuery: true
+            substantiveQuery: false
           }
         });
       },
-      input.maxCandidates ?? DEFAULT_PROVIDER_MAX_CANDIDATES
-    );
+      Math.max(1, maxCandidates - apiCandidates.length)
+    ).map((candidate) => ({
+      ...candidate,
+      score: Math.max(8, candidate.score - 40),
+      previewUrl: null
+    }));
+
+    return [...apiCandidates, ...fallback]
+      .sort((left, right) => right.score - left.score)
+      .slice(0, maxCandidates);
   }
 };

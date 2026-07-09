@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   MediaBeastCandidate,
   MediaBeastCandidateKind,
@@ -22,7 +23,8 @@ export interface DiscoveryQueryPlan {
 }
 
 export function stableCandidateId(providerId: string, seed: string) {
-  return `${providerId}-${Buffer.from(seed).toString("base64url").slice(0, 16)}`;
+  const digest = createHash("sha256").update(seed).digest("base64url").slice(0, 20);
+  return `${providerId}-${digest}`;
 }
 
 export function buildKeywordBase(input: MediaBeastSearchQuery) {

@@ -551,14 +551,29 @@ export async function cancelReelProductionRun(
 function resolveRunStatus(
   mode: ReelProductionRunMode,
   steps: ReelProductionStep[],
-  checklist: ReelProductionChecklist
+  checklist: ReelProductionChecklist,
+  renderJobId: string | null
 ): ReelProductionRunStatus {
   if (steps.some((step) => step.status === "failed")) {
+    if (mode === "render" && renderJobId) {
+      const createStep = steps.find((step) => step.id === "create_render_job");
+      if (createStep?.status === "completed") {
+        return "partial";
+      }
+    }
     return mode === "render" ? "failed" : "partial";
   }
 
   if (mode === "dry_run") {
     return "completed";
+  }
+
+  if (mode === "render" && renderJobId) {
+    const processStep = steps.find((step) => step.id === "process_render_job");
+    if (processStep?.status === "completed") {
+      return "completed";
+    }
+    return "partial";
   }
 
   if (
@@ -605,6 +620,7 @@ export async function runOneClickReelProduction(
   let beastResultPayload: OneClickBeastProductionResult | null = null;
   const beastMode = isBeastOneClickMode(input);
   const beastRenderAuthorized = isBeastRenderAuthorized(input);
+  let beastPlanBuildFailed = false;
   const runProductionPipeline =
     input.mode !== "dry_run" && (!beastMode || beastRenderAuthorized);
 
@@ -670,6 +686,7 @@ export async function runOneClickReelProduction(
         );
       }
     } catch (error) {
+      beastPlanBuildFailed = true;
       steps = failStep(steps, "build_beast_plan", getErrorMessage(error));
       warnings.push(getErrorMessage(error));
     }
@@ -681,7 +698,20 @@ export async function runOneClickReelProduction(
     );
   }
 
-  if (!runProductionPipeline) {
+  if (beastRenderAuthorized && beastPlanBuildFailed) {
+    steps = skipStep(
+      steps,
+      "generate_narration",
+      "Render abortado: plano Beast nao foi carregado."
+    );
+    steps = skipStep(steps, "generate_visuals", "Render abortado: plano Beast nao foi carregado.");
+    steps = skipStep(steps, "select_music", "Render abortado: plano Beast nao foi carregado.");
+    steps = skipStep(steps, "build_beat_sync", "Render abortado: plano Beast nao foi carregado.");
+    steps = skipStep(steps, "validate_microclips", "Render abortado: plano Beast nao foi carregado.");
+    steps = skipStep(steps, "build_blueprint", "Render abortado: plano Beast nao foi carregado.");
+    steps = skipStep(steps, "create_render_job", "Render abortado: plano Beast nao foi carregado.");
+    steps = skipStep(steps, "process_render_job", "Render abortado: plano Beast nao foi carregado.");
+  } else if (!runProductionPipeline) {
     if (beastMode) {
       steps = skipStep(
         steps,
@@ -1002,7 +1032,7 @@ export async function runOneClickReelProduction(
   }
 
   checklist = await buildReelProductionChecklist(dependencies, project.id);
-  const status = resolveRunStatus(input.mode, steps, checklist);
+  const status = resolveRunStatus(input.mode, steps, checklist, renderJobId);
   steps =
     outputPath || status === "completed"
       ? completeStep(steps, "finalize_output", outputPath ? "Output final registrado." : "Execucao finalizada.")

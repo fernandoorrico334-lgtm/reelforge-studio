@@ -82,6 +82,9 @@ export interface VideoRemixOptions {
   executeAssetDiscovery?: boolean;
   variationCount?: number;
   variationStyles?: RemixTargetStyle[];
+  enableResearch?: boolean;
+  deepResearch?: boolean;
+  selectedCuriosityIds?: string[];
 }
 
 export interface VideoRemixSourceResolution {
@@ -334,6 +337,26 @@ async function assertInputVideoExists(inputVideoPath: string) {
     throw new Error(`Input video not found or inaccessible: ${resolved}`);
   }
   return resolved;
+}
+
+export async function isRemixSourceStagedForRender(
+  sourceResolution: VideoRemixSourceResolution
+): Promise<boolean> {
+  const candidates = [
+    sourceResolution.download?.localPath,
+    sourceResolution.localPath
+  ].filter((value): value is string => Boolean(value?.trim()));
+
+  for (const candidate of candidates) {
+    try {
+      await access(resolve(candidate));
+      return true;
+    } catch {
+      continue;
+    }
+  }
+
+  return false;
 }
 
 function buildSourceCandidate(
@@ -682,7 +705,7 @@ function buildRenderBlueprint(input: {
         stageId: "narration_overlay",
         engine: "narration-engine",
         description: input.narrationPlan
-          ? "Generate optional narration overlay from approved script."
+          ? `Render narration from approved script (${input.narrationPlan.narrationBeats.length} beats, voice '${input.narrationPlan.voicePackHint}'). Apply styleDirective metadata for prosody.`
           : "Skipped — remix keeps original audio bed only.",
         blockedUntilApproval: true
       },
@@ -824,8 +847,13 @@ async function buildRemixPlanForVariation(
         analysis: shared.videoAnalysis,
         channelDNA,
         targetStyle,
+        variationIndex,
         maxDurationSeconds: clampRemixOutputDuration(durationSeconds),
-        narrationBias: channelDNA.narrationBias
+        narrationBias: channelDNA.narrationBias,
+        researchDossier: shared.videoAnalysis.researchDossier,
+        ...(options.selectedCuriosityIds
+          ? { selectedCuriosityIds: options.selectedCuriosityIds }
+          : {})
       })
     : null;
 
@@ -833,6 +861,7 @@ async function buildRemixPlanForVariation(
     analysis: shared.videoAnalysis,
     comfyVariations: visualPlan.comfyVariations,
     enableImageSearch: options.enableAssetDiscovery !== false,
+    niche: styleProfile.niche,
     discoveredCandidates: shared.discoveredCandidates
   });
 
@@ -858,12 +887,9 @@ async function buildRemixPlanForVariation(
     fastCutPlan
   });
 
-  const hasStagedSource =
-    Boolean(shared.resolvedPath) &&
-    (shared.sourceResolution.kind === "local_path" ||
-      Boolean(shared.sourceResolution.download?.localPath));
-
-  const canRenderAfterManualApproval = hasStagedSource;
+  const canRenderAfterManualApproval = await isRemixSourceStagedForRender(
+    shared.sourceResolution
+  );
   const seedSource = shared.sourceResolution.sourceUrl ?? shared.resolvedPath;
   const variationLabel = buildVariationLabel(variationIndex, targetStyle);
 
@@ -897,8 +923,8 @@ async function buildRemixPlanForVariation(
       canRenderAutomatically: false,
       canRenderAfterManualApproval,
       reason: canRenderAfterManualApproval
-        ? "Remix blueprint is staged locally. Render unlocks after plan approval and explicit rights confirmation."
-        : "Source clip is not staged locally yet. Download or provide a local path before render."
+        ? "Fonte local disponivel. Render liberado apos aprovacao manual e confirmacao de direitos."
+        : "Fonte nao encontrada no disco. Baixe o video ou informe um caminho local valido antes de renderizar."
     },
     videoAnalysis: shared.videoAnalysis,
     assetDiscovery,
@@ -1009,7 +1035,16 @@ export async function remixVideoFromSource(
     platform: sourceResolution.platform,
     metadataDurationSeconds: sourceResolution.download?.durationSeconds ?? null,
     targetOutputSeconds: options.durationTarget ?? REMIX_DEFAULT_OUTPUT_SECONDS,
-    intensity: options.intensity
+    intensity: options.intensity,
+    researchOptions: {
+      enabled: options.enableResearch !== false,
+      deepResearch: options.deepResearch === true,
+      ...(options.selectedCuriosityIds
+        ? { selectedCuriosityIds: options.selectedCuriosityIds }
+        : {}),
+      targetStyle: options.targetStyle,
+      language: options.language ?? "pt-BR"
+    }
   });
 
   const sourceCandidate = enrichSourceCandidateWithAnalysis(
@@ -1027,8 +1062,8 @@ export async function remixVideoFromSource(
     const discovery = await discoverRemixAssetCandidates({
       analysis: videoAnalysis,
       niche: baseStyleProfile.niche,
-      maxCandidatesPerQuery: 4,
-      maxQueries: 6
+      maxCandidatesPerQuery: 6,
+      maxQueries: 14
     });
     discoveredCandidates = discovery.candidates;
     assetDiscoveryWarnings.push(...discovery.warnings);

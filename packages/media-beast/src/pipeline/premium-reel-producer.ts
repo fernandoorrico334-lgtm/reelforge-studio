@@ -5,7 +5,8 @@ import { buildPremiumAudioScorePlan, type PremiumAudioScorePlan } from "./audio-
 import { buildFastCutEditorPlan, type FastCutEditorPlan } from "./fast-cut-editor.js";
 import {
   estimateScriptDurationSeconds,
-  hasConcreteCuriosity
+  hasConcreteCuriosity,
+  validateNarrationScript
 } from "./narration-curiosity-engine.js";
 import {
   buildChannelNarrationOverlay,
@@ -96,6 +97,7 @@ function buildPremiumNarrationProductionNotes(input: {
       : estimatedDuration < narrationSeconds * 0.75
         ? "curto"
         : "longo";
+  const narrationQuality = validateNarrationScript(input.narrationPlan.suggestedScript);
 
   return [
     `Production profile '${input.profileLabel}' applied with contextual narration engine.`,
@@ -106,6 +108,9 @@ function buildPremiumNarrationProductionNotes(input: {
       ? `Climax curiosity (${hasConcreteCuriosity(climaxBeat.text) ? "concreta" : "editorial"}): "${climaxBeat.text}"`
       : "Climax curiosity beat generated.",
     `Script fit: ~${estimatedDuration.toFixed(1)}s / ${narrationSeconds}s alvo (${scriptWordCount} palavras, ${durationFit}, ${input.narrationPlan.pacing} pacing).`,
+    narrationQuality.valid
+      ? "Narration script clean: sem metadados ou instrucoes de sistema."
+      : `Narration script review: ${narrationQuality.issues.slice(0, 2).join(" | ")}`,
     `Music preset '${input.musicPresetId}' paired with mastering '${input.masteringPresetId}'.`,
     `Editing blueprint defines ${input.sceneCount} scenes with beat-synced cuts and per-scene narration lines.`
   ];

@@ -15,6 +15,7 @@
     { "path": "../audio-engine" },
     { "path": "../caption-engine" },
     { "path": "../cinematic-engine" },
-    { "path": "../narration-engine" }
+    { "path": "../narration-engine" },
+    { "path": "../research-collector" }
   ]
 }

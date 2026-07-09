@@ -10,8 +10,11 @@ import {
   mediaBeastNiches,
   mediaBeastProviderIds,
   remixTargetStyles,
+  rebuildRemixNarrationWithResearch,
   remixVideoFromSource,
+  runDeepRemixResearch,
   type BeastModeDiscoveryInput,
+  type VideoRemixAnalysis,
   type ChannelDNA,
   type MediaBeastCandidate,
   type MediaBeastNiche,
@@ -272,7 +275,9 @@ const REMIX_ASSET_PURPOSES = [
   "comic_panel",
   "sports_photo",
   "broll_mood",
-  "differentiation"
+  "differentiation",
+  "character_art",
+  "documentary_still"
 ] as const;
 
 function readRemixAssetPurpose(value: unknown): RemixAssetSearchCandidate["purpose"] {
@@ -326,7 +331,14 @@ function readRemixAssetCandidates(payload: Record<string, unknown>): RemixAssetS
         record.providerTier === "comic_reference" ||
         record.providerTier === "generic_lead"
           ? record.providerTier
-          : "generic_lead"
+          : "generic_lead",
+      relevanceScore: Number(record.relevanceScore ?? record.score ?? 0),
+      combinedScore: Number(record.combinedScore ?? record.qualityScore ?? record.score ?? 0),
+      previewAvailable: readBoolean(record.previewAvailable, Boolean(record.previewUrl)),
+      suggestedSceneRole:
+        typeof record.suggestedSceneRole === "string" && record.suggestedSceneRole.trim()
+          ? record.suggestedSceneRole.trim()
+          : "context"
     };
   });
 }
@@ -507,6 +519,20 @@ export async function handleMediaBeastRoute(
         remixOptions.addNarration = readBoolean(payload.addNarration);
       }
 
+      if (payload.enableResearch !== undefined && payload.enableResearch !== null) {
+        remixOptions.enableResearch = readBoolean(payload.enableResearch, true);
+      }
+
+      if (payload.deepResearch !== undefined && payload.deepResearch !== null) {
+        remixOptions.deepResearch = readBoolean(payload.deepResearch);
+      }
+
+      if (Array.isArray(payload.selectedCuriosityIds)) {
+        remixOptions.selectedCuriosityIds = payload.selectedCuriosityIds.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0
+        );
+      }
+
       if (payload.channelDNA !== undefined) {
         remixOptions.channelDNA = readChannelDNA(payload.channelDNA);
       }
@@ -551,6 +577,75 @@ export async function handleMediaBeastRoute(
               ? "Public URL was downloaded to staging for planning only. Render stays blocked until manual approval and rights confirmation."
               : "Video Remixer returns a blueprint only. Render stays blocked until manual approval and rights confirmation."
         }
+      });
+      return true;
+    }
+
+    if (pathname === "/media-beast/remix-video/research") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const videoAnalysis = payload.videoAnalysis;
+      if (!videoAnalysis || typeof videoAnalysis !== "object") {
+        throw new ValidationError("videoAnalysis is required.");
+      }
+
+      const deepResearch = readBoolean(payload.deepResearch, true);
+      const selectedCuriosityIds = Array.isArray(payload.selectedCuriosityIds)
+        ? payload.selectedCuriosityIds.filter(
+            (item): item is string => typeof item === "string" && item.trim().length > 0
+          )
+        : undefined;
+
+      const targetStyle = readOptionalString(payload.targetStyle);
+      const researchDossier = runDeepRemixResearch(videoAnalysis as VideoRemixAnalysis, {
+        ...(selectedCuriosityIds ? { selectedCuriosityIds } : {}),
+        ...(targetStyle && remixTargetStyles.includes(targetStyle as (typeof remixTargetStyles)[number])
+          ? { targetStyle: targetStyle as (typeof remixTargetStyles)[number] }
+          : {}),
+        language: readOptionalString(payload.language) ?? "pt-BR"
+      });
+
+      const rebuildNarration = readBoolean(payload.rebuildNarration, false);
+      let narrationPlan = null;
+      if (rebuildNarration) {
+        const channelDNA = payload.channelDNA
+          ? readChannelDNA(payload.channelDNA)
+          : createChannelDNA({
+              id: "remix-research",
+              name: "Remix Research",
+              niche: "generic_broll",
+              dailyShortTarget: 3
+            });
+        const targetStyle = readRemixTargetStyle(
+          payload.targetStyle ?? remixTargetStyles[0]
+        );
+        const maxDurationSeconds = Math.min(
+          readPositiveInteger(payload.maxDurationSeconds, 40),
+          45
+        );
+
+        narrationPlan = rebuildRemixNarrationWithResearch({
+          analysis: {
+            ...(videoAnalysis as VideoRemixAnalysis),
+            researchDossier
+          },
+          channelDNA,
+          targetStyle,
+          maxDurationSeconds,
+          researchDossier,
+          selectedCuriosityIds: researchDossier.selectedCuriosityIds
+        });
+      }
+
+      sendJson(response, 200, {
+        researchDossier,
+        narrationPlan,
+        candidateFirst: true,
+        note: "Research dossier generated from remix analysis heuristics. Confirm facts before publishing."
       });
       return true;
     }

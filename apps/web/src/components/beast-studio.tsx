@@ -7,6 +7,7 @@ import {
   runEditorialShortPackRequest,
   runOneClickProductionRequest,
   importRemixAssetsRequest,
+  runRemixDeepResearchRequest,
   runRemixVideoRequest
 } from "../lib/studio-api";
 import type {
@@ -119,6 +120,105 @@ function resolveChannel(channels: StudioChannel[], presetId: string) {
   return channels.find((c) => c.niche.toLowerCase().includes(niche)) ?? channels[0] ?? null;
 }
 
+function formatSeconds(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "?s";
+  return `${Math.round(value)}s`;
+}
+
+function describeRenderPhase(response: OneClickProductionResponse | null): string | null {
+  if (!response) {
+    return null;
+  }
+
+  const findStep = (id: string) => response.steps.find((step) => step.id === id);
+
+  if (response.outputPath) {
+    return `MP4 pronto: ${response.outputPath}`;
+  }
+
+  if (response.renderJobId) {
+    const processStep = findStep("process_render_job");
+    if (processStep?.status === "running") {
+      return "Processando RenderJob no worker...";
+    }
+    if (processStep?.status === "completed") {
+      return "Render concluido pelo worker.";
+    }
+    if (processStep?.status === "failed") {
+      return `Worker nao concluiu: ${processStep.message}`;
+    }
+    return `RenderJob criado (${response.renderJobId}). O worker pode ainda estar processando.`;
+  }
+
+  const createStep = findStep("create_render_job");
+  if (createStep?.status === "running") {
+    return "Criando RenderJob...";
+  }
+  if (createStep?.status === "failed") {
+    return createStep.message;
+  }
+
+  const beastStep = findStep("build_beast_plan");
+  if (beastStep?.status === "running") {
+    return "Carregando plano aprovado e sincronizando cenas...";
+  }
+  if (beastStep?.status === "failed") {
+    return beastStep.message;
+  }
+
+  if (response.status === "failed") {
+    return "Render falhou. Revise os passos abaixo.";
+  }
+
+  return null;
+}
+
+function RenderProgressPanel({ response }: { response: OneClickProductionResponse | null }) {
+  if (!response) {
+    return null;
+  }
+
+  const phase = describeRenderPhase(response);
+  const pipelineSteps = response.steps.filter((step) =>
+    [
+      "build_beast_plan",
+      "generate_narration",
+      "generate_visuals",
+      "create_render_job",
+      "process_render_job"
+    ].includes(step.id)
+  );
+
+  if (!phase && pipelineSteps.every((step) => step.status === "pending" || step.status === "skipped")) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-white/10 bg-black/30 p-4">
+      {phase ? <p className="text-sm text-signal">{phase}</p> : null}
+      <ul className="space-y-1 text-xs text-mist/65">
+        {pipelineSteps.map((step) => (
+          <li key={step.id}>
+            <span
+              className={
+                step.status === "completed"
+                  ? "text-emerald-300/90"
+                  : step.status === "failed"
+                    ? "text-rose-300/90"
+                    : step.status === "running"
+                      ? "text-signal"
+                      : "text-mist/50"
+              }
+            >
+              {step.label}: {step.message}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function SourceCard({ candidate }: { candidate: MediaBeastCandidateSummary }) {
   const lens = candidate.metadata?.temporalLens;
   const lensLabel =
@@ -166,9 +266,15 @@ export function BeastStudio({
     NonNullable<VideoRemixPlanResponse["assetDiscovery"]["importedAssets"]>
   >([]);
   const [assetImportMessage, setAssetImportMessage] = useState<string | null>(null);
+  const [selectedCuriosityIds, setSelectedCuriosityIds] = useState<string[]>([]);
+  const [researchMessage, setResearchMessage] = useState<string | null>(null);
+  const [researchAction, setResearchAction] = useState<"deep" | "apply" | null>(null);
   const [pack, setPack] = useState<EditorialShortPackResponse | null>(null);
   const [remixPlan, setRemixPlan] = useState<VideoRemixPlanResponse | null>(null);
   const [result, setResult] = useState<OneClickProductionResponse | null>(null);
+  const [approvedBeastPlan, setApprovedBeastPlan] = useState<Record<string, unknown> | null>(
+    null
+  );
   const [projectId, setProjectId] = useState<string | null>(null);
   const [planApproved, setPlanApproved] = useState(false);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
@@ -188,6 +294,34 @@ export function BeastStudio({
     [remixPlan]
   );
   const activeRemixPlan = remixVariations[selectedVariationIndex] ?? remixPlan;
+  const importedCandidateIds = useMemo(
+    () => new Set(importedRemixAssets.map((asset) => asset.candidateId)),
+    [importedRemixAssets]
+  );
+  const activeCandidates = activeRemixPlan?.assetDiscovery.imageSearch.candidates ?? [];
+  const maxSelectableAssets = activeRemixPlan?.assetDiscovery.importPlan?.maxSelectable ?? 8;
+  const selectedImportedCount = selectedCandidateIds.filter((id) => importedCandidateIds.has(id)).length;
+  const remixReadyToRender = Boolean(planApproved && rightsConfirmed && activeRemixPlan);
+  const researchDossier = remixPlan?.videoAnalysis.researchDossier ?? null;
+  const rankedCuriosities = researchDossier?.rankedCuriosities ?? [];
+  const selectedCuriosities = rankedCuriosities.filter((curiosity) =>
+    selectedCuriosityIds.includes(curiosity.id)
+  );
+  const researchSubject =
+    (
+      remixPlan?.videoAnalysis.contentIntelligence?.entities?.[0]?.name ??
+      remixPlan?.videoAnalysis.contentIntelligence?.headline ??
+      remixPlan?.videoAnalysis.themeSummary ??
+      theme.trim()
+    ) || "este tema";
+  const narrationPreview =
+    activeRemixPlan?.narrationPlan?.suggestedScript ??
+    remixPlan?.narrationPlan?.suggestedScript ??
+    "";
+  const loadingMessage =
+    studioMode === "remix"
+      ? "Analisando fonte, baixando staging quando permitido, reescrevendo narrativa e buscando assets..."
+      : "Pesquisando fontes, montando narração e preparando plano editorial...";
 
   async function ensureProjectId(script: string) {
     if (projectId) return projectId;
@@ -224,6 +358,9 @@ export function BeastStudio({
     setSelectedCandidateIds([]);
     setImportedRemixAssets([]);
     setAssetImportMessage(null);
+    setSelectedCuriosityIds([]);
+    setResearchMessage(null);
+    setResearchAction(null);
     setResult(null);
     setShowAngles(false);
 
@@ -259,6 +396,16 @@ export function BeastStudio({
           });
 
           setRemixPlan(remix);
+          setSelectedCuriosityIds(
+            remix.videoAnalysis.researchDossier?.autoInjectedCuriosityIds ??
+              remix.videoAnalysis.researchDossier?.selectedCuriosityIds ??
+              []
+          );
+          setResearchMessage(
+            remix.videoAnalysis.researchDossier?.rankedCuriosities.length
+              ? `${remix.videoAnalysis.researchDossier.rankedCuriosities.length} curiosidades ranqueadas pelo Research Collector.`
+              : null
+          );
           setSelectedVariationIndex(0);
           setImportedRemixAssets([]);
           setAssetImportMessage(null);
@@ -313,6 +460,7 @@ export function BeastStudio({
           });
 
           setResult(plan);
+          setApprovedBeastPlan(plan.beastProductionPlan ?? null);
           return;
         }
 
@@ -363,15 +511,104 @@ export function BeastStudio({
         });
 
         setResult(plan);
+        setApprovedBeastPlan(plan.beastProductionPlan ?? null);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : String(caught));
       }
     });
   }
 
+  function toggleCuriositySelection(curiosityId: string) {
+    setSelectedCuriosityIds((current) =>
+      current.includes(curiosityId)
+        ? current.filter((id) => id !== curiosityId)
+        : [...current, curiosityId]
+    );
+  }
+
+  function handleDeepResearch(rebuildNarration = true) {
+    if (!remixPlan) return;
+
+    setResearchAction("deep");
+    startTransition(async () => {
+      try {
+        const result = await runRemixDeepResearchRequest({
+          videoAnalysis: remixPlan.videoAnalysis,
+          deepResearch: true,
+          rebuildNarration,
+          selectedCuriosityIds,
+          targetStyle: activeRemixPlan?.targetStyle ?? remixPlan.targetStyle,
+          maxDurationSeconds: activeRemixPlan?.durationSeconds ?? remixPlan.durationSeconds
+        });
+
+        setRemixPlan((current) =>
+          current
+            ? {
+                ...current,
+                videoAnalysis: {
+                  ...current.videoAnalysis,
+                  researchDossier: result.researchDossier
+                },
+                narrationPlan: result.narrationPlan ?? current.narrationPlan
+              }
+            : current
+        );
+        setSelectedCuriosityIds(result.researchDossier.selectedCuriosityIds);
+        setResearchMessage(
+          `Pesquisa profunda concluída: ${result.researchDossier.rankedCuriosities.length} curiosidades (${result.researchDossier.sourceCount} fontes de corpus).`
+        );
+      } catch (caught) {
+        setResearchMessage(caught instanceof Error ? caught.message : String(caught));
+      } finally {
+        setResearchAction(null);
+      }
+    });
+  }
+
+  function handleApplySelectedCuriosities() {
+    if (!remixPlan || selectedCuriosityIds.length === 0) {
+      setResearchMessage("Selecione pelo menos uma curiosidade para aplicar na narração.");
+      return;
+    }
+
+    setResearchAction("apply");
+    startTransition(async () => {
+      try {
+        const result = await runRemixDeepResearchRequest({
+          videoAnalysis: remixPlan.videoAnalysis,
+          deepResearch: false,
+          rebuildNarration: true,
+          selectedCuriosityIds,
+          targetStyle: activeRemixPlan?.targetStyle ?? remixPlan.targetStyle,
+          maxDurationSeconds: activeRemixPlan?.durationSeconds ?? remixPlan.durationSeconds
+        });
+
+        setRemixPlan((current) =>
+          current
+            ? {
+                ...current,
+                videoAnalysis: {
+                  ...current.videoAnalysis,
+                  researchDossier: result.researchDossier
+                },
+                narrationPlan: result.narrationPlan ?? current.narrationPlan
+              }
+            : current
+        );
+        setResearchMessage(
+          `${selectedCuriosityIds.length} curiosidade(s) aplicada(s) na narração.`
+        );
+      } catch (caught) {
+        setResearchMessage(caught instanceof Error ? caught.message : String(caught));
+      } finally {
+        setResearchAction(null);
+      }
+    });
+  }
+
   function toggleCandidateSelection(candidateId: string) {
     setSelectedCandidateIds((current) => {
-      const maxSelectable = activeRemixPlan?.assetDiscovery.importPlan?.maxSelectable ?? 6;
+      const maxSelectable = activeRemixPlan?.assetDiscovery.importPlan?.maxSelectable ?? 8;
       if (current.includes(candidateId)) {
         return current.filter((id) => id !== candidateId);
       }
@@ -380,6 +617,14 @@ export function BeastStudio({
       }
       return [...current, candidateId];
     });
+  }
+
+  function handleSelectRecommendedAssets() {
+    if (!activeRemixPlan) return;
+    const recommended = activeRemixPlan.assetDiscovery.imageSearch.defaultSelectedCandidateIds ??
+      activeCandidates.filter((candidate) => candidate.defaultSelected || candidate.recommended).map((candidate) => candidate.candidateId);
+    const maxSelectable = activeRemixPlan.assetDiscovery.importPlan?.maxSelectable ?? 8;
+    setSelectedCandidateIds(recommended.slice(0, maxSelectable));
   }
 
   function handleImportSelectedAssets() {
@@ -447,6 +692,7 @@ export function BeastStudio({
 
     startTransition(async () => {
       try {
+        setError(null);
         const source = videoPath.trim();
         const isUrl = /^https?:\/\//i.test(source);
 
@@ -480,6 +726,7 @@ export function BeastStudio({
           ...remixPayload,
           planApproved: true,
           rightsConfirmed: true,
+          beastProductionPlan: approvedBeastPlan ?? result?.beastProductionPlan ?? null,
           approvedRemixAssetIds: importedRemixAssets.map((asset) => asset.assetId),
           runWorkerOnce: true,
           defaults: {
@@ -511,17 +758,25 @@ export function BeastStudio({
         });
         setResult(response);
 
-        const failedStep = response.steps.find((step) => step.status === "failed");
-        if (failedStep) {
-          setError(failedStep.message);
+        const blockingFailedStep = response.steps.find(
+          (step) =>
+            step.status === "failed" &&
+            ["build_beast_plan", "create_render_job"].includes(step.id)
+        );
+        const workerFailedStep = response.steps.find(
+          (step) => step.id === "process_render_job" && step.status === "failed"
+        );
+
+        if (blockingFailedStep) {
+          setError(blockingFailedStep.message);
         } else if (!response.renderJobId && response.status !== "completed") {
           setError(
             response.warnings.join(" ") ||
-              "Render não concluiu. Verifique se a API está com DATA_BACKEND=prisma."
+              "Render nao criou RenderJob. Verifique se a API esta com DATA_BACKEND=prisma."
           );
-        } else if (!response.outputPath && response.renderJobId) {
+        } else if (workerFailedStep && !response.outputPath) {
           setError(
-            "RenderJob criado, mas o MP4 ainda não está pronto. Confira o worker ou tente novamente."
+            `${workerFailedStep.message} RenderJob ${response.renderJobId} foi criado — confira o worker.`
           );
         }
       } catch (caught) {
@@ -531,7 +786,7 @@ export function BeastStudio({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <header>
         <h1 className="text-3xl font-semibold text-white">Beast Studio</h1>
         <p className="mt-2 text-sm text-mist/65">
@@ -539,7 +794,7 @@ export function BeastStudio({
         </p>
       </header>
 
-      <section className="space-y-3 rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
+      <section className="space-y-4 rounded-[2rem] border border-white/10 bg-gradient-to-br from-white/[0.07] via-black/30 to-signal/5 p-5 shadow-2xl shadow-black/30">
         {studioMode === "new" ? (
           <input
             value={theme}
@@ -576,19 +831,33 @@ export function BeastStudio({
           </button>
         </div>
         {studioMode === "remix" ? (
-          <div className="space-y-2">
-            <input
-              value={videoPath}
-              onChange={(e) => setVideoPath(e.target.value)}
-              placeholder="Cole o link: YouTube Shorts, TikTok, Instagram Reels..."
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-base text-white outline-none focus:border-signal/40"
-            />
-            <input
-              value={remixContext}
-              onChange={(e) => setRemixContext(e.target.value)}
-              placeholder="Contexto opcional: ex. Deadpool vs Venom, Messi gol de falta..."
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none focus:border-signal/40"
-            />
+          <div className="space-y-3 rounded-[1.5rem] border border-signal/20 bg-signal/[0.06] p-4">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.24em] text-signal">
+                1. Cole a fonte do remix
+              </label>
+              <input
+                value={videoPath}
+                onChange={(e) => setVideoPath(e.target.value)}
+                placeholder="Cole aqui o link ou caminho local do vídeo autorizado"
+                className="mt-2 w-full rounded-2xl border border-signal/30 bg-black/35 px-5 py-5 text-base text-white shadow-inner shadow-black/30 outline-none placeholder:text-mist/35 focus:border-signal focus:ring-2 focus:ring-signal/20"
+              />
+              <p className="mt-2 text-xs text-mist/55">
+                Use links ou arquivos locais que você tem direito de remixar. O render só libera após aprovação manual.
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.24em] text-mist/60">
+                2. Contexto adicional opcional
+              </label>
+              <textarea
+                value={remixContext}
+                onChange={(e) => setRemixContext(e.target.value)}
+                placeholder='Ex.: "Deadpool brigando com Venom", "foco no gol de falta", "tom sombrio e documental"...'
+                rows={3}
+                className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-mist/35 focus:border-signal/40"
+              />
+            </div>
             <select
               value={variationCount}
               onChange={(e) => setVariationCount(Number(e.target.value))}
@@ -613,7 +882,7 @@ export function BeastStudio({
           type="button"
           onClick={handleGenerate}
           disabled={isPending}
-          className="w-full rounded-2xl bg-signal py-4 font-semibold text-black disabled:opacity-60"
+          className="w-full rounded-2xl bg-signal py-4 font-semibold text-black shadow-lg shadow-signal/20 transition hover:-translate-y-0.5 hover:shadow-signal/30 disabled:translate-y-0 disabled:opacity-60"
         >
           {isPending
             ? studioMode === "remix"
@@ -629,6 +898,18 @@ export function BeastStudio({
         <p className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-100">{error}</p>
       ) : null}
 
+      {isPending ? (
+        <div className="rounded-[1.75rem] border border-signal/20 bg-signal/[0.06] p-5">
+          <div className="flex items-center gap-3">
+            <div className="h-3 w-3 animate-pulse rounded-full bg-signal" />
+            <p className="text-sm font-medium text-white">{loadingMessage}</p>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full w-2/3 animate-pulse rounded-full bg-signal/70" />
+          </div>
+        </div>
+      ) : null}
+
       {remixPlan && activeRemixPlan ? (
         <div className="space-y-6">
           <p className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
@@ -642,24 +923,49 @@ export function BeastStudio({
               <p className="mt-1 text-xs text-mist/50">
                 Cada variação usa estilo, narração e assets ligeiramente diferentes para o mesmo vídeo.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {remixVariations.map((variation, index) => (
                   <button
                     key={variation.remixId}
                     type="button"
                     onClick={() => setSelectedVariationIndex(index)}
-                    className={`rounded-xl px-4 py-2 text-sm ${
+                    className={`rounded-2xl border p-4 text-left transition ${
                       selectedVariationIndex === index
-                        ? "bg-signal/20 text-white ring-1 ring-signal/40"
-                        : "bg-white/5 text-mist/70"
+                        ? "border-signal/50 bg-signal/15 text-white shadow-lg shadow-signal/10"
+                        : "border-white/10 bg-white/[0.03] text-mist/70 hover:border-white/20"
                     }`}
                   >
                     {variation.variationLabel ?? `Variação ${index + 1}`}
+                    <span className="mt-2 block text-xs text-mist/55">
+                      {variation.sceneStructure.totalScenes} cenas · {formatSeconds(variation.durationSeconds)} ·{" "}
+                      {variation.musicPlan.musicPresetId}
+                    </span>
                   </button>
                 ))}
               </div>
             </section>
           ) : null}
+
+          <section className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-xs text-mist/45">Duração</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{formatSeconds(activeRemixPlan.durationSeconds)}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-xs text-mist/45">Cenas</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{activeRemixPlan.sceneStructure.totalScenes}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-xs text-mist/45">Assets selecionados</p>
+              <p className="mt-1 text-2xl font-semibold text-white">
+                {selectedCandidateIds.length}/{maxSelectableAssets}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-xs text-mist/45">Importados</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-200">{importedRemixAssets.length}</p>
+            </div>
+          </section>
 
           <section className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
             <h2 className="text-lg font-medium text-white">Análise inteligente (Fase 2)</h2>
@@ -667,7 +973,8 @@ export function BeastStudio({
               {remixPlan.videoAnalysis.contentIntelligence?.headline ?? remixPlan.videoAnalysis.themeSummary}
             </p>
             <p className="mt-2 text-sm leading-7 text-mist/85">
-              {remixPlan.videoAnalysis.contentIntelligence?.summary ?? remixPlan.videoAnalysis.themeSummary}
+              {remixPlan.videoAnalysis.contentIntelligence?.narrativeBrief ??
+                remixPlan.videoAnalysis.themeSummary}
             </p>
             <p className="mt-2 text-xs text-mist/55">
               Domínio: {remixPlan.videoAnalysis.contentIntelligence?.domain ?? "generic"} · Tom:{" "}
@@ -700,6 +1007,157 @@ export function BeastStudio({
                 Palavras-chave: {remixPlan.videoAnalysis.contextKeywords.join(", ")}
               </p>
             ) : null}
+          </section>
+
+          <section className="overflow-hidden rounded-[1.75rem] border border-sky-300/15 bg-gradient-to-br from-sky-400/10 via-black/30 to-black/40 p-5 shadow-[0_24px_80px_rgba(14,165,233,0.08)]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200/70">
+                  Pesquisa de curiosidades
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-white">
+                  Enriquecer narração com fatos reais
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-mist/75">
+                  Use o Research Collector para encontrar detalhes sobre{" "}
+                  <span className="text-white">{researchSubject}</span>, selecionar só o que presta e
+                  regenerar a narração com mais contexto.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:items-end">
+                <button
+                  type="button"
+                  onClick={() => handleDeepResearch(true)}
+                  disabled={isPending || researchAction !== null}
+                  className="rounded-2xl bg-sky-300 px-5 py-3 text-sm font-semibold text-black shadow-[0_18px_45px_rgba(125,211,252,0.22)] transition hover:-translate-y-0.5 hover:bg-sky-200 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {researchAction === "deep"
+                    ? "Pesquisando curiosidades..."
+                    : `Pesquisar curiosidades sobre ${researchSubject}`}
+                </button>
+                <p className="text-xs text-mist/50">
+                  {rankedCuriosities.length
+                    ? `${rankedCuriosities.length} encontradas · ${selectedCuriosities.length} selecionadas`
+                    : "Nenhuma curiosidade carregada ainda"}
+                </p>
+              </div>
+            </div>
+
+            {researchMessage ? (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-mist/75">
+                {researchMessage}
+              </div>
+            ) : null}
+
+            {rankedCuriosities.length ? (
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {rankedCuriosities.slice(0, 8).map((curiosity) => {
+                  const selected = selectedCuriosityIds.includes(curiosity.id);
+                  return (
+                    <label
+                      key={curiosity.id}
+                      className={`group cursor-pointer rounded-2xl border p-4 transition ${
+                        selected
+                          ? "border-sky-300/50 bg-sky-300/10 shadow-[0_18px_45px_rgba(125,211,252,0.08)]"
+                          : "border-white/10 bg-white/[0.025] hover:border-white/20 hover:bg-white/[0.045]"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleCuriositySelection(curiosity.id)}
+                          className="mt-1 accent-sky-300"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] text-mist/60">
+                              {curiosity.suggestedBeat}
+                            </span>
+                            <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-2.5 py-1 text-[11px] text-sky-100">
+                              score {curiosity.scores.total.toFixed(2)}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-white">{curiosity.text}</p>
+                          <p className="mt-3 text-xs text-mist/55">
+                            Fonte: <span className="text-mist/80">{curiosity.source}</span> ·{" "}
+                            confiança {curiosity.confidence}
+                          </p>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-black/25 p-5">
+                <p className="text-sm font-medium text-white">Pronto para pesquisar quando o plano estiver gerado.</p>
+                <p className="mt-2 text-sm leading-6 text-mist/65">
+                  O resultado aparece aqui em cards com fonte, score e seleção manual. Nada entra na
+                  narração sem você marcar.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist/45">
+                      Seleção ativa
+                    </p>
+                    <h3 className="mt-1 text-base font-semibold text-white">
+                      {selectedCuriosities.length} curiosidade(s) para usar
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApplySelectedCuriosities}
+                    disabled={isPending || researchAction !== null || selectedCuriosities.length === 0}
+                    className="rounded-xl bg-signal/20 px-4 py-2 text-sm font-medium text-white ring-1 ring-signal/30 hover:bg-signal/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {researchAction === "apply" ? "Regenerando..." : "Regenerar narração"}
+                  </button>
+                </div>
+                {selectedCuriosities.length ? (
+                  <ul className="mt-4 space-y-2">
+                    {selectedCuriosities.slice(0, 4).map((curiosity) => (
+                      <li
+                        key={curiosity.id}
+                        className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-mist/75"
+                      >
+                        {curiosity.text}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-4 text-sm leading-6 text-mist/60">
+                    Marque uma ou mais curiosidades acima para ver como elas entram no roteiro.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist/45">
+                  Preview da narração
+                </p>
+                <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-white/10 bg-black/30 p-4 text-sm leading-7 text-mist/80">
+                  {narrationPreview || "A narração regenerada aparecerá aqui depois da pesquisa."}
+                  {selectedCuriosities.length ? (
+                    <div className="mt-4 border-t border-white/10 pt-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-200/70">
+                        Curiosidades selecionadas
+                      </p>
+                      <ul className="mt-2 space-y-2">
+                        {selectedCuriosities.slice(0, 3).map((curiosity) => (
+                          <li key={curiosity.id}>+ {curiosity.text}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </section>
 
           <section className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
@@ -773,63 +1231,143 @@ export function BeastStudio({
           ) : null}
 
           <section className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
-            <h2 className="text-lg font-medium text-white">Assets visuais do remix</h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-medium text-white">Assets visuais do remix</h2>
+                {activeRemixPlan.assetDiscovery.discoveryProfile ? (
+                  <p className="mt-1 text-xs text-mist/55">
+                    Perfil: {activeRemixPlan.assetDiscovery.discoveryProfile.domainLabel} ·{" "}
+                    {activeRemixPlan.assetDiscovery.discoveryProfile.queryCount} consultas
+                  </p>
+                ) : null}
+              </div>
+              {activeCandidates.length ? (
+                <button
+                  type="button"
+                  onClick={handleSelectRecommendedAssets}
+                  className="rounded-full border border-signal/30 bg-signal/10 px-3 py-1.5 text-xs font-medium text-signal transition hover:bg-signal/20"
+                >
+                  Selecionar recomendados
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/70">
+                {selectedCandidateIds.length} selecionados
+              </span>
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">
+                {selectedImportedCount} importados
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/70">
+                máximo {maxSelectableAssets}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/70">
+                {activeCandidates.length} candidatos
+              </span>
+            </div>
             <p className="mt-1 text-xs text-mist/50">
               Fontes: {activeRemixPlan.assetDiscovery.imageSearch.providerIds.join(", ") || "—"} · até{" "}
-              {activeRemixPlan.assetDiscovery.importPlan?.maxSelectable ?? 6} selecionáveis · ComfyUI:{" "}
+              {maxSelectableAssets} selecionáveis · ComfyUI:{" "}
               {activeRemixPlan.assetDiscovery.comfyui.variationCount}
             </p>
             {activeRemixPlan.assetDiscovery.imageSearch.queries.length > 0 ? (
               <ul className="mt-3 space-y-1 text-xs text-mist/70">
-                {activeRemixPlan.assetDiscovery.imageSearch.queries.slice(0, 4).map((query) => (
+                {activeRemixPlan.assetDiscovery.imageSearch.queries.slice(0, 5).map((query) => (
                   <li key={query}>· {query}</li>
                 ))}
               </ul>
             ) : null}
             {activeRemixPlan.assetDiscovery.imageSearch.candidates?.length ? (
-              <div className="mt-4 space-y-2">
+              <div className="mt-4 space-y-3">
                 <p className="text-xs text-mist/55">
-                  Selecione os assets aprovados. Após importar, eles entram em storage/assets/remix-imports e
-                  serão usados nas cenas do remix.
+                  Visualize, selecione e importe assets de alta qualidade. Cada candidato sugere uma cena
+                  (hook, context, evidence, climax) para o render.
                 </p>
-                {activeRemixPlan.assetDiscovery.imageSearch.candidates.slice(0, 8).map((candidate) => {
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {activeCandidates.slice(0, 12).map((candidate) => {
                   const checked = selectedCandidateIds.includes(candidate.candidateId);
+                  const imported = importedCandidateIds.has(candidate.candidateId);
+                  const previewSrc = candidate.previewUrl ?? null;
+                  const scoreLabel = candidate.combinedScore ?? candidate.qualityScore ?? candidate.score;
                   return (
                     <label
                       key={candidate.candidateId}
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 text-xs ${
-                        checked
-                          ? "border-signal/40 bg-signal/10"
-                          : "border-white/10 bg-white/[0.02]"
+                      className={`group flex cursor-pointer flex-col overflow-hidden rounded-2xl border text-xs transition ${
+                        imported
+                          ? "border-emerald-400/40 bg-emerald-400/10"
+                          : checked
+                            ? "border-signal/40 bg-signal/10"
+                            : "border-white/10 bg-white/[0.02] hover:border-white/20"
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleCandidateSelection(candidate.candidateId)}
-                        className="mt-1 accent-signal"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-white">{candidate.title}</p>
-                        <p className="mt-1 text-mist/50">
-                          {candidate.providerId} · qualidade {candidate.qualityScore ?? candidate.score} ·{" "}
-                          {candidate.purpose}
-                          {candidate.recommended ? " · recomendado" : ""}
+                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-black/40">
+                        {previewSrc ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewSrc}
+                            alt={candidate.title}
+                            className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-center text-mist/45">
+                            <span className="text-[10px] uppercase tracking-[0.2em]">sem preview</span>
+                            <span className="line-clamp-2 text-[11px]">{candidate.title}</span>
+                          </div>
+                        )}
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleCandidateSelection(candidate.candidateId)}
+                          className="absolute left-3 top-3 h-4 w-4 accent-signal"
+                        />
+                        {imported ? (
+                          <span className="absolute right-2 top-2 rounded-full bg-emerald-400/90 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-black">
+                            importado
+                          </span>
+                        ) : candidate.recommended ? (
+                          <span className="absolute right-2 top-2 rounded-full bg-signal/90 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-white">
+                            top
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1.5 p-3">
+                        <p className="line-clamp-2 font-medium text-white">{candidate.title}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-mist/70">
+                            {candidate.providerId}
+                          </span>
+                          <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-mist/70">
+                            {candidate.purpose.replace(/_/g, " ")}
+                          </span>
+                          {candidate.suggestedSceneRole ? (
+                            <span className="rounded-md bg-signal/10 px-1.5 py-0.5 text-[10px] text-signal">
+                              cena: {candidate.suggestedSceneRole}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[11px] text-mist/45">
+                          score {scoreLabel}
+                          {candidate.relevanceScore != null ? ` · relevância ${candidate.relevanceScore}` : ""}
+                          {candidate.importReady === false ? " · download manual" : ""}
                         </p>
                       </div>
                     </label>
                   );
                 })}
-                <button
-                  type="button"
-                  onClick={handleImportSelectedAssets}
-                  disabled={isPending || selectedCandidateIds.length === 0}
-                  className="mt-2 w-full rounded-xl border border-signal/30 bg-signal/10 py-3 text-sm font-medium text-white disabled:opacity-50"
-                >
-                  {isPending
-                    ? "Importando assets..."
-                    : `Importar ${selectedCandidateIds.length} asset(s) selecionado(s)`}
-                </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleImportSelectedAssets}
+                    disabled={isPending || selectedCandidateIds.length === 0}
+                    className="flex-1 rounded-xl border border-signal/30 bg-signal/15 py-3 text-sm font-medium text-white transition hover:bg-signal/25 disabled:opacity-50"
+                  >
+                    {isPending
+                      ? "Importando assets..."
+                      : `Importar ${selectedCandidateIds.length} asset(s) selecionado(s)`}
+                  </button>
+                </div>
               </div>
             ) : null}
             {assetImportMessage ? (
@@ -878,7 +1416,21 @@ export function BeastStudio({
             </ul>
           </section>
 
-          <section className="space-y-3 rounded-[1.75rem] border border-amber-400/20 bg-amber-400/5 p-5">
+          <section className="space-y-4 rounded-[1.75rem] border border-amber-400/20 bg-gradient-to-br from-amber-400/10 via-black/20 to-signal/5 p-5">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs text-mist/45">Você aprova</p>
+                <p className="mt-1 text-sm text-white">roteiro, cortes, música e variações</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs text-mist/45">Assets</p>
+                <p className="mt-1 text-sm text-white">{importedRemixAssets.length} importados / {selectedCandidateIds.length} selecionados</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs text-mist/45">Render</p>
+                <p className="mt-1 text-sm text-white">{formatSeconds(activeRemixPlan.durationSeconds)} · {activeRemixPlan.musicPlan.musicPresetId}</p>
+              </div>
+            </div>
             <p className="text-xs leading-6 text-amber-100/80">
               O render só inicia após aprovação explícita. Você é responsável por direitos autorais,
               termos da plataforma e permissão de remix do vídeo original.
@@ -901,19 +1453,26 @@ export function BeastStudio({
               />
               Confirmo que tenho direitos ou permissão explícita para remixar e publicar este conteúdo
             </label>
-            {planApproved && rightsConfirmed ? (
-              <button
-                type="button"
-                onClick={handleRender}
-                disabled={isPending}
-                className="w-full rounded-2xl border border-signal/30 bg-signal/10 py-3 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {isPending ? "Criando RenderJob..." : "Aprovar e Renderizar"}
-              </button>
-            ) : null}
+            <p className="text-xs text-mist/60">
+              Ao clicar abaixo, o sistema cria o RenderJob automaticamente e inicia o worker
+              (requer API com DATA_BACKEND=prisma).
+            </p>
+            <button
+              type="button"
+              onClick={handleRender}
+              disabled={isPending || !remixReadyToRender}
+              className="w-full rounded-2xl bg-signal py-4 text-sm font-bold text-black shadow-lg shadow-signal/20 transition hover:-translate-y-0.5 hover:shadow-signal/30 disabled:translate-y-0 disabled:bg-white/10 disabled:text-mist/45 disabled:shadow-none"
+            >
+              {isPending
+                ? "Iniciando render..."
+                : remixReadyToRender
+                  ? "Aprovar plano e renderizar MP4"
+                  : "Confirme aprovação e direitos para renderizar"}
+            </button>
+            <RenderProgressPanel response={result} />
             {result?.renderJobId ? (
               <p className="text-sm text-signal">
-                RenderJob criado:{" "}
+                RenderJob:{" "}
                 <Link href={`/projects/${projectId}`} className="underline">
                   {result.renderJobId}
                 </Link>
@@ -922,10 +1481,6 @@ export function BeastStudio({
             {result?.outputPath ? (
               <p className="text-sm text-emerald-300/90">
                 MP4 pronto: <span className="font-mono text-xs">{result.outputPath}</span>
-              </p>
-            ) : result?.status === "partial" && result?.renderJobId ? (
-              <p className="text-xs text-amber-200/70">
-                RenderJob enfileirado — o worker pode ainda estar processando.
               </p>
             ) : null}
             {projectId ? (
@@ -1036,18 +1591,25 @@ export function BeastStudio({
               Confirmo direitos ou permissão para usar e publicar o material deste short
             </label>
             {planApproved && rightsConfirmed ? (
-              <button
-                type="button"
-                onClick={handleRender}
-                disabled={isPending}
-                className="w-full rounded-2xl border border-signal/30 bg-signal/10 py-3 text-sm font-medium text-white disabled:opacity-50"
-              >
-                {isPending ? "Criando RenderJob..." : "Aprovar e Renderizar"}
-              </button>
+              <>
+                <p className="text-xs text-mist/60">
+                  Ao clicar abaixo, o sistema cria o RenderJob automaticamente e inicia o worker
+                  (requer API com DATA_BACKEND=prisma).
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRender}
+                  disabled={isPending}
+                  className="w-full rounded-2xl border border-signal/30 bg-signal/10 py-3 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {isPending ? "Iniciando render..." : "Aprovar e Renderizar"}
+                </button>
+              </>
             ) : null}
+            <RenderProgressPanel response={result} />
             {result?.renderJobId ? (
               <p className="text-sm text-signal">
-                RenderJob criado:{" "}
+                RenderJob:{" "}
                 <Link href={`/projects/${projectId}`} className="underline">
                   {result.renderJobId}
                 </Link>
@@ -1056,10 +1618,6 @@ export function BeastStudio({
             {result?.outputPath ? (
               <p className="text-sm text-emerald-300/90">
                 MP4 pronto: <span className="font-mono text-xs">{result.outputPath}</span>
-              </p>
-            ) : result?.status === "partial" && result?.renderJobId ? (
-              <p className="text-xs text-amber-200/70">
-                RenderJob enfileirado — o worker pode ainda estar processando.
               </p>
             ) : null}
             {projectId ? (

@@ -1,3 +1,4 @@
+import { buildNarrationPlan } from "@reelforge/narration-engine";
 import { detectTopicCase, type TopicCaseBrief } from "../editorial/topic-knowledge.js";
 import type { MediaBeastCandidate } from "../providers/types.js";
 import type { MediaBeastNiche } from "../providers/types.js";
@@ -6,6 +7,7 @@ import type {
   RemixStructuredContentDescription
 } from "./remix-content-intelligence.js";
 import type { ProductionEmotion } from "./niche-production-profiles.js";
+import type { RemixTargetStyle } from "./remix-types.js";
 
 const PROVIDER_TITLE_PREFIX =
   /^(Manual |YouTube |Image |Forum |Trend |TikTok |Pinterest |Flickr |Reddit |Generic web |Internet Archive )[\w\s]*(?:lead|candidate):\s*/iu;
@@ -46,20 +48,48 @@ const SYSTEM_TEXT_PATTERNS: RegExp[] = [
   /temporal_lens/i,
   /https?:\/\//i,
   /archive collections often/i,
-  /manual license review/i
+  /manual license review/i,
+  /dom[ií]nio:\s*\w+/i,
+  /entidades:\s*/i,
+  /a[cç][aã]o central:/i,
+  /plataforma:\s*(local|youtube|tiktok)/i,
+  /tom:\s*energia/i,
+  /gancho imediato com/i,
+  /contexto editorial:/i,
+  /prova visual:/i,
+  /fechamento com cta/i,
+  /narration engine directive/i,
+  /beat map/i,
+  /script final/i,
+  /proibido no audio/i
 ];
 
+export type NarrationBeatRole = "hook" | "context" | "tension" | "climax" | "cta";
+
+export interface NarrationProsody {
+  energy: "whisper" | "low" | "medium" | "high" | "peak";
+  tone: string;
+  pauseBeforeMs: number;
+  emphasisWords: string[];
+  deliveryNote: string;
+}
+
 export interface NarrationBeatDraft {
-  role: "hook" | "context" | "climax" | "cta";
+  role: NarrationBeatRole;
   text: string;
   caption: string;
   curiosityTag: string;
+  prosody?: NarrationProsody;
 }
 
 export interface VideoNarrationHints {
   domain?: RemixContentDomain;
   headline?: string;
   summary?: string;
+  narrativeBrief?: string;
+  narrativeHook?: string;
+  curiosityAngle?: string;
+  setting?: string | null;
   entities?: string[];
   primaryAction?: string;
   primaryActionVerb?: string;
@@ -86,25 +116,25 @@ export interface NarrationContentContext {
   isQuestionTitle: boolean;
   platformHint: string | null;
   videoHints: VideoNarrationHints | null;
-  wordBudget: Record<"hook" | "context" | "climax" | "cta", number>;
+  wordBudget: Record<NarrationBeatRole, number>;
   targetDurationSeconds: number;
 }
 
 const ENTITY_CURIOSITY_FACTS: Record<string, string[]> = {
   messi: [
-    "Messi mede 1,70 m e ainda assim ganha duelos porque lê o quadril do marcador antes de acelerar.",
-    "Ele faz o gol parecer improviso, mas o toque nasce de um hábito raro: olhar o pé de apoio do adversário.",
-    "A curiosidade é biomecânica: passos curtos e centro de gravidade baixo comprimem o tempo de reação do zagueiro."
+    "Messi tem 1,70 m. Mesmo assim, ganha duelo. Ele lê o quadril do zagueiro antes de acelerar.",
+    "O gol parece improviso. Não é. Ele olha o pé de apoio do marcador antes do toque.",
+    "Passos curtos. Centro de gravidade baixo. Isso comprime o tempo de reação do adversário."
   ],
   ronaldo: [
-    "CR7 treina cabeceio com salto vertical acima de 70 cm — por isso o timing no ar parece fora do comum.",
-    "O detalhe pouco comentado: ele ajusta a corrida de aproximação para chegar no ponto exato do cruzamento.",
-    "Muitos veem força bruta; o segredo está na leitura do espaço entre marcação e goleiro."
+    "CR7 salta mais de 70 cm no cabeceio. Por isso o timing no ar parece impossível.",
+    "Ele ajusta a corrida de aproximação. Chega no ponto exato do cruzamento.",
+    "Parece força bruta. O segredo é ler o espaço entre marcação e goleiro."
   ],
   neymar: [
-    "Neymar troca de ritmo com o ombro antes do pé — o marcador reage ao movimento errado.",
-    "O drible que viraliza costuma nascer de um toque de sola, não de velocidade pura.",
-    "Ele usa o corpo como isca: o passe sai no meio da finta, quando a defesa já se comprometeu."
+    "Neymar mexe o ombro antes do pé. O marcador reage no movimento errado.",
+    "O drible viral nasce de toque de sola. Não de velocidade pura.",
+    "Ele usa o corpo como isca. O passe sai no meio da finta."
   ],
   goro: [
     "Goro foi o primeiro chefe jogável da franquia — quatro braços não são só estética, mudam o alcance do grab.",
@@ -185,9 +215,9 @@ const DOMAIN_CURIOSITY_FALLBACKS: Record<RemixContentDomain, string[]> = {
     "A curiosidade está no que ficou fora do corte original — contexto que só fonte primária revela."
   ],
   generic: [
-    "O detalhe que separa um short genérico de um memorável quase nunca está no título.",
-    "Quem entende o contexto antes do clímax percebe camadas que a maioria ignora.",
-    "A surpresa real está no que acontece um segundo antes do momento que todo mundo compartilha."
+    "O que separa um short memorável quase nunca está no título.",
+    "Quem entende o contexto antes do clímax vê o que a maioria ignora.",
+    "O melhor vem um segundo antes do momento que todo mundo compartilha."
   ]
 };
 
@@ -196,13 +226,148 @@ const OBVIOUS_PHRASE_PATTERNS = [
   /pouca gente sabe/i,
   /poucos sabem/i,
   /quase ninguem/i,
+  /quase ninguém/i,
   /camada que shorts costumam ignorar/i,
   /muda a leitura inteira/i,
   /no feed/i,
   /remix gen[eé]rico/i,
   /recorte editorial do short/i,
-  /viralizou no clipe/i
+  /viralizou no clipe/i,
+  /antecipa a explica[cç][aã]o/i,
+  /surpresa est[aá] no que acontece/i,
+  /pausa aqui/i,
+  /é nesse instante que tudo vira/i,
+  /esse lance de .+ parece simples/i,
+  /até você ver o instante anterior/i,
+  /todo mundo vê .+ quase ninguém/i,
+  /a câmera gruda em/i,
+  /o clipe só mostra metade/i,
+  /e aí vem o lance que quase ninguém comentou/i,
+  /fãs reconhecem na hora\.?$/i,
+  /contexto que raramente aparece no clipe/i,
+  /por isso o hype explode nesse frame/i
 ];
+
+export type NarrationVariationAngle =
+  | "curiosity_led"
+  | "dark_reveal"
+  | "emotional_bond"
+  | "fan_lore"
+  | "hype_energy"
+  | "documentary_fact";
+
+const STYLE_ANGLE_ROTATION: Record<RemixTargetStyle, NarrationVariationAngle[]> = {
+  documentary: ["documentary_fact", "curiosity_led", "emotional_bond"],
+  dark_cinematic: ["dark_reveal", "curiosity_led", "documentary_fact"],
+  horror: ["dark_reveal", "emotional_bond", "curiosity_led"],
+  true_crime: ["dark_reveal", "documentary_fact", "curiosity_led"],
+  hype_sports: ["hype_energy", "curiosity_led", "fan_lore"],
+  vintage_football: ["hype_energy", "fan_lore", "documentary_fact"],
+  anime: ["fan_lore", "emotional_bond", "curiosity_led"],
+  comics: ["fan_lore", "curiosity_led", "emotional_bond"],
+  bodybuilding: ["hype_energy", "documentary_fact", "curiosity_led"],
+  generic: ["curiosity_led", "documentary_fact", "emotional_bond", "fan_lore"]
+};
+
+const DOMAIN_ANGLE_BOOST: Partial<Record<RemixContentDomain, NarrationVariationAngle[]>> = {
+  comics_superhero: ["fan_lore", "emotional_bond"],
+  sports: ["hype_energy"],
+  gaming: ["fan_lore", "hype_energy"],
+  true_crime: ["dark_reveal"],
+  horror: ["dark_reveal"]
+};
+
+export function resolveNarrationVariationAngle(input: {
+  targetStyle?: RemixTargetStyle;
+  variationIndex?: number;
+  domain?: RemixContentDomain;
+  emotion?: ProductionEmotion;
+}): NarrationVariationAngle {
+  const fallbackAngles: NarrationVariationAngle[] = [
+    "curiosity_led",
+    "documentary_fact",
+    "emotional_bond",
+    "fan_lore",
+    "dark_reveal"
+  ];
+  const base = input.targetStyle
+    ? STYLE_ANGLE_ROTATION[input.targetStyle]
+    : fallbackAngles;
+  const boosted = input.domain ? DOMAIN_ANGLE_BOOST[input.domain] ?? [] : [];
+  const pool: NarrationVariationAngle[] = [
+    ...new Set<NarrationVariationAngle>([...base, ...boosted])
+  ];
+  const index = input.variationIndex ?? 0;
+  return pool[index % pool.length] ?? "curiosity_led";
+}
+
+function spokenHookFromNarrativeHook(hook: string): string {
+  return optimizeForSpokenDelivery(
+    hook
+      .replace(/\s*—\s*/g, ". ")
+      .replace(/\s+-\s+/g, ". ")
+      .replace(/!\s*/g, ". ")
+      .replace(/\s+\.\s*/g, ". ")
+      .replace(/\.\s+\./g, ".")
+      .replace(/\s+,/g, ",")
+      .trim()
+  );
+}
+
+function linesTooSimilar(left: string, right: string, threshold = 0.55): boolean {
+  const leftWords = new Set(left.toLowerCase().split(/\s+/).filter((word) => word.length > 3));
+  const rightWords = right.toLowerCase().split(/\s+/).filter((word) => word.length > 3);
+  if (leftWords.size === 0 || rightWords.length === 0) {
+    return false;
+  }
+  const overlap = rightWords.filter((word) => leftWords.has(word)).length;
+  return overlap / rightWords.length >= threshold;
+}
+
+export function weaveCuriosityNaturally(
+  curiosity: string,
+  lead: string,
+  angle: NarrationVariationAngle
+): string {
+  const spoken = optimizeForSpokenDelivery(curiosity);
+  const lowerFirst =
+    spoken.charAt(0).toLowerCase() + spoken.slice(1).replace(/\.$/, "");
+
+  const bridges: Record<NarrationVariationAngle, string[]> = {
+    curiosity_led: [
+      `E o detalhe é esse: ${lowerFirst}.`,
+      `Aqui que fica interessante. ${spoken}`,
+      `Pouca gente liga, mas ${lowerFirst}.`
+    ],
+    documentary_fact: [
+      `Nos bastidores, ${lowerFirst}.`,
+      `O registro diz o seguinte: ${lowerFirst}.`,
+      `Arquivo e HQ contam outra coisa: ${lowerFirst}.`
+    ],
+    fan_lore: [
+      `Quem acompanha ${lead} reconhece: ${lowerFirst}.`,
+      `Nos quadrinhos, ${lowerFirst}.`,
+      `Fã antigo já sabe — ${lowerFirst}.`
+    ],
+    emotional_bond: [
+      `E tem um motivo emocional: ${lowerFirst}.`,
+      `Por trás dessa cena, ${lowerFirst}.`,
+      `Não é só visual. ${spoken}`
+    ],
+    dark_reveal: [
+      `E aí fica estranho: ${lowerFirst}.`,
+      `O tom muda quando você sabe que ${lowerFirst}.`,
+      `Por baixo da cena, ${lowerFirst}.`
+    ],
+    hype_energy: [
+      `E é por isso que explode: ${lowerFirst}.`,
+      `Esse é o gatilho do hype — ${lowerFirst}.`,
+      `No auge do momento, ${lowerFirst}.`
+    ]
+  };
+
+  return pickVariant(bridges[angle], lead, `curiosity-weave-${angle}`);
+}
 
 export function isOperationalText(text: string): boolean {
   const trimmed = text.trim();
@@ -234,14 +399,377 @@ function pickVariant<T>(variants: T[], seed: string, salt: string): T {
   return variants[acc] ?? variants[0]!;
 }
 
+const LITERARY_TO_SPOKEN: Array<[RegExp, string]> = [
+  [/protagoniza/gi, "é o centro de"],
+  [/recorte editorial/gi, "corte"],
+  [/pano de fundo editorial/gi, "contexto"],
+  [/camada que shorts costumam ignorar/gi, "detalhe que quase ninguém vê"],
+  [/muda a leitura inteira/gi, "muda tudo"],
+  [/memória coletiva/gi, "história que todo mundo lembra"],
+  [/instante decisivo/gi, "momento decisivo"],
+  [/—/g, ". "],
+  [/\s-\s/g, ". "],
+  [/;\s*/g, ". "],
+  [/\bvoce\b/gi, "você"],
+  [/\bnao\b/gi, "não"],
+  [/\bate voce\b/gi, "até você"],
+  [/\bate\s/gi, "até "]
+];
+
+const DANGLING_ENDING_PATTERN =
+  /\b(o|a|os|as|um|uma|de|do|da|dos|das|em|no|na|nos|nas|que|se|e|ou|com|por|para)\.?$/i;
+
+function polishTruncatedEnding(text: string): string {
+  let result = text.trim();
+  let guard = 0;
+
+  while (DANGLING_ENDING_PATTERN.test(result) && result.includes(" ") && guard < 6) {
+    guard += 1;
+    const words = result.replace(/[.!?]$/, "").split(/\s+/).filter(Boolean);
+    words.pop();
+    if (!words.length) {
+      break;
+    }
+    result = `${words.join(" ")}.`;
+  }
+
+  return result;
+}
+
+function shortenAtClauseBoundary(text: string, maxWords: number): string {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return text.trim();
+  }
+
+  for (let index = Math.min(words.length, maxWords); index >= Math.max(4, maxWords - 6); index -= 1) {
+    const chunk = words.slice(0, index).join(" ");
+    if (/[.!?]$/.test(chunk) || /[,;:]$/.test(chunk)) {
+      return polishTruncatedEnding(chunk.replace(/[,;:]$/, ".").trim());
+    }
+  }
+
+  const trimmed = words.slice(0, maxWords).join(" ");
+  const withEnding = /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+  return polishTruncatedEnding(withEnding);
+}
+
 export function shortenForSpeech(text: string, maxWords: number): string {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length <= maxWords) {
     return text.trim();
   }
 
-  const trimmed = words.slice(0, maxWords).join(" ");
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  if (sentences.length > 1) {
+    let assembled = "";
+    let usedWords = 0;
+
+    for (const sentence of sentences) {
+      const sentenceWords = sentence.split(/\s+/).filter(Boolean).length;
+      if (usedWords + sentenceWords <= maxWords) {
+        assembled = assembled ? `${assembled} ${sentence}` : sentence;
+        usedWords += sentenceWords;
+        continue;
+      }
+      if (!assembled) {
+        return shortenAtClauseBoundary(sentence, maxWords);
+      }
+      break;
+    }
+
+    if (assembled) {
+      return /[.!?]$/.test(assembled.trim()) ? assembled.trim() : `${assembled.trim()}.`;
+    }
+  }
+
+  return shortenAtClauseBoundary(text, maxWords);
+}
+
+export function optimizeForSpokenDelivery(text: string): string {
+  let spoken = text.trim();
+  if (!spoken) {
+    return "";
+  }
+
+  for (const [pattern, replacement] of LITERARY_TO_SPOKEN) {
+    spoken = spoken.replace(pattern, replacement);
+  }
+
+  spoken = spoken
+    .replace(/\s+/g, " ")
+    .replace(/\s+\./g, ".")
+    .replace(/\.\s*\./g, ".")
+    .replace(/,\s*,/g, ", ")
+    .replace(/\s+([,.!?])/g, "$1")
+    .trim();
+
+  const sentences = spoken.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const normalized = sentences.flatMap((sentence) => {
+    const words = sentence.split(/\s+/).filter(Boolean);
+    if (words.length <= 16) {
+      return [sentence];
+    }
+
+    const clauses = sentence.split(/,\s+/).filter(Boolean);
+    if (clauses.length > 1 && clauses.every((clause) => clause.split(/\s+/).length <= 14)) {
+      return clauses.map((clause) => (/[.!?]$/.test(clause) ? clause : `${clause}.`));
+    }
+
+    const pivot = Math.ceil(words.length / 2);
+    const first = words.slice(0, pivot).join(" ");
+    const second = words.slice(pivot).join(" ");
+    return [
+      /[.!?]$/.test(first) ? first : `${first}.`,
+      /[.!?]$/.test(second) ? second : `${second}.`
+    ];
+  });
+
+  return normalized
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .replace(/(\. )([a-zà-ú])/g, (_, separator, letter) => `${separator}${letter.toUpperCase()}`)
+    .trim();
+}
+
+function distillNarrativeBriefForSpeech(brief: string, maxWords: number): string {
+  const spoken = optimizeForSpokenDelivery(
+    brief
+      .replace(/\b(em|no|na)\s+[^,.]+,\s*/gi, "")
+      .replace(/\bprotagoniza\b/gi, "é o centro de")
+  );
+  return shortenForSpeech(spoken, maxWords);
+}
+
+function extractEmphasisWords(text: string): string[] {
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const emphasis = new Set<string>();
+
+  for (const token of tokens) {
+    const cleaned = token.replace(/[^a-zA-ZÀ-ÿ0-9]/g, "");
+    if (!cleaned) {
+      continue;
+    }
+    if (/\d/.test(cleaned)) {
+      emphasis.add(cleaned);
+    }
+    if (/^[A-ZÀ-Ý]/.test(token) && cleaned.length > 2) {
+      emphasis.add(cleaned);
+    }
+  }
+
+  return [...emphasis].slice(0, 4);
+}
+
+export function buildBeatProsody(
+  role: NarrationBeatRole,
+  emotion: ProductionEmotion,
+  text: string
+): NarrationProsody {
+  const emphasisWords = extractEmphasisWords(text);
+  const emotionTone: Partial<Record<ProductionEmotion, string>> = {
+    dark: "sombrio, contido",
+    hype: "energia alta, ritmo acelerado",
+    horror: "sussurro tenso, pausas longas",
+    epic: "grandioso, seguro",
+    curious: "curioso, conversacional",
+    calm: "calmo, didático",
+    tense: "suspenso, pressão crescente"
+  };
+
+  const byRole: Record<NarrationBeatRole, Omit<NarrationProsody, "emphasisWords">> = {
+    hook: {
+      energy: emotion === "hype" ? "peak" : "high",
+      tone: `${emotionTone[emotion] ?? "direto"} — gancho`,
+      pauseBeforeMs: 0,
+      deliveryNote: "Primeira sílaba forte. Frase curta. Zero hesitação."
+    },
+    context: {
+      energy: "medium",
+      tone: `${emotionTone[emotion] ?? "documental"} — contexto`,
+      pauseBeforeMs: 180,
+      deliveryNote: "Tom explicativo. Uma ideia por frase. Respirar entre períodos."
+    },
+    tension: {
+      energy: emotion === "dark" || emotion === "horror" ? "low" : "medium",
+      tone: `${emotionTone[emotion] ?? "suspenso"} — virada`,
+      pauseBeforeMs: 320,
+      deliveryNote: "Micro-pausa antes da linha. Acelerar na última palavra."
+    },
+    climax: {
+      energy: emotion === "hype" ? "peak" : emotion === "calm" ? "high" : "high",
+      tone: `${emotionTone[emotion] ?? "revelação"} — clímax`,
+      pauseBeforeMs: 420,
+      deliveryNote: "Ênfase em números e no fato surpreendente. Pausa curta antes do dado."
+    },
+    cta: {
+      energy: "low",
+      tone: "convite leve — fechamento",
+      pauseBeforeMs: 260,
+      deliveryNote: "Tom amigável. Desacelerar. Soar como pergunta natural."
+    }
+  };
+
+  return {
+    ...byRole[role],
+    emphasisWords
+  };
+}
+
+function buildTensionBeatText(input: {
+  lead: string;
+  secondaryEntity?: string | null;
+  action?: string;
+  actionVerb?: string;
+  hookPhrase?: string | null;
+  domain?: RemixContentDomain;
+  emotion: ProductionEmotion;
+  angle?: NarrationVariationAngle;
+  seed: string;
+}): string {
+  const action = input.action ?? "esse momento";
+  const actionLower = action.replace(/\s*\/\s*/g, " e ").toLowerCase();
+  const secondary = input.secondaryEntity;
+  const angle = input.angle ?? "curiosity_led";
+
+  const shared: string[] = [];
+
+  if (secondary && input.domain === "comics_superhero") {
+    shared.push(
+      `A química entre ${input.lead} e ${secondary} não é acaso. O clipe esconde a origem disso.`,
+      `${input.lead} e ${secondary} juntos mudam o peso da cena. Repara no encontro.`,
+      `Essa dupla funciona porque ${actionLower} — mas o short não explica por quê.`
+    );
+  }
+
+  if (input.hookPhrase && input.hookPhrase.length > 4) {
+    shared.push(
+      `O título promete ${input.hookPhrase.toLowerCase()}. O corte não explica.`,
+      `Parece exagero. Mas ${input.lead} entrega.`
+    );
+  }
+
+  const byAngle: Record<NarrationVariationAngle, string[]> = {
+    curiosity_led: [
+      `Repara no timing. É aqui que ${actionLower} deixa de ser só cena.`,
+      `O corte acelera, mas o detalhe está nesse meio segundo.`,
+      ...shared
+    ],
+    dark_reveal: [
+      `E o clima pesa. ${input.lead} não escolhe isso por acaso.`,
+      `Tem algo incômodo nesse encontro. Proposital.`,
+      ...shared
+    ],
+    emotional_bond: [
+      `Não é só ação. É o vínculo que o short quer que você sinta.`,
+      `Aqui a cena deixa de ser luta e vira conexão.`,
+      ...shared
+    ],
+    fan_lore: [
+      `Quem leu a história original já esperava esse beat.`,
+      `Esse frame paga uma dívida com os fãs — e o short só mostra a superfície.`,
+      ...shared
+    ],
+    hype_energy: [
+      `A energia sobe aqui. ${input.lead} entra no modo que o clipe quer vender.`,
+      `É nesse pico que o short prende — antes do corte seguinte.`,
+      ...shared
+    ],
+    documentary_fact: [
+      `Sem contexto, parece só ${actionLower}. Com contexto, muda tudo.`,
+      `O que o vídeo não narra é o que aconteceu imediatamente antes.`,
+      ...shared
+    ]
+  };
+
+  const domainExtras: Partial<Record<RemixContentDomain, string[]>> = {
+    sports: [
+      `Pressão, marcação e ritmo. ${actionLower} ganha outro sentido com o placar na cabeça.`,
+      `O estádio sente esse lance antes da câmera mostrar.`
+    ],
+    gaming: [
+      `Frame a frame, a leitura muda. Highlight bonito, decisão fria.`,
+      `${input.lead} já leu o oponente. Só faltava esse segundo.`
+    ],
+    true_crime: [
+      `As peças começam a encaixar. O que parecia isolado, não é.`,
+      `Um detalhe pequeno muda o peso de ${actionLower}.`
+    ]
+  };
+
+  const pool = [
+    ...(byAngle[angle] ?? byAngle.curiosity_led),
+    ...(input.domain ? domainExtras[input.domain] ?? [] : [])
+  ];
+
+  if (input.emotion === "horror" || input.emotion === "dark") {
+    pool.push(`O silêncio aqui pesa. ${input.lead} não está sozinho nessa cena.`);
+  }
+
+  return pickVariant(
+    pool.filter((line) => !isObviousPhrase(line)),
+    input.seed,
+    `tension-${angle}`
+  );
+}
+
+function ensureFiveBeatStructure(
+  drafts: Array<Omit<NarrationBeatDraft, "caption">>,
+  options?: {
+    emotion?: ProductionEmotion;
+    lead?: string;
+    action?: string;
+    domain?: RemixContentDomain;
+    seed?: string;
+  }
+): Array<Omit<NarrationBeatDraft, "caption">> {
+  if (drafts.some((draft) => draft.role === "tension")) {
+    return drafts;
+  }
+
+  const ordered: Array<Exclude<NarrationBeatRole, "tension">> = [
+    "hook",
+    "context",
+    "climax",
+    "cta"
+  ];
+  const result: Array<Omit<NarrationBeatDraft, "caption">> = [];
+
+  for (const role of ordered) {
+    const beat = drafts.find((draft) => draft.role === role);
+    if (!beat) {
+      continue;
+    }
+
+    result.push(beat);
+    if (role === "context" && options?.seed) {
+      const tensionInput: {
+        lead: string;
+        emotion: ProductionEmotion;
+        seed: string;
+        action?: string;
+        domain?: RemixContentDomain;
+      } = {
+        lead: options.lead ?? "esse assunto",
+        emotion: options.emotion ?? "curious",
+        seed: options.seed
+      };
+      if (options.action) {
+        tensionInput.action = options.action;
+      }
+      if (options.domain) {
+        tensionInput.domain = options.domain;
+      }
+
+      result.push({
+        role: "tension",
+        text: buildTensionBeatText(tensionInput),
+        curiosityTag: "tension-pivot"
+      });
+    }
+  }
+
+  return result.length >= 4 ? result : drafts;
 }
 
 export function polishPtBrNarration(text: string): string {
@@ -350,11 +878,22 @@ function reduceSubjectRepetition(
 export function finalizeNarrationBeats(
   drafts: Array<Omit<NarrationBeatDraft, "caption">>,
   budget: NarrationContentContext["wordBudget"],
-  subject: string
+  subject: string,
+  options?: {
+    emotion?: ProductionEmotion;
+    lead?: string;
+    action?: string;
+    domain?: RemixContentDomain;
+    seed?: string;
+  }
 ): NarrationBeatDraft[] {
-  const polished = drafts.map((draft) => {
-    const sanitized = sanitizeNarrationLine(polishPtBrNarration(draft.text));
-    const maxWords = budget[draft.role];
+  const structured = ensureFiveBeatStructure(drafts, options);
+  const emotion = options?.emotion ?? "curious";
+
+  const polished = structured.map((draft) => {
+    const optimized = optimizeForSpokenDelivery(polishPtBrNarration(draft.text));
+    const sanitized = sanitizeNarrationLine(optimized);
+    const maxWords = budget[draft.role] ?? budget.context;
     const text =
       countWords(sanitized) > maxWords
         ? shortenForSpeech(sanitized, maxWords)
@@ -363,11 +902,80 @@ export function finalizeNarrationBeats(
     return {
       ...draft,
       text,
-      caption: buildCaptionFromLine(text)
+      caption: buildCaptionFromLine(text),
+      prosody: draft.prosody ?? buildBeatProsody(draft.role, emotion, text)
     };
   });
 
   return reduceSubjectRepetition(polished, subject);
+}
+
+export function validateNarrationScript(script: string): {
+  valid: boolean;
+  issues: string[];
+} {
+  const issues: string[] = [];
+
+  for (const line of script.split("\n").map((entry) => entry.trim()).filter(Boolean)) {
+    if (isOperationalText(line)) {
+      issues.push(`texto operacional: ${line}`);
+    }
+    if (isMetadataSummary(line)) {
+      issues.push(`metadado no script: ${line}`);
+    }
+    if (isObviousPhrase(line)) {
+      issues.push(`frase genérica: ${line}`);
+    }
+  }
+
+  return {
+    valid: issues.length === 0,
+    issues
+  };
+}
+
+export function ensureNarrationBeatsSafe(
+  beats: NarrationBeatDraft[],
+  fallbackSubject: string
+): NarrationBeatDraft[] {
+  return beats.map((beat) => {
+    const sanitized = sanitizeNarrationLine(polishPtBrNarration(beat.text));
+    if (
+      sanitized &&
+      !isOperationalText(sanitized) &&
+      !isMetadataSummary(sanitized)
+    ) {
+      return {
+        ...beat,
+        text: sanitized,
+        caption: buildCaptionFromLine(sanitized)
+      };
+    }
+
+    const fallbackByRole: Record<NarrationBeatDraft["role"], string> = {
+      hook: `Esse corte de ${fallbackSubject} abre forte. Vamos entender o que está por trás.`,
+      context: `Antes do clímax, vale olhar o que preparou esse momento.`,
+      tension: `Repara nesse meio segundo. É aqui que a cena muda de rumo.`,
+      climax: weaveCuriosityNaturally(
+        resolveCuriosityFact({
+          domain: "generic",
+          seed: fallbackSubject,
+          lead: fallbackSubject
+        }),
+        fallbackSubject,
+        "curiosity_led"
+      ),
+      cta: `Comenta o que mais te pegou nesse trecho.`
+    };
+
+    const fallback = fallbackByRole[beat.role];
+    return {
+      ...beat,
+      text: fallback,
+      caption: buildCaptionFromLine(fallback),
+      curiosityTag: `${beat.curiosityTag}-safe`
+    };
+  });
 }
 
 export function extractVideoHintsFromMetadata(
@@ -395,6 +1003,18 @@ export function extractVideoHintsFromMetadata(
   }
   if (typeof metadata.remixContentSummary === "string") {
     hints.summary = metadata.remixContentSummary;
+  }
+  if (typeof metadata.remixNarrativeBrief === "string") {
+    hints.narrativeBrief = metadata.remixNarrativeBrief;
+  }
+  if (typeof metadata.remixNarrativeHook === "string") {
+    hints.narrativeHook = metadata.remixNarrativeHook;
+  }
+  if (typeof metadata.remixCuriosityAngle === "string") {
+    hints.curiosityAngle = metadata.remixCuriosityAngle;
+  }
+  if (typeof metadata.remixSetting === "string") {
+    hints.setting = metadata.remixSetting;
   }
   if (typeof entitiesRaw === "string") {
     hints.entities = entitiesRaw
@@ -466,7 +1086,7 @@ export function buildWordBudget(
   durationSeconds: number,
   pacing: "tight" | "balanced" | "breathing",
   options?: { fillRatio?: number; minTotalWords?: number }
-): Record<"hook" | "context" | "climax" | "cta", number> {
+): Record<NarrationBeatRole, number> {
   const fillRatio = options?.fillRatio ?? 0.9;
   const minTotalWords =
     options?.minTotalWords ?? Math.max(Math.round(durationSeconds * 1.75), 28);
@@ -477,10 +1097,11 @@ export function buildWordBudget(
   );
 
   return {
-    hook: Math.max(Math.round(totalWords * 0.22), 10),
-    context: Math.max(Math.round(totalWords * 0.34), 14),
-    climax: Math.max(Math.round(totalWords * 0.28), 12),
-    cta: Math.max(Math.round(totalWords * 0.16), 6)
+    hook: Math.max(Math.round(totalWords * 0.18), 8),
+    context: Math.max(Math.round(totalWords * 0.24), 10),
+    tension: Math.max(Math.round(totalWords * 0.12), 9),
+    climax: Math.max(Math.round(totalWords * 0.28), 10),
+    cta: Math.max(Math.round(totalWords * 0.14), 5)
   };
 }
 
@@ -705,9 +1326,9 @@ function buildTrueCrimeEraBeats(
 
   const hook = pickVariant(
     [
-      `Sobre ${topic}, pouca gente conecta a onda de casos a mudancas reais nas investigacoes.`,
-      `Os anos ${decade} e ${topic} mudaram para sempre como o FBI perseguia assassinos em serie.`,
-      `Antes da internet, ${topic} ja alimentava manchetes com camadas que shorts raramente mostram.`
+      `Os anos ${decade} e ${topic} mudaram para sempre como o FBI perseguia assassinos em série.`,
+      `Antes da internet, ${topic} já alimentava manchetes com camadas que shorts raramente mostram.`,
+      `${topic} na década de ${decade}: o que os arquivos revelam vai além das manchetes.`
     ],
     seed,
     "hook"
@@ -887,55 +1508,77 @@ function buildVideoAwareBeats(input: {
 
   const hook = pickVariant(
     [
-      input.hints.headline && !isObviousPhrase(input.hints.headline)
-        ? `${input.hints.headline} — e o clipe só mostra metade disso.`
+      input.hints.narrativeHook && !isOperationalText(input.hints.narrativeHook)
+        ? spokenHookFromNarrativeHook(input.hints.narrativeHook)
         : null,
-      `Esse trecho com ${lead} prende porque antecipa ${action.toLowerCase()} antes da maioria perceber.`,
-      `A câmera foca em ${lead}, mas o que importa acontece um segundo antes do que todo mundo compartilha.`,
-      themeLine ? `${themeLine} — e é isso que muda a leitura do vídeo.` : null
-    ].filter((line): line is string => Boolean(line)),
+      input.hints.headline && !isObviousPhrase(input.hints.headline)
+        ? `${input.hints.headline}. O vídeo resume demais.`
+        : null,
+      themeLine ? `${themeLine}. É por isso que esse corte prende.` : null,
+      `${lead} no centro — e o short não perde tempo com rodeio.`
+    ].filter((line): line is string => {
+      if (!line) return false;
+      return !isObviousPhrase(line);
+    }),
     input.seed,
     "video-hook"
   );
 
   const context = pickVariant(
     [
-      themeLine ?? `O contexto de ${action.toLowerCase()} muda quando você olha o que ficou fora do corte.`,
+      input.hints.narrativeBrief && !isMetadataSummary(input.hints.narrativeBrief)
+        ? distillNarrativeBriefForSpeech(input.hints.narrativeBrief, 18)
+        : null,
+      themeLine ?? `Olha o que aconteceu antes de ${action.toLowerCase()}. O contexto muda tudo.`,
       domain === "sports"
-        ? `Placar, marcação e ritmo do jogo explicam por que ${action.toLowerCase()} virou memória coletiva.`
+        ? `Placar, marcação e ritmo${input.hints.setting ? ` em ${input.hints.setting}` : ""}. É isso que transforma ${action.toLowerCase()} em lance histórico.`
         : domain === "gaming"
-          ? `No gameplay, timing e leitura de matchup transformam highlight em clip de conhecimento.`
+          ? `No jogo, timing e leitura de matchup separam highlight de clip de conhecimento.`
           : domain === "comics_superhero"
-            ? `A cena remete a painéis clássicos — por isso o frame parece maior do que alguns segundos.`
-            : `O pano de fundo editorial dá peso ao instante e evita que ${lead} vire só mais um corte.`,
-      input.hints.mood
-        ? `Tom do recorte: ${input.hints.mood}. Isso orienta como o espectador deve sentir o clímax.`
-        : `Conecte o que aparece na tela com o que aconteceu imediatamente antes deste trecho.`
-    ],
+            ? `A cena puxa painéis clássicos. Por isso o frame parece maior que alguns segundos.`
+            : `O contexto dá peso ao instante. ${lead} deixa de ser só mais um corte.`
+    ].filter(
+      (line): line is string =>
+        typeof line === "string" && line.length > 0 && !isMetadataSummary(line)
+    ),
     input.seed,
     "video-context"
   );
 
-  const climax = hasConcreteCuriosity(curiosity)
-    ? curiosity
-    : pickVariant(
-        [
-          curiosity,
-          `E aqui entra a curiosidade: ${curiosity.charAt(0).toLowerCase()}${curiosity.slice(1)}`
-        ],
-        input.seed,
-        "video-climax"
-      );
+  const tension = buildTensionBeatText({
+    lead,
+    secondaryEntity: input.hints.entities?.[1] ?? null,
+    action,
+    domain,
+    emotion: input.emotion,
+    angle: resolveNarrationVariationAngle({ domain, emotion: input.emotion }),
+    seed: input.seed
+  });
+
+  const climaxCandidate =
+    input.hints.curiosityAngle && hasConcreteCuriosity(input.hints.curiosityAngle)
+      ? input.hints.curiosityAngle
+      : curiosity;
+
+  const climax = optimizeForSpokenDelivery(
+    hasConcreteCuriosity(climaxCandidate)
+      ? weaveCuriosityNaturally(
+          climaxCandidate,
+          lead,
+          resolveNarrationVariationAngle({ domain, emotion: input.emotion })
+        )
+      : climaxCandidate
+  );
 
   const cta = pickVariant(
     [
       domain === "sports"
-        ? `Comenta de qual jogo ou lance você lembra quando vê ${lead}.`
+        ? `Comenta de qual jogo você lembra quando vê ${lead}.`
         : domain === "gaming"
-          ? `Salva e comenta seu main — quer mais breakdown assim?`
-          : `Comenta se você já conhecia essa camada sobre ${lead}.`,
-      `Salva este corte e comenta o que mais te surpreendeu.`,
-      `Quer a continuação? Comenta ${lead.split(" ")[0] ?? "aqui"}.`
+          ? `Salva e comenta seu main. Quer mais breakdown?`
+          : `Comenta se você já sabia disso sobre ${lead}.`,
+      `Salva o corte. Comenta o que mais te pegou.`,
+      `Quer a parte 2? Comenta ${lead.split(" ")[0] ?? "aqui"}.`
     ],
     input.seed,
     "video-cta"
@@ -944,6 +1587,7 @@ function buildVideoAwareBeats(input: {
   return [
     { role: "hook", text: hook, curiosityTag: "video-aware-hook" },
     { role: "context", text: context, curiosityTag: "video-aware-context" },
+    { role: "tension", text: tension, curiosityTag: "video-aware-tension" },
     { role: "climax", text: climax, curiosityTag: "video-aware-curiosity" },
     { role: "cta", text: cta, curiosityTag: "video-aware-cta" }
   ];
@@ -956,21 +1600,26 @@ export function buildRemixNarrationBeats(input: {
   contentIntelligence: RemixStructuredContentDescription;
   emotion: ProductionEmotion;
   seed: string;
+  targetStyle?: RemixTargetStyle;
+  variationIndex?: number;
 }): Omit<NarrationBeatDraft, "caption">[] {
   const intel = input.contentIntelligence;
   const lead = intel.entities[0]?.name ?? sanitizeTitle(input.title);
+  const secondaryEntity = intel.entities[1]?.name ?? null;
   const entityId = intel.entities[0]?.id ?? null;
   const action = intel.actions[0]?.label ?? "momento de destaque";
   const actionVerb = intel.actions[0]?.verb ?? "acontecer";
-  const rawKeyword = input.contextKeywords[0] ?? intel.entities[0]?.franchise ?? lead;
-  const keyword =
-    rawKeyword.toLowerCase() === lead.toLowerCase()
-      ? (intel.entities[0]?.franchise ?? "campo")
-      : rawKeyword;
+  const angle = resolveNarrationVariationAngle({
+    ...(input.targetStyle ? { targetStyle: input.targetStyle } : {}),
+    ...(input.variationIndex !== undefined ? { variationIndex: input.variationIndex } : {}),
+    domain: intel.domain,
+    emotion: input.emotion
+  });
+  const hookPhrase = extractHookPhraseFromTitle(input.title);
   const curiosity = resolveCuriosityFact({
     entityId,
     domain: intel.domain,
-    seed: input.seed,
+    seed: `${input.seed}:${angle}`,
     lead,
     action
   });
@@ -979,84 +1628,247 @@ export function buildRemixNarrationBeats(input: {
   const hookScene = sceneByRole.get("hook");
   const contextScene = sceneByRole.get("context");
   const climaxScene = sceneByRole.get("climax") ?? sceneByRole.get("evidence");
+  const themeLine = distillThemeSummary(input.themeSummary, 18);
+
+  const hookCandidates: Array<string | null> = [];
+
+  if (intel.narrativeHook && !isOperationalText(intel.narrativeHook)) {
+    hookCandidates.push(spokenHookFromNarrativeHook(intel.narrativeHook));
+  }
+
+  const angleHooks: Record<NarrationVariationAngle, string[]> = {
+    curiosity_led: [
+      hookPhrase
+        ? `${lead} e ${hookPhrase.toLowerCase()} — o short inteiro gira em torno disso.`
+        : `${lead} no centro. E o vídeo não perde tempo.`,
+      secondaryEntity
+        ? `Olha só: ${lead} e ${secondaryEntity} no mesmo frame. Já prende.`
+        : `Esse corte de ${lead} abre com ${actionVerb}. Direto ao ponto.`
+    ],
+    dark_reveal: [
+      `Tem algo estranho nessa cena de ${lead}. E o short sabe disso.`,
+      hookPhrase
+        ? `"${hookPhrase}" soa pesado. ${lead} não está brincando aqui.`
+        : `${lead} aparece — e o tom muda na hora.`
+    ],
+    emotional_bond: [
+      secondaryEntity
+        ? `Não é só ação. É ${lead} e ${secondaryEntity} num momento que parece íntimo.`
+        : `Aqui ${lead} não luta. Conecta.`,
+      hookPhrase
+        ? `O vídeo vende ${hookPhrase.toLowerCase()}. E funciona.`
+        : `${lead} num beat que parece pessoal, não só espetáculo.`
+    ],
+    fan_lore: [
+      secondaryEntity
+        ? `Fã de ${lead} e ${secondaryEntity} reconhece esse encontro na hora.`
+        : `Quem acompanha ${lead} sabe por que esse frame gruda.`,
+      hookPhrase ? `${hookPhrase} — clássico pra quem leu a história.` : `${lead} num beat de fã.`
+    ],
+    hype_energy: [
+      `${lead} entra no modo que o algoritmo ama. ${action}.`,
+      hookPhrase
+        ? `${hookPhrase}! ${lead} no pico.`
+        : `Energia alta, corte rápido, ${lead} no centro.`
+    ],
+    documentary_fact: [
+      hookPhrase
+        ? `O clipe mostra ${lead} e ${hookPhrase.toLowerCase()}. Mas de onde vem essa ideia?`
+        : `Vamos entender o que ${lead} está fazendo nesse recorte.`,
+      themeLine ?? `O recorte de ${lead} pede contexto — não só reação.`
+    ]
+  };
+
+  const spokenActionVerb =
+    actionVerb.charAt(0).toUpperCase() + actionVerb.slice(1).replace(/\s+\.\s*/g, "");
+
+  hookCandidates.push(
+    ...angleHooks[angle],
+    hookScene?.visualHint?.includes("crop")
+      ? `O corte abre colado em ${lead}. ${spokenActionVerb}, e já prende.`
+      : null
+  );
 
   const hook = pickVariant(
-    [
-      hookScene?.visualHint?.includes("crop")
-        ? `O corte abre em ${lead} no instante exato em que ${actionVerb} — e já prende.`
-        : null,
-      intel.headline.length > 12
-        ? `${intel.headline}. O vídeo original não explica por que isso funciona.`
-        : null,
-      `Esse trecho com ${lead} parece simples — até você ver o que acontece antes de ${actionVerb}.`,
-      `A maioria assiste ${action.toLowerCase()} e ignora o detalhe que faz ${lead} viralizar de novo.`
-    ].filter((line): line is string => Boolean(line)),
+    hookCandidates.filter((line): line is string => {
+      if (!line) return false;
+      return !isObviousPhrase(line) && !isOperationalText(line);
+    }),
     input.seed,
-    "remix-hook"
+    `remix-hook-${angle}`
   );
 
-  const themeLine = distillThemeSummary(input.themeSummary, 24);
+  const angleContext: Record<NarrationVariationAngle, string[]> = {
+    curiosity_led: [
+      secondaryEntity
+        ? `A dupla ${lead} e ${secondaryEntity} carrega história. O short só mostra o encontro.`
+        : `${lead} num contexto de ${action.toLowerCase()}. Sem repetir o que já está na tela.`,
+      themeLine ?? `O vídeo resume ${action.toLowerCase()}. A narração abre a camada de trás.`
+    ],
+    dark_reveal: [
+      `Por trás de ${action.toLowerCase()}, tem uma escolha narrativa — não é só efeito.`,
+      secondaryEntity
+        ? `${lead} e ${secondaryEntity} juntos mudam o peso emocional da cena.`
+        : `${lead} num tom que o clipe original não explica.`
+    ],
+    emotional_bond: [
+      `Não é coincidência: ${action.toLowerCase()} vende conexão, não só impacto.`,
+      secondaryEntity
+        ? `A química entre ${lead} e ${secondaryEntity} vem dos quadrinhos — o short só sugere.`
+        : themeLine ?? `${lead} num beat que pede empatia, não só reação.`
+    ],
+    fan_lore: [
+      intel.domain === "comics_superhero"
+        ? `Painéis clássicos inspiram esse frame. Por isso parece maior que segundos.`
+        : `Referência de fã embutida no corte. ${lead} carrega décadas de história.`,
+      secondaryEntity
+        ? `${secondaryEntity} entra e muda a leitura de ${lead}.`
+        : (themeLine ?? `${lead} num recorte que pede olhar de fã.`)
+    ],
+    hype_energy: [
+      intel.domain === "sports"
+        ? `Placar, pressão e ritmo${intel.setting ? ` em ${intel.setting}` : ""}. O lance ganha escala.`
+        : `Corte rápido, energia alta — ${lead} no momento que o vídeo quer viralizar.`,
+      `${action}. É isso que o short quer que você sinta.`
+    ],
+    documentary_fact: [
+      secondaryEntity
+        ? `Nos quadrinhos, ${lead} e ${secondaryEntity} já dividiram cena assim — o short só resume.`
+        : `A origem desse momento com ${lead} está nos quadrinhos, não só no algoritmo.`,
+      intel.domain === "gaming"
+        ? `No jogo, ${actionVerb} costuma punir leitura errada. O highlight esconde o setup.`
+        : `${action.replace(/\s*\/\s*/g, " e ")} muda de peso quando você sabe o que veio antes.`
+    ]
+  };
+
+  const contextCandidates: Array<string | null> = [...angleContext[angle]];
+
+  if (
+    contextScene?.narrationAngle &&
+    !isTemplateSceneAngle(contextScene.narrationAngle) &&
+    !isMetadataSummary(contextScene.narrationAngle)
+  ) {
+    contextCandidates.push(
+      optimizeForSpokenDelivery(shortenForSpeech(contextScene.narrationAngle, 18))
+    );
+  }
+
+  if (contextCandidates.length < 2 && intel.narrativeBrief && !isMetadataSummary(intel.narrativeBrief)) {
+    const brief = distillNarrativeBriefForSpeech(intel.narrativeBrief, 20);
+    if (!linesTooSimilar(brief, hook)) {
+      contextCandidates.push(brief);
+    }
+  }
 
   const context = pickVariant(
-    [
-      intel.domain === "sports"
-        ? `O lance só faz sentido com pressão, marcação e o ritmo da partida em ${keyword}.`
-        : intel.domain === "comics_superhero"
-          ? `A cena remete a painéis clássicos — por isso o frame parece icônico em poucos segundos.`
-          : intel.domain === "gaming"
-            ? `No jogo, ${actionVerb} costuma punir um erro de leitura que o highlight esconde.`
-            : `O recorte liga ${lead} a ${keyword} sem repetir o que o clipe já mostra na tela.`,
-      themeLine,
-      intel.summary && !isMetadataSummary(intel.summary)
-        ? shortenForSpeech(intel.summary.replace(/^Domínio:\s*/i, ""), 24)
-        : null,
-      contextScene?.narrationAngle && !isTemplateSceneAngle(contextScene.narrationAngle)
-        ? shortenForSpeech(
-            contextScene.narrationAngle.replace(/^[^:]+:\s*/i, ""),
-            24
-          )
-        : null
-    ].filter(
+    contextCandidates.filter(
       (line): line is string =>
-        typeof line === "string" && line.length > 0 && !isObviousPhrase(line)
+        typeof line === "string" &&
+        line.length > 0 &&
+        !isObviousPhrase(line) &&
+        !isMetadataSummary(line)
     ),
     input.seed,
-    "remix-context"
+    `remix-context-${angle}`
   );
 
-  const climaxCandidates = [
-    curiosity,
-    climaxScene?.focusAction && !hasConcreteCuriosity(curiosity)
-      ? `No pico do ${climaxScene.focusAction.toLowerCase()}, ${curiosity.charAt(0).toLowerCase()}${curiosity.slice(1)}`
-      : null
-  ].filter((line): line is string => Boolean(line));
+  const tension = buildTensionBeatText({
+    lead,
+    secondaryEntity,
+    action,
+    actionVerb,
+    hookPhrase,
+    domain: intel.domain,
+    emotion: input.emotion,
+    angle,
+    seed: input.seed
+  });
 
-  const climax = pickVariant(climaxCandidates, input.seed, "remix-climax");
+  const curiosityAngleUsable =
+    intel.curiosityAngle &&
+    hasConcreteCuriosity(intel.curiosityAngle) &&
+    !linesTooSimilar(intel.curiosityAngle, intel.narrativeHook ?? "") &&
+    !linesTooSimilar(intel.curiosityAngle, intel.narrativeBrief ?? "");
 
-  const cta = pickVariant(
-    [
-      intel.domain === "sports"
-        ? `Comenta se você lembra em qual jogo ${lead} fez isso.`
-        : intel.domain === "gaming"
-          ? `Salva e comenta — quer mais breakdown de ${lead}?`
-          : `Comenta se essa camada sobre ${lead} te surpreendeu.`,
-      `Salva o corte e comenta o que mais te pegou.`,
-      `Quer a parte 2? Comenta ${lead.split(" ")[0] ?? keyword}.`
+  const rawClimax = curiosityAngleUsable ? intel.curiosityAngle : curiosity;
+
+  const climax = optimizeForSpokenDelivery(
+    weaveCuriosityNaturally(
+      hasConcreteCuriosity(rawClimax) ? rawClimax : curiosity,
+      lead,
+      angle
+    )
+  );
+
+  const ctaByAngle: Record<NarrationVariationAngle, string[]> = {
+    curiosity_led: [
+      `Você já sabia disso sobre ${lead}? Comenta.`,
+      secondaryEntity
+        ? `Time ${lead} ou ${secondaryEntity}? Comenta sua dupla favorita.`
+        : `Salva e comenta o que mais te pegou nesse corte.`
     ],
-    input.seed,
-    "remix-cta"
-  );
+    dark_reveal: [
+      `Isso te deixou inquieto? Comenta.`,
+      `Salva — tem mais camada nessa história de ${lead}.`
+    ],
+    emotional_bond: [
+      `Esse momento te emocionou? Comenta.`,
+      secondaryEntity
+        ? `Você shippa ${lead} e ${secondaryEntity}? Conta aí.`
+        : `Comenta se ${lead} te pegou pelo sentimento, não só pela ação.`
+    ],
+    fan_lore: [
+      `Fã de ${lead}? Comenta sua referência favorita.`,
+      secondaryEntity
+        ? `Qual dupla ${lead}/${secondaryEntity} você prefere? Comenta.`
+        : `Salva pra assistir de novo com olhar de fã.`
+    ],
+    hype_energy: [
+      intel.domain === "sports"
+        ? `De qual jogo você lembra esse lance? Comenta.`
+        : `Esse hype de ${lead} merece salvar. Comenta.`,
+      `Comenta se ${lead} te deu arrepio nesse frame.`
+    ],
+    documentary_fact: [
+      `Quer mais contexto sobre ${lead}? Comenta.`,
+      `Salva e comenta — tem fonte por trás dessa cena.`
+    ]
+  };
+
+  const cta = pickVariant(ctaByAngle[angle], input.seed, `remix-cta-${angle}`);
 
   return [
-    { role: "hook", text: hook, curiosityTag: "remix-hook" },
-    { role: "context", text: context, curiosityTag: "remix-context" },
+    { role: "hook", text: hook, curiosityTag: `remix-hook-${angle}` },
+    { role: "context", text: context, curiosityTag: `remix-context-${angle}` },
+    { role: "tension", text: tension, curiosityTag: `remix-tension-${angle}` },
     {
       role: "climax",
       text: climax,
-      curiosityTag: hasConcreteCuriosity(climax) ? "remix-curiosity-fact" : "remix-climax"
+      curiosityTag: hasConcreteCuriosity(climax) ? "remix-curiosity-fact" : `remix-climax-${angle}`
     },
-    { role: "cta", text: cta, curiosityTag: "remix-cta" }
+    { role: "cta", text: cta, curiosityTag: `remix-cta-${angle}` }
   ];
+}
+
+function extractHookPhraseFromTitle(title: string): string | null {
+  const cleaned = title
+    .replace(/#[\p{L}\p{N}_]+/gu, " ")
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, " ")
+    .replace(/!+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const partnership = cleaned.match(
+    /(?:parceiro\s*perfeito|perfect\s*partner|dupla\s*perfeita|match\s*perfeito)/i
+  );
+  if (partnership) {
+    return partnership[0]!.trim();
+  }
+
+  const found = cleaned.match(
+    /(?:encontrou|achou|descobriu|revela|mostra)\s+(?:o|a|seu|sua)?\s*(.+?)(?:\s*[#@]|$)/i
+  );
+  return found?.[1]?.trim().slice(0, 48) ?? null;
 }
 
 function buildTitleDerivedBeats(
@@ -1082,17 +1894,17 @@ function buildTitleDerivedBeats(
   const hook = isQuestionTitle
     ? pickVariant(
         [
-          `${subject} — a resposta não está no título, está no que acontece antes do clímax.`,
-          `Todo mundo pergunta sobre ${subject}; poucos conectam as pistas certas.`,
-          `Essa pergunta sobre ${subject} só fecha quando você vê o contexto completo.`
+          `${subject}? A resposta não está no título. Está no segundo anterior.`,
+          `Todo mundo pergunta sobre ${subject}. Poucos ligam as pistas certas.`,
+          `Essa pergunta sobre ${subject} só fecha com o contexto completo.`
         ],
         seed,
         "hook"
       )
     : pickVariant(
         [
-          `${focus}${yearHint}: o que a tela mostra é só a superfície.`,
-          `Esse recorte de ${focus} funciona porque antecipa a explicação antes do espectador desistir.`,
+          `${focus}${yearHint}. Na tela, você vê só a superfície.`,
+          `Esse corte de ${focus} prende. O melhor vem no segundo seguinte.`,
           `Antes do clímax de ${focus}, tem um detalhe que muda tudo.`
         ],
         seed,
@@ -1136,33 +1948,33 @@ function buildTitleDerivedBeats(
   const climaxByEmotion: Record<ProductionEmotion, string[]> = {
     dark: [
       curiosity,
-      `E aqui ${focus} revela o fato que fecha o quebra-cabeça.`,
-      `Esse ponto transforma ${focus} de curiosidade em revelação.`
+      `Agora o fato. ${focus} fecha o quebra-cabeça aqui.`,
+      `Esse ponto transforma ${focus} em revelação.`
     ],
     hype: [
       curiosity,
-      `Esse instante resume por que ${focus} virou momento inesquecível.`,
-      `Aqui ${focus} atinge o pico — e o frame explica o hype.`
+      `Esse instante resume por que ${focus} virou inesquecível.`,
+      `Aqui ${focus} atinge o pico. O frame explica o hype.`
     ],
     horror: [
       curiosity,
-      `Quando esse detalhe entra, o clima de ${focus} muda completamente.`,
-      `A revelação sobre ${focus} é mais perturbadora do que parece à primeira vista.`
+      `Quando esse detalhe entra, o clima de ${focus} muda.`,
+      `A revelação sobre ${focus} é mais forte do que parece.`
     ],
     epic: [
       curiosity,
       `Esse instante define o legado de ${focus}.`,
-      `Esse detalhe explica por que ${focus} ainda é referência hoje.`
+      `Esse detalhe explica por que ${focus} ainda é referência.`
     ],
     curious: [
       curiosity,
-      `E aqui a explicação de ${focus} finalmente encaixa.`,
-      `No fim, ${focus} faz sentido por um motivo mais simples do que parece.`
+      `Agora encaixa. ${focus} faz sentido por um motivo simples.`,
+      `No fim, ${focus} surpreende por algo que estava na cara.`
     ],
     calm: [
       curiosity,
-      `Esse ponto fecha a explicação de ${focus} com clareza.`,
-      `Esse detalhe amarra o raciocínio inteiro sobre ${focus}.`
+      `Esse ponto fecha ${focus} com clareza.`,
+      `Esse detalhe amarra tudo sobre ${focus}.`
     ],
     tense: [
       curiosity,
@@ -1293,7 +2105,25 @@ export function buildContextualNarrationBeats(input: {
     );
   }
 
-  return finalizeNarrationBeats(drafts, context.wordBudget, context.subject);
+  const finalizeOptions: {
+    emotion: ProductionEmotion;
+    lead: string;
+    seed: string;
+    action?: string;
+    domain?: RemixContentDomain;
+  } = {
+    emotion: input.emotion,
+    lead: context.primaryEntity ?? context.subject,
+    seed: input.seed
+  };
+  if (context.videoHints?.primaryAction) {
+    finalizeOptions.action = context.videoHints.primaryAction;
+  }
+  if (context.videoHints?.domain) {
+    finalizeOptions.domain = context.videoHints.domain;
+  }
+
+  return finalizeNarrationBeats(drafts, context.wordBudget, context.subject, finalizeOptions);
 }
 
 export function beatsToScript(beats: NarrationBeatDraft[]): string {
@@ -1312,6 +2142,57 @@ export function estimateScriptDurationSeconds(
   return Math.max(words / estimateWordsPerSecond(pacing) + punctuationPauses, 4);
 }
 
+export function buildNarrationVoiceVariations(input: {
+  voicePackId: string;
+  channelTone: string;
+  emotion: ProductionEmotion;
+  pacing: "tight" | "balanced" | "breathing";
+  beats: NarrationBeatDraft[];
+  script: string;
+}) {
+  const basePlan = buildNarrationPlan({
+    voicePackId: input.voicePackId,
+    text: input.script,
+    language: "pt-BR"
+  });
+
+  const pacingRates = {
+    tight: [6, 1, 3, 8, 2],
+    balanced: [4, 0, 2, 6, 0],
+    breathing: [2, -1, 0, 4, -2]
+  } as const;
+
+  const rates = pacingRates[input.pacing];
+  const variationIds = [
+    "hook-attack",
+    "context-flow",
+    "tension-pivot",
+    "climax-reveal",
+    "cta-soft"
+  ];
+  const durationWeights = [0.18, 0.22, 0.12, 0.3, 0.18];
+
+  return input.beats.map((beat, index) => ({
+    variationId: variationIds[index] ?? `beat-${index + 1}`,
+    voicePackId: input.voicePackId,
+    tone: beat.prosody?.tone ?? `${input.channelTone} ${beat.role}`,
+    emotion: `${input.emotion}_${beat.role}`,
+    pacing: input.pacing,
+    rateShift: rates[index] ?? 0,
+    emphasis: beat.role,
+    line: beat.text,
+    curiosityTag: beat.curiosityTag,
+    pauseBeforeMs: beat.prosody?.pauseBeforeMs ?? 0,
+    energy: beat.prosody?.energy ?? "medium",
+    emphasisWords: beat.prosody?.emphasisWords ?? [],
+    deliveryNote: beat.prosody?.deliveryNote ?? "",
+    estimatedDurationSeconds: Math.max(
+      basePlan.estimatedDurationSeconds * (durationWeights[index] ?? 0.18),
+      beat.role === "cta" ? 1.4 : beat.role === "tension" ? 1.8 : 2.2
+    )
+  }));
+}
+
 export function buildNarrationEnginePrompt(input: {
   beats: NarrationBeatDraft[];
   context: NarrationContentContext;
@@ -1322,44 +2203,71 @@ export function buildNarrationEnginePrompt(input: {
   estimatedDurationSeconds: number;
 }): string {
   const beatMap = input.beats
-    .map((beat) => `${beat.role.toUpperCase()}: ${beat.text}`)
-    .join("\n");
+    .map((beat) => {
+      const prosody = beat.prosody;
+      const direction = prosody
+        ? `[${prosody.energy} | pausa ${prosody.pauseBeforeMs}ms | ${prosody.deliveryNote}]`
+        : "";
+      return `${beat.role.toUpperCase()} ${direction}\n${beat.text}`;
+    })
+    .join("\n\n");
 
   const pacingGuide =
     input.pacing === "tight"
-      ? "Entrega rapida, frases curtas, ataque imediato no hook."
+      ? "Fala rápida, frases de 6-10 palavras, ataque imediato no hook."
       : input.pacing === "breathing"
-        ? "Entrega pausada, micro-pausas entre ideias, tom contemplativo."
-        : "Entrega equilibrada, fluidez documental, sem correria.";
+        ? "Fala pausada, micro-pausas entre frases, tom contemplativo."
+        : "Fala equilibrada, ritmo de documentário moderno, sem correria.";
+
+  const emotionGuide: Partial<Record<ProductionEmotion, string>> = {
+    dark: "Tom sombrio e contido. Pausas antes de revelações.",
+    hype: "Energia alta no hook e clímax. Aceleração controlada.",
+    horror: "Sussurro tenso, pausas longas, frases curtíssimas.",
+    epic: "Voz segura e grandiosa, sem teatralidade excessiva.",
+    curious: "Tom de conversa inteligente, como quem conta um segredo.",
+    calm: "Didático e sereno, uma ideia por frase.",
+    tense: "Pressão crescente do hook ao clímax."
+  };
 
   return [
     "=== NARRATION ENGINE DIRECTIVE ===",
     `Idioma: ${input.language}.`,
     `Tom do canal: ${input.channelTone}.`,
+    `Emoção de produção: ${emotionGuide[input.context.emotion] ?? input.context.emotion}.`,
     `Voice pack: ${input.voicePackName}.`,
-    `Duracao alvo: ${input.context.targetDurationSeconds}s (estimativa atual: ${input.estimatedDurationSeconds.toFixed(1)}s).`,
+    `Duração alvo: ${input.context.targetDurationSeconds}s (estimativa: ${input.estimatedDurationSeconds.toFixed(1)}s).`,
     pacingGuide,
     "",
-    "=== CONTEUDO (100% CONTEXTUAL) ===",
-    `Assunto: ${input.context.subject}`,
-    `Entidade principal: ${input.context.primaryEntity ?? "n/a"}`,
-    `Fonte de curiosidade: ${input.context.curiositySource}`,
-    input.context.years.length > 0
-      ? `Periodo: ${input.context.years.join(", ")}`
-      : null,
+    "=== REGRAS DE FALA (OBRIGATÓRIO) ===",
+    "Escreva e narre como TEXTO PARA FALA, não para leitura.",
+    "Frases curtas. Uma ideia por período. Evite subordinadas longas.",
+    "Use ritmo oral: pausa antes do clímax, leve aceleração na tensão.",
+    "Curiosidade no clímax deve soar natural — como dado contado, não enciclopédia.",
+    "Depois da primeira menção, use pronomes (ele, ela, isso) em vez de repetir nomes.",
     "",
-    "=== BEAT MAP (VARIACOES DISTINTAS) ===",
+    "=== CONTEÚDO ===",
+    `Assunto: ${input.context.subject}`,
+    `Entidade: ${input.context.primaryEntity ?? "n/a"}`,
+    `Fonte: ${input.context.curiositySource}`,
+    input.context.years.length > 0 ? `Período: ${input.context.years.join(", ")}` : null,
+    "",
+    "=== BEAT MAP + PROSÓDIA ===",
+    "HOOK: gancho imediato, energia alta.",
+    "CONTEXT: situa o espectador, tom explicativo.",
+    "TENSION: virada narrativa, micro-pausa, suspense.",
+    "CLIMAX: fato surpreendente, ênfase em números e nomes.",
+    "CTA: convite leve, tom de pergunta.",
+    "",
     beatMap,
     "",
-    "=== SCRIPT FINAL (NARRAR APENAS ISTO) ===",
+    "=== SCRIPT FINAL (NARRAR APENAS ISTO — SEM METADADOS) ===",
     beatsToScript(input.beats),
     "",
-    "=== PROIBIDO NO AUDIO ===",
-    "Nao narre avisos legais, instrucoes de sistema, metadados, notas de producao ou frases administrativas.",
-    "Nao mencione aprovacao manual, direitos autorais, discovery ou termos tecnicos de pipeline.",
-    "Narre como narrador humano de shorts premium: natural, fluido, com ritmo de conversa e uma curiosidade concreta no clímax.",
-    "Varie o sujeito com pronomes depois da primeira menção — não repita o título em todo beat.",
-    "Não use frases genéricas tipo 'pouca gente sabe' ou 'detalhe mais intrigante'."
+    "=== PROIBIDO NO ÁUDIO ===",
+    "Não narre avisos legais, instruções de sistema, metadados ou notas de produção.",
+    "Não mencione aprovação manual, direitos, discovery ou termos de pipeline.",
+    "Não use clichês: 'pouca gente sabe', 'detalhe intrigante', 'recorte editorial'.",
+    "Não leia colchetes de prosódia em voz alta — são direção de entrega apenas."
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");

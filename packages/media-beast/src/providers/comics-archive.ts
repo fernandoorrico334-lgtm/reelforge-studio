@@ -1,11 +1,21 @@
+import { searchDirectAssetBundle, simplifyAssetQuery } from "./asset-api-clients.js";
 import type {
   MediaBeastCandidate,
   MediaBeastProvider,
   MediaBeastSearchQuery
 } from "./types.js";
 
-function stableCandidateId(seed: string) {
-  return `comics-archive-${Buffer.from(seed).toString("base64url").slice(0, 16)}`;
+function buildComicsQueries(input: MediaBeastSearchQuery): string[] {
+  const raw = input.keywords.join(" ").trim();
+  const core = simplifyAssetQuery(raw, 3);
+  const lead = input.keywords.find((keyword) => keyword.length > 3) ?? core.split(" ")[0] ?? core;
+
+  return [
+    core,
+    `${lead} marvel comic`,
+    `${lead} symbiote`,
+    `${lead} superhero comic art`
+  ].filter((query) => query.length > 4);
 }
 
 export const comicsArchiveProvider: MediaBeastProvider = {
@@ -13,7 +23,7 @@ export const comicsArchiveProvider: MediaBeastProvider = {
     id: "comics-archive",
     name: "Comics Archive Leads",
     description:
-      "Candidate planner for old comics, public-domain collections and issue metadata review.",
+      "Real comic panel and illustration discovery via Wikimedia Commons and Openverse.",
     enabled: true,
     capabilities: {
       supportsImages: true,
@@ -23,7 +33,7 @@ export const comicsArchiveProvider: MediaBeastProvider = {
       supportsDateFilters: true,
       supportsLicenseMetadata: true,
       discoveryOnly: false,
-      importSupported: false,
+      importSupported: true,
       requiresApiKey: false,
       setupInstructions:
         "Review issue dates, publishers, public-domain status and site terms before importing pages or panels."
@@ -35,39 +45,32 @@ export const comicsArchiveProvider: MediaBeastProvider = {
     ]
   },
   buildQueries(input: MediaBeastSearchQuery) {
-    const base = input.keywords.join(" ");
-    return [
-      `${base} public domain comics archive`,
-      `${base} golden age comics issue`,
-      `${base} comic book database old issue`
-    ];
+    return buildComicsQueries(input);
   },
   async searchCandidates(input: MediaBeastSearchQuery) {
-    return this.buildQueries(input).slice(0, input.maxCandidates ?? 5).map(
-      (query): MediaBeastCandidate => ({
-        id: stableCandidateId(query),
-        providerId: "comics-archive",
-        kind: "webpage",
-        title: `Comics archive candidate: ${query}`,
-        sourceUrl: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-        previewUrl: null,
-        licenseStatus: "unknown",
-        riskLevel: "medium",
-        score: 52,
-        reasons: [
-          "Useful for golden-age/public-domain candidate discovery.",
-          "Can feed visual requirements for ComfyUI-safe original variations."
-        ],
-        warnings: [
-          "Manual public-domain verification required.",
-          "Do not import pages from active copyrighted franchises without rights."
-        ],
-        metadata: {
+    const maxCandidates = input.maxCandidates ?? 6;
+    const queries = buildComicsQueries(input).slice(0, 3);
+    const perQuery = Math.max(4, Math.ceil(maxCandidates / Math.max(1, queries.length)));
+    const candidateMap = new Map<string, MediaBeastCandidate>();
+
+    const bundles = await Promise.all(
+      queries.map((query) =>
+        searchDirectAssetBundle({
           query,
-          comicsFocus: true
-        }
-      })
+          maxPerSource: perQuery,
+          includeFlickr: false
+        })
+      )
     );
+
+    for (const group of bundles) {
+      for (const candidate of group) {
+        candidateMap.set(candidate.id, candidate);
+      }
+    }
+
+    return [...candidateMap.values()]
+      .sort((left, right) => right.score - left.score)
+      .slice(0, maxCandidates);
   }
 };
-
