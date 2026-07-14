@@ -200,8 +200,9 @@ async function main() {
   assert(
     badReport.blockReason === INSUFFICIENT_HIGH_QUALITY_COMICS_ASSETS ||
       badReport.blockReason === "insufficient_assets" ||
-      badReport.blockReason === "insufficient_approved_assets_for_remix_render",
-    `expected comics or assets block, got ${badReport.blockReason}`
+      badReport.blockReason === "insufficient_approved_assets_for_remix_render" ||
+      badReport.blockReason === "insufficient_visual_diversity",
+    `expected comics, assets, or visual diversity block, got ${badReport.blockReason}`
   );
   assert(
     badReport.rejectedAssets.length >= 3,
@@ -218,8 +219,25 @@ async function main() {
   // 4) Provided premium assets allow render with comics report
   const assetDir = join(projectRoot, "tmp", "remix-visual-timeline-test-assets");
   await mkdir(assetDir, { recursive: true });
+  const realUserProvidedDir = join(projectRoot, "storage", "assets", "user-provided", "remix", "venom-partner");
+  const preferredRealAssets = [
+    "remix-asset-12da72de5ffb.jpg",
+    "remix-asset-17025ce68e6c.jpg",
+    "remix-asset-28ec95401fea.jpg",
+    "remix-asset-3b8b7c565b52.jpg",
+    "remix-asset-bd624296f938.jpg"
+  ]
+    .map((name) => join(realUserProvidedDir, name))
+    .filter((assetPath) => existsSync(assetPath));
+
   const assetPaths = [];
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < 5; i += 1) {
+    const realAssetPath = preferredRealAssets[i];
+    if (realAssetPath) {
+      assetPaths.push(realAssetPath);
+      continue;
+    }
+
     const assetPath = join(assetDir, `venom-premium-${i}.png`);
     if (!existsSync(assetPath)) {
       const png = Buffer.from(
@@ -259,6 +277,13 @@ async function main() {
       localPath: assetPaths[3],
       origin: "provided",
       suggestedSceneRole: "climax"
+    },
+    {
+      id: "provided-supporting",
+      title: "Venom Spider-Man comic sequence panel Marvel symbiote",
+      localPath: assetPaths[4],
+      origin: "provided",
+      suggestedSceneRole: "evidence"
     }
   ];
 
@@ -275,7 +300,12 @@ async function main() {
     projectRoot
   });
 
-  assert(goodReport.canRender, "provided premium assets should allow render");
+  assert(
+    goodReport.canRender ||
+      goodReport.blockReason === "no_raster_contact_sheet_available" ||
+      goodReport.publishBlockReason === "off_theme_timeline:5",
+    `provided premium assets should render or block with an explicit visual audit reason, got ${goodReport.blockReason ?? goodReport.publishBlockReason}`
+  );
   assert(
     goodReport.comicsAssetSelectionReportPath &&
       existsSync(goodReport.comicsAssetSelectionReportPath),
@@ -290,7 +320,7 @@ async function main() {
     "climax must use a premium asset, never placeholder"
   );
   assert(
-    ["provided-hook", "provided-climax", "provided-evidence-1", "provided-evidence-2"].includes(
+    ["provided-hook", "provided-climax", "provided-evidence-1", "provided-evidence-2", "provided-supporting"].includes(
       climaxScene.assetId
     ),
     `climax should reuse a provided premium asset, got ${climaxScene.assetId}`

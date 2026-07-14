@@ -244,11 +244,15 @@ function poolForRole(pools: BeatVerifiedCandidatePool[], beatRole: string): Veri
   return pools.find((pool) => pool.beatRole === beatRole)?.candidates ?? [];
 }
 
+function resolveBeatSpecificFitScore(candidate: VerifiedPanelCandidate): number {
+  return candidate.verification.scores.beatSpecificFitScore ?? candidate.verification.scores.finalScore ?? 0;
+}
+
 function candidateRankingScore(
   candidate: VerifiedPanelCandidate,
   panelUseCount?: Map<string, number>
 ): number {
-  const fit = candidate.verification.scores.beatSpecificFitScore ?? candidate.verification.scores.finalScore;
+  const fit = resolveBeatSpecificFitScore(candidate);
   const reusePenalty = (panelUseCount?.get(candidate.panel.panelId) ?? 0) * 6;
   return fit - reusePenalty;
 }
@@ -652,6 +656,7 @@ export function assignPanelsToBeatsGlobally(input: {
   for (const beat of input.beats) {
     const pick = bestState.picks.get(beat.beatRole);
     if (!pick) continue;
+    const beatSpecificFitScore = resolveBeatSpecificFitScore(pick);
     beatPicks.set(beat.beatRole, { panel: pick.panel, verification: pick.verification });
     assignments.push({
       beatRole: beat.beatRole,
@@ -659,9 +664,9 @@ export function assignPanelsToBeatsGlobally(input: {
       panelId: pick.panel.panelId,
       pageNumber: pick.panel.pageNumber,
       finalScore: pick.verification.scores.finalScore,
-      beatSpecificFitScore: pick.verification.scores.beatSpecificFitScore,
+      beatSpecificFitScore,
       weightedScore: Number(
-        (pick.verification.scores.beatSpecificFitScore * getBeatWeight(beat.beatRole)).toFixed(2)
+        (beatSpecificFitScore * getBeatWeight(beat.beatRole)).toFixed(2)
       ),
       evidenceType: pick.verification.evidenceType
     });

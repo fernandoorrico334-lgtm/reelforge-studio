@@ -174,7 +174,9 @@ export async function buildPanelMaterializationManifest(input: {
   for (const scene of input.timelineScenes) {
     if (!scene.assetId || !scene.assetPath) continue;
     const asset = assetById.get(scene.assetId);
-    const descriptor = input.cropDescriptors.get(scene.assetId);
+    const descriptor =
+      (scene.panelId ? input.cropDescriptors.get(scene.panelId) : undefined) ??
+      input.cropDescriptors.get(scene.assetId);
     if (!asset || !descriptor) continue;
 
     const [sourcePageSha256, panelImageSha256] = await Promise.all([
@@ -326,14 +328,21 @@ export function patchTimelineScenesWithMaterializedPanelPaths(input: {
 }): MaterializedTimelineScene[] {
   return input.timelineScenes.map((scene) => {
     if (!scene.assetId) return scene;
-    const descriptor = input.cropDescriptors.get(scene.assetId);
+    const descriptor =
+      (scene.panelId ? input.cropDescriptors.get(scene.panelId) : undefined) ??
+      input.cropDescriptors.get(scene.assetId);
     if (!descriptor) return scene;
-    if (scene.assetPath && scene.assetPath !== descriptor.sourceAssetPath) {
+    if (scene.assetPath && scene.assetPath !== descriptor.sourceAssetPath && scene.assetPath !== descriptor.panelImagePath) {
       return scene;
     }
     return {
       ...scene,
-      assetPath: descriptor.panelImagePath
+      assetPath: descriptor.panelImagePath,
+      panelId: descriptor.panelId,
+      panelImagePath: descriptor.panelImagePath,
+      cropBounds: descriptor.cropBounds,
+      cropContentHash: descriptor.cropContentHash,
+      localVisualEvidence: descriptor.localVisualEvidence
     };
   });
 }

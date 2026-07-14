@@ -1839,6 +1839,7 @@ export async function materializePanelCropImages(input: {
       ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {})
     });
     descriptors.set(asset.id, descriptor);
+    descriptors.set(descriptor.panelId, descriptor);
   }
   return descriptors;
 }
@@ -3124,8 +3125,23 @@ export function evaluateUserProvidedPublishGates(input: {
       );
     }
   }
-  if (input.globalPanelAssignmentReady === false) {
+  const missingPanelProvenance = input.assignments.filter(
+    (assignment) => !assignment.panelId || !assignment.panelImagePath || !assignment.cropContentHash
+  );
+  if (missingPanelProvenance.length > 0) {
+    canRender = false;
     canPublish = false;
+    blockReason = "missing_panel_provenance";
+    publishBlockReason = "missing_panel_provenance";
+    warnings.push(
+      `missing_panel_provenance:${missingPanelProvenance.map((assignment) => assignment.beatRole).join(",")}`
+    );
+  }
+
+  if (input.globalPanelAssignmentReady === false) {
+    canRender = false;
+    canPublish = false;
+    blockReason = input.globalPanelPublishBlockReason ?? "global_panel_assignment_failed";
     publishBlockReason = input.globalPanelPublishBlockReason ?? "global_panel_assignment_failed";
   }
 
@@ -3283,6 +3299,8 @@ export function expandUserProvidedAssignmentsToFastCutScenes(input: {
         ? resolveMaterializedPanelPathForBeat(parent, asset)
         : asset?.assetPath ?? parent.panelImagePath ?? parent.assetPath;
 
+    const usesParentPanel = asset?.id === parent.assetId || !asset;
+
     scenes.push({
       sceneId: `user-fastcut-${String(index + 1).padStart(3, "0")}`,
       startSec,
@@ -3290,6 +3308,11 @@ export function expandUserProvidedAssignmentsToFastCutScenes(input: {
       visualSourceType: "approved_asset",
       assetPath: resolvedAssetPath,
       assetId: asset?.id ?? parent.assetId,
+      ...(usesParentPanel && parent.panelId ? { panelId: parent.panelId } : {}),
+      ...(usesParentPanel && parent.panelImagePath ? { panelImagePath: parent.panelImagePath } : {}),
+      ...(usesParentPanel && parent.cropBounds ? { cropBounds: parent.cropBounds } : {}),
+      ...(usesParentPanel && parent.cropContentHash ? { cropContentHash: parent.cropContentHash } : {}),
+      ...(usesParentPanel && parent.localVisualEvidence ? { localVisualEvidence: parent.localVisualEvidence } : {}),
       caption: parent.caption,
       narration,
       transition: index % 3 === 0 ? "flash-cut" : "cut",
@@ -3651,7 +3674,26 @@ export async function buildUserProvidedPreflightReport(input: {
     ffmpegCommand: input.ffmpegCommand ?? "ffmpeg"
   });
   for (const assignment of assignments) {
-    const descriptor = cropDescriptors.get(assignment.assetId);
+    const existingPanelComplete = Boolean(
+      assignment.panelId && assignment.panelImagePath && assignment.cropBounds && assignment.cropContentHash
+    );
+    if (existingPanelComplete) {
+      const asset = narrativeAssets.find((entry) => entry.id === assignment.assetId);
+      if (asset && assignment.panelId && assignment.panelImagePath && assignment.cropBounds && assignment.cropContentHash) {
+        cropDescriptors.set(assignment.panelId, {
+          panelId: assignment.panelId,
+          sourceAssetPath: assignment.assetPath,
+          panelImagePath: assignment.panelImagePath,
+          cropBounds: assignment.cropBounds,
+          cropContentHash: assignment.cropContentHash,
+          focusRegion: "global",
+          localVisualEvidence: assignment.localVisualEvidence ?? []
+        });
+      }
+      continue;
+    }
+
+    const descriptor = cropDescriptors.get(assignment.panelId ?? "") ?? cropDescriptors.get(assignment.assetId);
     if (!descriptor) continue;
     assignment.panelId = descriptor.panelId;
     assignment.panelImagePath = descriptor.panelImagePath;
@@ -3734,6 +3776,7 @@ export async function buildUserProvidedPreflightReport(input: {
         ffmpegCommand: input.ffmpegCommand ?? "ffmpeg"
       });
       cropDescriptors.set(assetId, descriptor);
+      cropDescriptors.set(descriptor.panelId, descriptor);
     }
 
     materialization.timelineScenes = integrity.patchTimelineScenesWithMaterializedPanelPaths({

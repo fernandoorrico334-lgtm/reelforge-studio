@@ -939,6 +939,40 @@ function narrationPurposeForRole(
   return "ask_grounded_question";
 }
 
+function resolvePanelSpecificNarrationDetail(scene: SceneEvidenceContract): string {
+  const localLine = scene.localNarrationBoxes[0] ?? scene.localDialogue[0] ?? "";
+  if (localLine.trim()) return localLine.trim().slice(0, 90);
+
+  const action = scene.visibleActions[0]?.action?.trim();
+  if (action && !/duo presence/i.test(action)) return action;
+
+  const relationship = scene.visibleRelationships[0]?.type;
+  if (relationship === "conflict") return "o confronto fica visivel no enquadramento";
+  if (relationship === "host_symbiote") return "o vinculo com o simbionte domina o quadro";
+  if (relationship === "transformation") return "a transformacao aparece no corpo e no traje";
+  if (relationship === "duo") return "os dois personagens dividem a tensao do mesmo quadro";
+
+  const theme = scene.visibleThemes[0];
+  if (theme === "symbiosis") return "a simbiose deixa marca visual na cena";
+  if (theme === "partnership") return "a parceria aparece como composicao, nao como explicacao";
+
+  return scene.literalDescription.replace(/\.$/, "");
+}
+
+function buildRoleSpecificPanelLine(input: {
+  scene: SceneEvidenceContract;
+  role: SceneFirstNarrationCue["role"];
+  fallback: string;
+}): string {
+  const detail = resolvePanelSpecificNarrationDetail(input.scene);
+  if (!detail.trim()) return input.fallback;
+
+  if (input.role === "hook") return `Olha o detalhe do quadro: ${detail}.`;
+  if (input.role === "context") return `O contexto visual esta aqui: ${detail}.`;
+  if (input.role === "development") return `A sequencia avanca pelo detalhe certo: ${detail}.`;
+  if (input.role === "climax") return `O payoff visual esta nesse ponto: ${detail}.`;
+  return `Esse detalhe fecha a leitura: ${detail}.`;
+}
 function composeNarrationText(input: {
   scene: SceneEvidenceContract;
   role: SceneFirstNarrationCue["role"];
@@ -953,6 +987,11 @@ function composeNarrationText(input: {
   const duoVisible = entityIds.includes("venom") && entityIds.includes("spider-man");
   const symbioteOnly =
     entityIds.includes("symbiote") && !entityIds.includes("venom") && !entityIds.includes("spider-man");
+  const panelSpecificLine = buildRoleSpecificPanelLine({
+    scene: input.scene,
+    role: input.role,
+    fallback: input.scene.literalDescription
+  });
 
   if (
     input.proposal.topic === "parceiro_perfeito" &&
@@ -960,10 +999,10 @@ function composeNarrationText(input: {
     entities.includes("Homem-Aranha")
   ) {
     if (input.role === "hook") {
-      return "Venom e Homem-Aranha dividem o mesmo quadro — e a tensão entre os dois começa ali mesmo.";
+      return panelSpecificLine;
     }
     if (input.role === "context") {
-      return "Os dois ocupam o mesmo espaço visual — e a relação entre eles deixa de ser abstrata na hora.";
+      return panelSpecificLine;
     }
     if (input.role === "development") {
       return input.previousScene
@@ -982,10 +1021,10 @@ function composeNarrationText(input: {
       input.proposal.topic !== "parceiro_perfeito")
   ) {
     if (input.role === "hook") {
-      return "O traje começa a envolver o corpo — e o personagem perde o controle da situação.";
+      return panelSpecificLine;
     }
     if (input.role === "context") {
-      return "Repara no traje preto: ele não funciona como roupa comum, mas como parte do próprio corpo.";
+      return panelSpecificLine;
     }
     if (input.role === "development") {
       if (symbioteOnly) {

@@ -297,6 +297,16 @@ export type MaterializedTimelineScene = {
   visualSourceType: VisualSourceType;
   assetPath: string | null;
   assetId: string | null;
+  panelId?: string;
+  panelImagePath?: string;
+  cropBounds?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  cropContentHash?: string;
+  localVisualEvidence?: string[];
   caption: string;
   narration: string;
   transition: string;

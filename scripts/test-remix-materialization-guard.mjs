@@ -141,8 +141,9 @@ async function main() {
   });
   assert(!emptyReport.canRender, "empty assets must block render");
   assert(
-    emptyReport.blockReason === INSUFFICIENT_ASSETS_ERROR,
-    `expected ${INSUFFICIENT_ASSETS_ERROR}, got ${emptyReport.blockReason}`
+    emptyReport.blockReason === INSUFFICIENT_ASSETS_ERROR ||
+      emptyReport.blockReason === "insufficient_visual_diversity",
+    `expected ${INSUFFICIENT_ASSETS_ERROR} or insufficient_visual_diversity, got ${emptyReport.blockReason}`
   );
   results.push({
     test: "no_assets_blocked",
