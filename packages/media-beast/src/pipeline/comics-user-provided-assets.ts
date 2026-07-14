@@ -41,6 +41,14 @@ import { validateComicsAssetForTheme } from "./comics-theme-asset-validator.js";
 import type { MaterializedTimelineScene, RemixMaterializationReport } from "./remix-materialization.js";
 import type { PanelMaterializationIntegrityReport } from "./comics-panel-materialization-integrity.js";
 import {
+  matchReferenceVideoToComicsStories,
+  type ReferenceComicMatchReport
+} from "./reference-comics-match-engine.js";
+import {
+  resolveLocalPanelIndexPath,
+  type LocalComicPanelIndex
+} from "./comics-local-panel-index.js";
+import {
   buildReferenceAlignedUserProvidedNarration,
   classifyUserProvidedPanel,
   extractPageIndex,
@@ -323,6 +331,14 @@ export type UserProvidedPreflightReport = {
     climaxScore: number;
     promotionalPanelCount: number;
   };
+  referenceComicsStoryMatchReportPath: string | null;
+  referenceComicsStoryMatchSummary: {
+    canUseComicsStory: boolean;
+    bestStoryTitle: string | null;
+    bestStoryScore: number | null;
+    selectedPanelCount: number;
+    warnings: string[];
+  };
   beatAssignments: UserProvidedBeatAssignment[];
   metrics: UserProvidedPublishMetrics;
   hookAligned: boolean;
@@ -374,6 +390,25 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function loadLocalComicPanelIndexIfPresent(
+  assetDirectory: string
+): Promise<LocalComicPanelIndex | null> {
+  const indexPath = resolveLocalPanelIndexPath(assetDirectory);
+  if (!(await fileExists(indexPath))) return null;
+  const raw = await readFile(indexPath, "utf8");
+  return JSON.parse(raw) as LocalComicPanelIndex;
+}
+
+async function saveReferenceComicMatchReport(
+  report: ReferenceComicMatchReport,
+  projectRoot: string
+): Promise<string> {
+  const reportPath = join(projectRoot, "tmp", "reference-comics-story-match-report.json");
+  await mkdir(join(projectRoot, "tmp"), { recursive: true });
+  await writeFile(reportPath, JSON.stringify(report, null, 2), "utf8");
+  return reportPath;
 }
 
 function runCommand(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
@@ -3639,7 +3674,7 @@ export async function buildUserProvidedPreflightReport(input: {
 
   const alignedPlan = applyReferenceAlignedNarrationToPlan(input.plan);
   const narrativeAssets = filterNarrativeUserProvidedAssets(scan.found);
-  const {
+  let {
     assignments,
     warnings: timelineWarnings,
     hookAligned,
@@ -3647,6 +3682,50 @@ export async function buildUserProvidedPreflightReport(input: {
     panelBeatMatches,
     globalAssignment
   } = buildUserProvidedBeatTimeline(narrativeAssets, themeAnalysis, alignedPlan);
+
+  let referenceComicsStoryMatchReport: ReferenceComicMatchReport | null = null;
+  let referenceComicsStoryMatchReportPath: string | null = null;
+  try {
+    const localPanelIndex = await loadLocalComicPanelIndexIfPresent(assetDirectory);
+    const indexedPanels = localPanelIndex?.pages.flatMap((page) => page.panels) ?? [];
+    if (indexedPanels.length > 0) {
+      referenceComicsStoryMatchReport = matchReferenceVideoToComicsStories({
+        analysis: input.plan.videoAnalysis,
+        themeAnalysis,
+        panels: indexedPanels
+      });
+      referenceComicsStoryMatchReportPath = await saveReferenceComicMatchReport(
+        referenceComicsStoryMatchReport,
+        projectRoot
+      );
+
+      if (referenceComicsStoryMatchReport.canUseComicsStory && referenceComicsStoryMatchReport.bestStory) {
+        assignments = buildIntelligentIndexedPanelAssignments({
+          beats: referenceComicsStoryMatchReport.bestStory.beats,
+          beatAssignments: assignments
+        });
+        timelineWarnings = [
+          ...timelineWarnings,
+          "reference_comics_story_match_used:" + referenceComicsStoryMatchReport.bestStory.storyId,
+          "reference_comics_story_score:" + referenceComicsStoryMatchReport.bestStory.score
+        ];
+        hookAligned = referenceComicsStoryMatchReport.bestStory.coverageRoles.includes("hook");
+        climaxAligned = referenceComicsStoryMatchReport.bestStory.coverageRoles.includes("climax");
+      } else {
+        timelineWarnings = [
+          ...timelineWarnings,
+          ...referenceComicsStoryMatchReport.warnings.map((warning) => "reference_comics_match:" + warning)
+        ];
+      }
+    } else {
+      timelineWarnings = [...timelineWarnings, "reference_comics_match:no_local_panel_index_panels"];
+    }
+  } catch (error) {
+    timelineWarnings = [
+      ...timelineWarnings,
+      "reference_comics_match_failed:" + (error instanceof Error ? error.message : "unknown")
+    ];
+  }
 
   const panelBeatMatchReport = buildPanelBeatMatchReport({
     beats: panelBeatMatches,
@@ -3897,6 +3976,14 @@ export async function buildUserProvidedPreflightReport(input: {
       hookScore: panelBeatMatchReport.hookScore,
       climaxScore: panelBeatMatchReport.climaxScore,
       promotionalPanelCount: panelBeatMatchReport.promotionalPanelCount
+    },
+    referenceComicsStoryMatchReportPath,
+    referenceComicsStoryMatchSummary: {
+      canUseComicsStory: referenceComicsStoryMatchReport?.canUseComicsStory ?? false,
+      bestStoryTitle: referenceComicsStoryMatchReport?.bestStory?.title ?? null,
+      bestStoryScore: referenceComicsStoryMatchReport?.bestStory?.score ?? null,
+      selectedPanelCount: referenceComicsStoryMatchReport?.bestStory?.beats.length ?? 0,
+      warnings: referenceComicsStoryMatchReport?.warnings ?? []
     },
     beatAssignments: assignments,
     metrics,
