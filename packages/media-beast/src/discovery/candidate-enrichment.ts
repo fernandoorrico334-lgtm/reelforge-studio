@@ -27,6 +27,8 @@ export interface CandidateEnrichmentOptions {
   enrichRemote?: boolean;
   maxRemoteFetches?: number;
   maxConcurrent?: number;
+  /** Cap direct-image pool size (default 12). Use higher values for primary catalog discovery. */
+  maxPoolSize?: number;
 }
 
 const SEARCH_SURFACE_PATTERNS: Array<{ pattern: RegExp; type: ContentSignalType }> = [
@@ -494,10 +496,11 @@ export async function enrichAndScoreCandidates(
     }
   }
 
-  const targetPool = Math.min(16, Math.max(8, withDirectImages.length || 8));
+  const poolCap = options.maxPoolSize ?? 12;
+  const targetPool = Math.min(Math.max(poolCap, 16), Math.max(8, withDirectImages.length || 8));
   const minimumKeep = Math.min(targetPool, Math.max(8, withDirectImages.length));
   if (withDirectImages.length >= 8) {
-    filtered = withDirectImages.filter(passesScoreGate).slice(0, 12);
+    filtered = withDirectImages.filter(passesScoreGate).slice(0, poolCap);
   } else if (filtered.length < minimumKeep) {
     filtered = [
       ...withDirectImages.filter(passesScoreGate),

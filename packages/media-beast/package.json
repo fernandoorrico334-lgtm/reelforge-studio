@@ -20,7 +20,8 @@
     "@reelforge/caption-engine": "file:../caption-engine",
     "@reelforge/cinematic-engine": "file:../cinematic-engine",
     "@reelforge/narration-engine": "file:../narration-engine",
-    "@reelforge/research-collector": "file:../research-collector"
+    "@reelforge/research-collector": "file:../research-collector",
+    "node-unrar-js": "^2.0.2"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

@@ -7,6 +7,7 @@ import type {
   RemixStructuredContentDescription
 } from "./remix-content-intelligence.js";
 import type { ProductionEmotion } from "./niche-production-profiles.js";
+import { repairTruncatedPhrases } from "./narration-pad-sanitizer.js";
 import type { RemixTargetStyle } from "./remix-types.js";
 
 const PROVIDER_TITLE_PREFIX =
@@ -180,9 +181,9 @@ const DOMAIN_CURIOSITY_FALLBACKS: Record<RemixContentDomain, string[]> = {
     "O instante decisivo costuma vir depois de uma jogada sem bola que a câmera larga corta."
   ],
   comics_superhero: [
-    "O momento icônico no filme quase sempre paga dívida com um painel clássico dos quadrinhos.",
-    "Diretores costumam esconder referências visuais que só fãs de HQ reconhecem no frame.",
-    "A cena que viraliza raramente é CGI puro — é quando ator, luz e composição copiam a página original."
+    "O momento icônico no filme quase sempre vem de um painel clássico dos quadrinhos.",
+    "Diretores escondem referências visuais que só fã de HQ reconhece na hora.",
+    "A cena que viraliza raramente é só efeito — é quando ator, luz e composição copiam a página original."
   ],
   gaming: [
     "Highlights virais costumam esconder frame data e decisão de matchup — não é só reflexo bonito.",
@@ -245,7 +246,17 @@ const OBVIOUS_PHRASE_PATTERNS = [
   /e aí vem o lance que quase ninguém comentou/i,
   /fãs reconhecem na hora\.?$/i,
   /contexto que raramente aparece no clipe/i,
-  /por isso o hype explode nesse frame/i
+  /por isso o hype explode nesse frame/i,
+  /pain[eé]is cl[aá]ssicos inspiram/i,
+  /inspiram esse frame/i,
+  /escolha narrativa/i,
+  /peso emocional da cena/i,
+  /paga uma d[ií]vida com os f[aã]s/i,
+  /a narra[cç][aã]o abre a camada/i,
+  /refer[eê]ncia de f[aã] embutida no corte/i,
+  /num beat de f[aã]/i,
+  /num beat que parece/i,
+  /o v[ií]deo resume demais/i
 ];
 
 export type NarrationVariationAngle =
@@ -280,6 +291,7 @@ const DOMAIN_ANGLE_BOOST: Partial<Record<RemixContentDomain, NarrationVariationA
 export function resolveNarrationVariationAngle(input: {
   targetStyle?: RemixTargetStyle;
   variationIndex?: number;
+  styleSlotIndex?: number;
   domain?: RemixContentDomain;
   emotion?: ProductionEmotion;
 }): NarrationVariationAngle {
@@ -290,31 +302,34 @@ export function resolveNarrationVariationAngle(input: {
     "fan_lore",
     "dark_reveal"
   ];
-  const base = input.targetStyle
-    ? STYLE_ANGLE_ROTATION[input.targetStyle]
-    : fallbackAngles;
+  if (input.targetStyle) {
+    const styleAngles = STYLE_ANGLE_ROTATION[input.targetStyle];
+    const slot = input.styleSlotIndex ?? input.variationIndex ?? 0;
+    return styleAngles[slot % styleAngles.length] ?? "curiosity_led";
+  }
+
   const boosted = input.domain ? DOMAIN_ANGLE_BOOST[input.domain] ?? [] : [];
-  const pool: NarrationVariationAngle[] = [
-    ...new Set<NarrationVariationAngle>([...base, ...boosted])
-  ];
-  const index = input.variationIndex ?? 0;
-  return pool[index % pool.length] ?? "curiosity_led";
+  const pool = [...new Set<NarrationVariationAngle>([...fallbackAngles, ...boosted])];
+  const slot = input.variationIndex ?? 0;
+  return pool[slot % pool.length] ?? "curiosity_led";
 }
 
 function spokenHookFromNarrativeHook(hook: string): string {
-  return optimizeForSpokenDelivery(
-    hook
-      .replace(/\s*—\s*/g, ". ")
-      .replace(/\s+-\s+/g, ". ")
-      .replace(/!\s*/g, ". ")
-      .replace(/\s+\.\s*/g, ". ")
-      .replace(/\.\s+\./g, ".")
-      .replace(/\s+,/g, ",")
-      .trim()
+  return humanizeOralPtBr(
+    optimizeForSpokenDelivery(
+      hook
+        .replace(/\s*—\s*/g, ". ")
+        .replace(/\s+-\s+/g, ". ")
+        .replace(/!\s*/g, ". ")
+        .replace(/\s+\.\s*/g, ". ")
+        .replace(/\.\s+\./g, ".")
+        .replace(/\s+,/g, ",")
+        .trim()
+    )
   );
 }
 
-function linesTooSimilar(left: string, right: string, threshold = 0.55): boolean {
+export function linesTooSimilar(left: string, right: string, threshold = 0.55): boolean {
   const leftWords = new Set(left.toLowerCase().split(/\s+/).filter((word) => word.length > 3));
   const rightWords = right.toLowerCase().split(/\s+/).filter((word) => word.length > 3);
   if (leftWords.size === 0 || rightWords.length === 0) {
@@ -330,43 +345,41 @@ export function weaveCuriosityNaturally(
   angle: NarrationVariationAngle
 ): string {
   const spoken = optimizeForSpokenDelivery(curiosity);
-  const lowerFirst =
-    spoken.charAt(0).toLowerCase() + spoken.slice(1).replace(/\.$/, "");
 
   const bridges: Record<NarrationVariationAngle, string[]> = {
     curiosity_led: [
-      `E o detalhe é esse: ${lowerFirst}.`,
-      `Aqui que fica interessante. ${spoken}`,
-      `Pouca gente liga, mas ${lowerFirst}.`
+      `E o detalhe é esse: ${spoken}`,
+      `Aqui que fica interessante — ${spoken}`,
+      `Pouca gente liga, mas é o seguinte: ${spoken}`
     ],
     documentary_fact: [
-      `Nos bastidores, ${lowerFirst}.`,
-      `O registro diz o seguinte: ${lowerFirst}.`,
-      `Arquivo e HQ contam outra coisa: ${lowerFirst}.`
+      `O registro diz o seguinte: ${spoken}`,
+      `Se você for ver nas HQs: ${spoken}`,
+      `Nas HQs a história é outra: ${spoken}`
     ],
     fan_lore: [
-      `Quem acompanha ${lead} reconhece: ${lowerFirst}.`,
-      `Nos quadrinhos, ${lowerFirst}.`,
-      `Fã antigo já sabe — ${lowerFirst}.`
+      `Quem acompanha ${lead} reconhece na hora: ${spoken}`,
+      `Nos quadrinhos, a história é essa: ${spoken}`,
+      `Fã antigo já ouviu falar — ${spoken}`
     ],
     emotional_bond: [
-      `E tem um motivo emocional: ${lowerFirst}.`,
-      `Por trás dessa cena, ${lowerFirst}.`,
-      `Não é só visual. ${spoken}`
+      `E tem um lado emocional nisso: ${spoken}`,
+      `Por trás dessa cena: ${spoken}`,
+      spoken
     ],
     dark_reveal: [
-      `E aí fica estranho: ${lowerFirst}.`,
-      `O tom muda quando você sabe que ${lowerFirst}.`,
-      `Por baixo da cena, ${lowerFirst}.`
+      `E aí fica estranho: ${spoken}`,
+      `Quando você descobre isso, o tom muda — ${spoken}`,
+      `O que pouca gente lembra: ${spoken}`
     ],
     hype_energy: [
-      `E é por isso que explode: ${lowerFirst}.`,
-      `Esse é o gatilho do hype — ${lowerFirst}.`,
-      `No auge do momento, ${lowerFirst}.`
+      `E é por isso que explode: ${spoken}`,
+      `Esse é o gatilho do hype — ${spoken}`,
+      `No auge do momento: ${spoken}`
     ]
   };
 
-  return pickVariant(bridges[angle], lead, `curiosity-weave-${angle}`);
+  return humanizeOralPtBr(pickVariant(bridges[angle], lead, `curiosity-weave-${angle}`));
 }
 
 export function isOperationalText(text: string): boolean {
@@ -407,6 +420,28 @@ const LITERARY_TO_SPOKEN: Array<[RegExp, string]> = [
   [/muda a leitura inteira/gi, "muda tudo"],
   [/memória coletiva/gi, "história que todo mundo lembra"],
   [/instante decisivo/gi, "momento decisivo"],
+  [/pain[eé]is cl[aá]ssicos inspiram esse frame/gi, "isso aparece bastante nos quadrinhos"],
+  [/inspiram esse frame/gi, "aparecem muito nos quadrinhos"],
+  [/por isso parece maior que segundos/gi, "por isso parece maior do que uns segundos"],
+  [/escolha narrativa/gi, "intenção na história"],
+  [/peso emocional da cena/gi, "clima da cena"],
+  [/paga uma d[ií]vida com os f[aã]s/gi, "é referência direta pros fãs"],
+  [/refer[eê]ncia de f[aã] embutida no corte/gi, "tem referência de fã escondida aqui"],
+  [/a narra[cç][aã]o abre a camada de tr[aá]s/gi, "a gente abre o que veio antes"],
+  [/arquivo e hq contam outra coisa/gi, "nas HQs a história é outra"],
+  [/o clipe mostra/gi, "Olha só: aqui aparece"],
+  [/o short s[oó] resume/gi, "o vídeo só mostra um pedaço"],
+  [/o short s[oó] mostra/gi, "o vídeo só mostra"],
+  [/o short s[oó] sugere/gi, "o vídeo só dá uma pista"],
+  [/no mesmo frame/gi, "na mesma cena"],
+  [/esse frame/gi, "essa cena"],
+  [/\besse beat\b/gi, "esse momento"],
+  [/\bnum beat\b/gi, "num momento"],
+  [/pede contexto/gi, "precisa de contexto"],
+  [/pede olhar de f[aã]/gi, "precisa do olhar de fã"],
+  [/pede empatia/gi, "pede pra você sentir junto"],
+  [/de onde vem essa ideia/gi, "de onde surgiu essa ideia"],
+  [/reconhece esse encontro na hora/gi, "saca esse encontro na hora"],
   [/—/g, ". "],
   [/\s-\s/g, ". "],
   [/;\s*/g, ". "],
@@ -415,6 +450,43 @@ const LITERARY_TO_SPOKEN: Array<[RegExp, string]> = [
   [/\bate voce\b/gi, "até você"],
   [/\bate\s/gi, "até "]
 ];
+
+function oralizeActionLabel(action: string): string {
+  return action
+    .replace(/\s*\/\s*/g, " e ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+export function humanizeOralPtBr(text: string): string {
+  let oral = text.trim();
+  if (!oral) {
+    return "";
+  }
+
+  oral = oral
+    .replace(/\bPor tr[aá]s de ([^,]+), tem uma\b/gi, "Não é só $1 por acaso — tem uma")
+    .replace(/\bEssa dupla funciona porque ([^.]+)\./gi, "Essa dupla funciona por causa da $1.")
+    .replace(/\bO t[ií]tulo promete\b/gi, "O título joga com a ideia de")
+    .replace(/\bO corte n[aã]o explica\b/gi, "O vídeo não explica")
+    .replace(/\bCom contexto, muda tudo\b/gi, "Quando você sabe o contexto, muda tudo")
+    .replace(/\bSem contexto, parece s[oó]\b/gi, "Sem contexto, parece só")
+    .replace(/\bvirou assinatura do personagem\b/gi, "virou marca do personagem")
+    .replace(/\bvenom surgiu\b/gi, "Venom surgiu")
+    .replace(/\bem que\.\s+([a-zà-ú])/gi, "em que $1")
+    .replace(/\b(de|do|da|um|uma)\.\s+([A-ZÀ-Ú][a-zà-ú]+)/g, (_, prefix, word) => `${prefix} ${word.toLowerCase()}`)
+    .replace(/\bpor causa da ([a-z])/gi, "por causa de $1")
+    .replace(/\s+\./g, ".")
+    .replace(/\.\s*\./g, ".")
+    .trim();
+
+  if (oral.length > 0) {
+    oral = oral.charAt(0).toUpperCase() + oral.slice(1);
+  }
+
+  return oral;
+}
 
 const DANGLING_ENDING_PATTERN =
   /\b(o|a|os|as|um|uma|de|do|da|dos|das|em|no|na|nos|nas|que|se|e|ou|com|por|para)\.?$/i;
@@ -479,11 +551,14 @@ export function shortenForSpeech(text: string, maxWords: number): string {
     }
 
     if (assembled) {
-      return /[.!?]$/.test(assembled.trim()) ? assembled.trim() : `${assembled.trim()}.`;
+      const withEnding = /[.!?]$/.test(assembled.trim())
+        ? assembled.trim()
+        : `${assembled.trim()}.`;
+      return repairTruncatedPhrases(withEnding);
     }
   }
 
-  return shortenAtClauseBoundary(text, maxWords);
+  return repairTruncatedPhrases(shortenAtClauseBoundary(text, maxWords));
 }
 
 export function optimizeForSpokenDelivery(text: string): string {
@@ -507,7 +582,7 @@ export function optimizeForSpokenDelivery(text: string): string {
   const sentences = spoken.split(/(?<=[.!?])\s+/).filter(Boolean);
   const normalized = sentences.flatMap((sentence) => {
     const words = sentence.split(/\s+/).filter(Boolean);
-    if (words.length <= 16) {
+    if (words.length <= 20 || /\bem que\b/i.test(sentence)) {
       return [sentence];
     }
 
@@ -525,11 +600,13 @@ export function optimizeForSpokenDelivery(text: string): string {
     ];
   });
 
-  return normalized
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .replace(/(\. )([a-zà-ú])/g, (_, separator, letter) => `${separator}${letter.toUpperCase()}`)
-    .trim();
+  return humanizeOralPtBr(
+    normalized
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .replace(/(\. )([a-zà-ú])/g, (_, separator, letter) => `${separator}${letter.toUpperCase()}`)
+      .trim()
+  );
 }
 
 function distillNarrativeBriefForSpeech(brief: string, maxWords: number): string {
@@ -636,16 +713,16 @@ function buildTensionBeatText(input: {
 
   if (secondary && input.domain === "comics_superhero") {
     shared.push(
-      `A química entre ${input.lead} e ${secondary} não é acaso. O clipe esconde a origem disso.`,
+      `A química entre ${input.lead} e ${secondary} não é acaso — o vídeo não conta de onde veio.`,
       `${input.lead} e ${secondary} juntos mudam o peso da cena. Repara no encontro.`,
-      `Essa dupla funciona porque ${actionLower} — mas o short não explica por quê.`
+      `Essa dupla funciona por causa de ${actionLower} — mas o vídeo não explica o porquê.`
     );
   }
 
   if (input.hookPhrase && input.hookPhrase.length > 4) {
     shared.push(
-      `O título promete ${input.hookPhrase.toLowerCase()}. O corte não explica.`,
-      `Parece exagero. Mas ${input.lead} entrega.`
+      `O título joga com a ideia de ${input.hookPhrase.toLowerCase()}. O vídeo não explica.`,
+      `Parece exagero, mas ${input.lead} entrega.`
     );
   }
 
@@ -666,8 +743,8 @@ function buildTensionBeatText(input: {
       ...shared
     ],
     fan_lore: [
-      `Quem leu a história original já esperava esse beat.`,
-      `Esse frame paga uma dívida com os fãs — e o short só mostra a superfície.`,
+      `Quem leu a história original já esperava esse momento.`,
+      `Isso é referência direta pros fãs — o vídeo só mostra a superfície.`,
       ...shared
     ],
     hype_energy: [
@@ -706,10 +783,12 @@ function buildTensionBeatText(input: {
     pool.push(`O silêncio aqui pesa. ${input.lead} não está sozinho nessa cena.`);
   }
 
-  return pickVariant(
-    pool.filter((line) => !isObviousPhrase(line)),
-    input.seed,
-    `tension-${angle}`
+  return humanizeOralPtBr(
+    pickVariant(
+      pool.filter((line) => !isObviousPhrase(line)),
+      input.seed,
+      `tension-${angle}`
+    )
   );
 }
 
@@ -773,20 +852,22 @@ function ensureFiveBeatStructure(
 }
 
 export function polishPtBrNarration(text: string): string {
-  return text
-    .replace(/\bvoce\b/gi, "você")
-    .replace(/\bnao\b/gi, "não")
-    .replace(/\bmidia\b/gi, "mídia")
-    .replace(/\bepoca\b/gi, "época")
-    .replace(/\bgeracoes\b/gi, "gerações")
-    .replace(/\bdecada\b/gi, "década")
-    .replace(/\bdecadas\b/gi, "décadas")
-    .replace(/\btecnica\b/gi, "técnica")
-    .replace(/\bclassico\b/gi, "clássico")
-    .replace(/\biconico\b/gi, "icônico")
-    .replace(/\bcuriosidade real\b/gi, "curiosidade")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  return humanizeOralPtBr(
+    text
+      .replace(/\bvoce\b/gi, "você")
+      .replace(/\bnao\b/gi, "não")
+      .replace(/\bmidia\b/gi, "mídia")
+      .replace(/\bepoca\b/gi, "época")
+      .replace(/\bgeracoes\b/gi, "gerações")
+      .replace(/\bdecada\b/gi, "década")
+      .replace(/\bdecadas\b/gi, "décadas")
+      .replace(/\btecnica\b/gi, "técnica")
+      .replace(/\bclassico\b/gi, "clássico")
+      .replace(/\biconico\b/gi, "icônico")
+      .replace(/\bcuriosidade real\b/gi, "curiosidade")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+  );
 }
 
 export function hasConcreteCuriosity(text: string): boolean {
@@ -1593,6 +1674,51 @@ function buildVideoAwareBeats(input: {
   ];
 }
 
+export function reduceNarrationOverlap(
+  beats: Array<Omit<NarrationBeatDraft, "caption">>,
+  priorScripts: string[],
+  seed: string
+): Array<Omit<NarrationBeatDraft, "caption">> {
+  if (priorScripts.length === 0) {
+    return beats;
+  }
+
+  return beats.map((beat, beatIndex) => {
+    const overlapsPrior = priorScripts.some((script) =>
+      linesTooSimilar(beat.text, script, 0.42)
+    );
+    if (!overlapsPrior) {
+      return beat;
+    }
+
+    const rewrites = [
+      beat.text.replace(/^O clipe mostra/i, "Nesse recorte"),
+      beat.text.replace(/^O vídeo/i, "Esse corte"),
+      beat.text.replace(/^Nos quadrinhos/i, "Na HQ"),
+      beat.text.replace(/^Venom/i, "Aqui, Venom"),
+      beat.text.replace(/^Pouca gente liga/i, "O detalhe é"),
+      `${beat.text.split(".")[0] ?? beat.text}. A leitura muda no remix.`
+    ]
+      .map((line) => optimizeForSpokenDelivery(line))
+      .filter(
+        (line) =>
+          line.length > 12 &&
+          !priorScripts.some((script) => linesTooSimilar(line, script, 0.42))
+      );
+
+    if (rewrites.length === 0) {
+      return beat;
+    }
+
+    const text = pickVariant(rewrites, seed, `anti-overlap-${beat.role}-${beatIndex}`);
+    return {
+      ...beat,
+      text,
+      curiosityTag: `${beat.curiosityTag ?? beat.role}-alt`
+    };
+  });
+}
+
 export function buildRemixNarrationBeats(input: {
   title: string;
   themeSummary: string;
@@ -1610,7 +1736,7 @@ export function buildRemixNarrationBeats(input: {
   const action = intel.actions[0]?.label ?? "momento de destaque";
   const actionVerb = intel.actions[0]?.verb ?? "acontecer";
   const angle = resolveNarrationVariationAngle({
-    ...(input.targetStyle ? { targetStyle: input.targetStyle } : {}),
+    ...(input.targetStyle ? { targetStyle: input.targetStyle, styleSlotIndex: 0 } : {}),
     ...(input.variationIndex !== undefined ? { variationIndex: input.variationIndex } : {}),
     domain: intel.domain,
     emotion: input.emotion
@@ -1632,50 +1758,58 @@ export function buildRemixNarrationBeats(input: {
 
   const hookCandidates: Array<string | null> = [];
 
-  if (intel.narrativeHook && !isOperationalText(intel.narrativeHook)) {
+  if (
+    intel.narrativeHook &&
+    !isOperationalText(intel.narrativeHook) &&
+    (angle === "documentary_fact" || angle === "curiosity_led")
+  ) {
     hookCandidates.push(spokenHookFromNarrativeHook(intel.narrativeHook));
   }
+
+  const oralAction = oralizeActionLabel(action);
 
   const angleHooks: Record<NarrationVariationAngle, string[]> = {
     curiosity_led: [
       hookPhrase
-        ? `${lead} e ${hookPhrase.toLowerCase()} — o short inteiro gira em torno disso.`
-        : `${lead} no centro. E o vídeo não perde tempo.`,
+        ? `${lead} e ${hookPhrase.toLowerCase()} — o vídeo inteiro gira em torno disso.`
+        : `${lead} no centro, e o vídeo não perde tempo.`,
       secondaryEntity
-        ? `Olha só: ${lead} e ${secondaryEntity} no mesmo frame. Já prende.`
+        ? `Olha só: ${lead} e ${secondaryEntity} na mesma cena. Já prende.`
         : `Esse corte de ${lead} abre com ${actionVerb}. Direto ao ponto.`
     ],
     dark_reveal: [
-      `Tem algo estranho nessa cena de ${lead}. E o short sabe disso.`,
+      `Tem algo estranho nessa cena de ${lead}. O vídeo sabe disso.`,
       hookPhrase
         ? `"${hookPhrase}" soa pesado. ${lead} não está brincando aqui.`
-        : `${lead} aparece — e o tom muda na hora.`
+        : `${lead} aparece, e o tom muda na hora.`
     ],
     emotional_bond: [
       secondaryEntity
         ? `Não é só ação. É ${lead} e ${secondaryEntity} num momento que parece íntimo.`
         : `Aqui ${lead} não luta. Conecta.`,
       hookPhrase
-        ? `O vídeo vende ${hookPhrase.toLowerCase()}. E funciona.`
-        : `${lead} num beat que parece pessoal, não só espetáculo.`
+        ? `O vídeo vende ${hookPhrase.toLowerCase()}, e funciona.`
+        : `${lead} num momento que parece pessoal, não só espetáculo.`
     ],
     fan_lore: [
       secondaryEntity
-        ? `Fã de ${lead} e ${secondaryEntity} reconhece esse encontro na hora.`
-        : `Quem acompanha ${lead} sabe por que esse frame gruda.`,
-      hookPhrase ? `${hookPhrase} — clássico pra quem leu a história.` : `${lead} num beat de fã.`
+        ? `Quem curte ${lead} e ${secondaryEntity} saca esse encontro na hora.`
+        : `Quem acompanha ${lead} sabe por que essa cena prende.`,
+      hookPhrase
+        ? `${hookPhrase} — clássico pra quem leu a história.`
+        : `${lead} num momento que fã reconhece na hora.`
     ],
     hype_energy: [
-      `${lead} entra no modo que o algoritmo ama. ${action}.`,
+      `${lead} entra no modo que o algoritmo ama. ${oralAction}.`,
       hookPhrase
         ? `${hookPhrase}! ${lead} no pico.`
         : `Energia alta, corte rápido, ${lead} no centro.`
     ],
     documentary_fact: [
       hookPhrase
-        ? `O clipe mostra ${lead} e ${hookPhrase.toLowerCase()}. Mas de onde vem essa ideia?`
+        ? `Olha só: aparece ${lead} com essa ideia de ${hookPhrase.toLowerCase()}. Mas de onde isso veio?`
         : `Vamos entender o que ${lead} está fazendo nesse recorte.`,
-      themeLine ?? `O recorte de ${lead} pede contexto — não só reação.`
+      themeLine ?? `Esse corte de ${lead} precisa de contexto — não dá só pra reagir.`
     ]
   };
 
@@ -1684,7 +1818,8 @@ export function buildRemixNarrationBeats(input: {
 
   hookCandidates.push(
     ...angleHooks[angle],
-    hookScene?.visualHint?.includes("crop")
+    hookScene?.visualHint?.includes("crop") &&
+    (angle === "hype_energy" || angle === "curiosity_led" || angle === "fan_lore")
       ? `O corte abre colado em ${lead}. ${spokenActionVerb}, e já prende.`
       : null
   );
@@ -1701,43 +1836,43 @@ export function buildRemixNarrationBeats(input: {
   const angleContext: Record<NarrationVariationAngle, string[]> = {
     curiosity_led: [
       secondaryEntity
-        ? `A dupla ${lead} e ${secondaryEntity} carrega história. O short só mostra o encontro.`
-        : `${lead} num contexto de ${action.toLowerCase()}. Sem repetir o que já está na tela.`,
-      themeLine ?? `O vídeo resume ${action.toLowerCase()}. A narração abre a camada de trás.`
+        ? `A dupla ${lead} e ${secondaryEntity} carrega história. O vídeo só mostra o encontro.`
+        : `${lead} num contexto de ${oralAction} — o clipe só mostra o encontro.`,
+      themeLine ?? `O vídeo resume ${oralAction}. A gente abre o que veio antes.`
     ],
     dark_reveal: [
-      `Por trás de ${action.toLowerCase()}, tem uma escolha narrativa — não é só efeito.`,
+      `Não é só ${oralAction} por acaso — tem intenção por trás disso.`,
       secondaryEntity
-        ? `${lead} e ${secondaryEntity} juntos mudam o peso emocional da cena.`
-        : `${lead} num tom que o clipe original não explica.`
+        ? `${lead} e ${secondaryEntity} juntos deixam a cena mais pesada.`
+        : `${lead} num clima que o vídeo original não explica.`
     ],
     emotional_bond: [
-      `Não é coincidência: ${action.toLowerCase()} vende conexão, não só impacto.`,
+      `Não é coincidência: ${oralAction} vende conexão, não só impacto.`,
       secondaryEntity
-        ? `A química entre ${lead} e ${secondaryEntity} vem dos quadrinhos — o short só sugere.`
-        : themeLine ?? `${lead} num beat que pede empatia, não só reação.`
+        ? `A química entre ${lead} e ${secondaryEntity} vem dos quadrinhos — o vídeo só dá uma pista.`
+        : themeLine ?? `${lead} num momento que pede pra você sentir junto, não só reagir.`
     ],
     fan_lore: [
       intel.domain === "comics_superhero"
-        ? `Painéis clássicos inspiram esse frame. Por isso parece maior que segundos.`
-        : `Referência de fã embutida no corte. ${lead} carrega décadas de história.`,
+        ? `Isso aparece bastante nos quadrinhos — por isso a cena parece maior do que uns segundos.`
+        : `Tem referência de fã escondida nesse corte. ${lead} carrega anos de história.`,
       secondaryEntity
-        ? `${secondaryEntity} entra e muda a leitura de ${lead}.`
-        : (themeLine ?? `${lead} num recorte que pede olhar de fã.`)
+        ? `Quando ${secondaryEntity} entra, a leitura de ${lead} muda completamente.`
+        : (themeLine ?? `Pra entender ${lead} aqui, você precisa do olhar de fã.`)
     ],
     hype_energy: [
       intel.domain === "sports"
         ? `Placar, pressão e ritmo${intel.setting ? ` em ${intel.setting}` : ""}. O lance ganha escala.`
         : `Corte rápido, energia alta — ${lead} no momento que o vídeo quer viralizar.`,
-      `${action}. É isso que o short quer que você sinta.`
+      `${oralAction}. É isso que o vídeo quer que você sinta.`
     ],
     documentary_fact: [
       secondaryEntity
-        ? `Nos quadrinhos, ${lead} e ${secondaryEntity} já dividiram cena assim — o short só resume.`
+        ? `Nos quadrinhos, ${lead} e ${secondaryEntity} já dividiram cena assim — o vídeo só mostra um pedaço.`
         : `A origem desse momento com ${lead} está nos quadrinhos, não só no algoritmo.`,
       intel.domain === "gaming"
         ? `No jogo, ${actionVerb} costuma punir leitura errada. O highlight esconde o setup.`
-        : `${action.replace(/\s*\/\s*/g, " e ")} muda de peso quando você sabe o que veio antes.`
+        : `${oralAction} muda de peso quando você sabe o que veio antes.`
     ]
   };
 
@@ -1753,7 +1888,12 @@ export function buildRemixNarrationBeats(input: {
     );
   }
 
-  if (contextCandidates.length < 2 && intel.narrativeBrief && !isMetadataSummary(intel.narrativeBrief)) {
+  if (
+    contextCandidates.length < 2 &&
+    intel.narrativeBrief &&
+    !isMetadataSummary(intel.narrativeBrief) &&
+    (angle === "documentary_fact" || angle === "curiosity_led")
+  ) {
     const brief = distillNarrativeBriefForSpeech(intel.narrativeBrief, 20);
     if (!linesTooSimilar(brief, hook)) {
       contextCandidates.push(brief);
@@ -1785,12 +1925,22 @@ export function buildRemixNarrationBeats(input: {
   });
 
   const curiosityAngleUsable =
+    angle === "documentary_fact" &&
     intel.curiosityAngle &&
     hasConcreteCuriosity(intel.curiosityAngle) &&
     !linesTooSimilar(intel.curiosityAngle, intel.narrativeHook ?? "") &&
     !linesTooSimilar(intel.curiosityAngle, intel.narrativeBrief ?? "");
 
-  const rawClimax = curiosityAngleUsable ? intel.curiosityAngle : curiosity;
+  const rawClimax =
+    curiosityAngleUsable
+      ? intel.curiosityAngle
+      : resolveCuriosityFact({
+          entityId,
+          domain: intel.domain,
+          seed: `${input.seed}:${angle}:climax:${input.variationIndex ?? 0}`,
+          lead,
+          action
+        });
 
   const climax = optimizeForSpokenDelivery(
     weaveCuriosityNaturally(
@@ -2243,6 +2393,8 @@ export function buildNarrationEnginePrompt(input: {
     "Frases curtas. Uma ideia por período. Evite subordinadas longas.",
     "Use ritmo oral: pausa antes do clímax, leve aceleração na tensão.",
     "Curiosidade no clímax deve soar natural — como dado contado, não enciclopédia.",
+    "Evite linguagem de roteiro escrito: frame, beat, escolha narrativa, inspiram esse frame.",
+    "Prefira fala coloquial brasileira: olha só, saca, a galera, nos quadrinhos, o vídeo.",
     "Depois da primeira menção, use pronomes (ele, ela, isso) em vez de repetir nomes.",
     "",
     "=== CONTEÚDO ===",

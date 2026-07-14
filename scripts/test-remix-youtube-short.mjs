@@ -16,6 +16,30 @@ function getVariations(plan) {
   return [plan, ...(plan.alternativePlans ?? [])];
 }
 
+function tokenOverlap(left, right) {
+  const leftWords = new Set(
+    String(left ?? "")
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => word.length > 3)
+  );
+  const rightWords = String(right ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word.length > 3);
+  if (leftWords.size === 0 || rightWords.length === 0) return 0;
+  const overlap = rightWords.filter((word) => leftWords.has(word)).length;
+  return Number((overlap / rightWords.length).toFixed(2));
+}
+
+function assetOverlap(a, b) {
+  const titlesA = new Set((a ?? []).map((item) => item.title?.toLowerCase?.() ?? ""));
+  const titlesB = (b ?? []).map((item) => item.title?.toLowerCase?.() ?? "");
+  if (titlesA.size === 0 || titlesB.length === 0) return 0;
+  const shared = titlesB.filter((title) => titlesA.has(title)).length;
+  return Number((shared / Math.max(titlesB.length, 1)).toFixed(2));
+}
+
 function summarizeVariation(plan) {
   const topAssets = (plan.assetDiscovery?.imageSearch?.candidates ?? [])
     .slice(0, 6)
@@ -37,6 +61,8 @@ function summarizeVariation(plan) {
     plan.videoAnalysis?.themeSummary ??
     null;
 
+  const retention = plan.narrationPlan?.retentionMetadata ?? null;
+
   return {
     variationLabel: plan.variationLabel,
     targetStyle: plan.targetStyle,
@@ -44,6 +70,44 @@ function summarizeVariation(plan) {
     hookLine: plan.narrationPlan?.hookLine ?? null,
     narrationScript: plan.narrationPlan?.suggestedScript ?? null,
     narrationBeats: beats.map((b) => ({ role: b.role, text: b.text })),
+    retention: retention
+      ? {
+          retentionEngineEnabled: retention.retentionEngineEnabled,
+          usedRetentionEngine: retention.usedRetentionEngine,
+          fallbackUsed: retention.fallbackUsed,
+          fallbackReason: retention.fallbackReason ?? null,
+          narrationScore: retention.narrationScore ?? null,
+          scoreBreakdown: retention.scoreBreakdown ?? null,
+          forbiddenPhrasesFound: retention.forbiddenPhrasesFound ?? [],
+          estimatedDurationSec: retention.estimatedDurationSec ?? null,
+          beats: retention.beats ?? null,
+          voiceMetadata: retention.voiceMetadata ?? null,
+          variationOverlap: retention.variationOverlap ?? null,
+          angleUniquenessScore: retention.angleUniquenessScore ?? null,
+          angle: retention.angle ?? null,
+          truthGuard: retention.truthGuard
+            ? {
+                ok: retention.truthGuard.ok,
+                score: retention.truthGuard.score,
+                issues: retention.truthGuard.issues?.length ?? 0
+              }
+            : null,
+          speechTiming: retention.speechTiming
+            ? {
+                targetDurationSec: retention.speechTiming.targetDurationSec,
+                estimatedDurationSec: retention.speechTiming.estimatedDurationSec,
+                differenceSec: retention.speechTiming.differenceSec
+              }
+            : null,
+          captionDirection: retention.captionDirection
+            ? {
+                style: retention.captionDirection.style,
+                cueCount: retention.captionDirection.cues?.length ?? 0
+              }
+            : null,
+          upgradeWarnings: retention.upgradeWarnings ?? []
+        }
+      : null,
     curiositiesUsed: plan.narrationPlan?.narrationContext?.curiosityLines ?? [],
     editingStyle: {
       cinematicPreset: plan.cinematicPlan?.preset?.id ?? plan.cinematicPlan?.preset?.name,
@@ -95,6 +159,29 @@ async function main() {
 
   const analysis = plan.videoAnalysis;
   const variations = getVariations(plan).map(summarizeVariation);
+  const differentiation = {
+    narrationOverlap: [],
+    assetOverlap: []
+  };
+
+  for (let i = 0; i < variations.length; i += 1) {
+    for (let j = i + 1; j < variations.length; j += 1) {
+      differentiation.narrationOverlap.push({
+        pair: `${variations[i].variationLabel} vs ${variations[j].variationLabel}`,
+        overlap: tokenOverlap(
+          variations[i].narrationScript,
+          variations[j].narrationScript
+        )
+      });
+      differentiation.assetOverlap.push({
+        pair: `${variations[i].variationLabel} vs ${variations[j].variationLabel}`,
+        overlap: assetOverlap(
+          variations[i].suggestedAssets,
+          variations[j].suggestedAssets
+        )
+      });
+    }
+  }
 
   const report = {
     sourceUrl: SOURCE_URL,
@@ -151,6 +238,8 @@ async function main() {
     },
     warnings: plan.warnings ?? [],
     variationCount: variations.length,
+    retentionEngineEnabled: process.env.ENABLE_NARRATION_RETENTION_ENGINE === "true",
+    differentiation,
     variations
   };
 

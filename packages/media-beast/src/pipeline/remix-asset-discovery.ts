@@ -6,11 +6,15 @@ import {
 } from "../providers/asset-api-clients.js";
 import { listMediaBeastProviders } from "../providers/index.js";
 import type { MediaBeastCandidate, MediaBeastNiche, MediaBeastProviderId } from "../providers/types.js";
+import type { RemixTargetStyle } from "./remix-types.js";
 import type { VideoRemixAnalysis } from "./remix-video-analyzer.js";
 import type { BeastComfyVariation } from "./visual-transformer.js";
 import {
   buildEntityAwareAssetQueries,
+  buildNarrativeHookAssetQueries,
   buildStrategyAssetQueries,
+  normalizeAssetTitleKey,
+  normalizePreviewUrlKey,
   resolvePurposeForCandidate,
   resolveRemixAssetDiscoveryStrategy,
   scoreAssetDomainRelevance,
@@ -169,6 +173,203 @@ function applyDefaultAssetSelection(ranked: RemixAssetSearchCandidate[]): void {
   }
 }
 
+function deduplicateRankedCandidates(
+  ranked: RemixAssetSearchCandidate[]
+): RemixAssetSearchCandidate[] {
+  const seenTitles = new Set<string>();
+  const seenPreviews = new Set<string>();
+  const deduped: RemixAssetSearchCandidate[] = [];
+
+  for (const candidate of ranked) {
+    const titleKey = normalizeAssetTitleKey(candidate.title);
+    const previewKey = normalizePreviewUrlKey(candidate.previewUrl);
+
+    if (seenTitles.has(titleKey)) continue;
+    if (previewKey && seenPreviews.has(previewKey)) continue;
+
+    seenTitles.add(titleKey);
+    if (previewKey) seenPreviews.add(previewKey);
+    deduped.push(candidate);
+  }
+
+  return deduped;
+}
+
+interface VariationAssetPreference {
+  preferredPurposes: RemixAssetPurpose[];
+  titleKeywords: string[];
+  avoidKeywords: string[];
+  queryKeywords: string[];
+}
+
+const VARIATION_ASSET_PREFERENCES: Partial<Record<RemixTargetStyle, VariationAssetPreference>> = {
+  documentary: {
+    preferredPurposes: ["archive_reference", "documentary_still", "comic_panel"],
+    titleKeywords: ["archive", "photograph", "panel", "golden age", "classic", "editorial"],
+    avoidKeywords: ["cosplay", "neon", "anime", "carnaval"],
+    queryKeywords: ["archive", "editorial", "documentary", "golden age"]
+  },
+  comics: {
+    preferredPurposes: ["comic_panel", "character_art"],
+    titleKeywords: ["comic", "spider", "venom", "symbiote", "panel", "marvel", "vs", "illustration"],
+    avoidKeywords: ["photograph", "carnaval", "ceramica", "cerâmica"],
+    queryKeywords: ["comic", "panel", "halftone", "illustration", "marvel"]
+  },
+  dark_cinematic: {
+    preferredPurposes: ["character_art", "comic_panel", "broll_mood"],
+    titleKeywords: ["symbiote", "venom", "dark", "noir", "shadow", "vs", "bond"],
+    avoidKeywords: ["carnival", "carnaval", "bright", "cosplay", "carnaval"],
+    queryKeywords: ["symbiote", "bond", "dark", "noir", "partnership"]
+  },
+  horror: {
+    preferredPurposes: ["broll_mood", "character_art", "documentary_still"],
+    titleKeywords: ["horror", "dark", "noir", "shadow", "venom", "symbiote"],
+    avoidKeywords: ["cosplay", "carnaval", "bright"],
+    queryKeywords: ["noir", "dark", "atmospheric", "horror"]
+  },
+  true_crime: {
+    preferredPurposes: ["archive_reference", "documentary_still"],
+    titleKeywords: ["archive", "newspaper", "investigation", "evidence"],
+    avoidKeywords: ["cosplay", "comic", "anime"],
+    queryKeywords: ["archive", "newspaper", "investigation"]
+  },
+  anime: {
+    preferredPurposes: ["character_art", "differentiation"],
+    titleKeywords: ["anime", "manga", "key visual", "illustration"],
+    avoidKeywords: ["photograph", "archive", "newspaper"],
+    queryKeywords: ["anime", "manga", "key visual"]
+  },
+  hype_sports: {
+    preferredPurposes: ["sports_photo", "archive_reference"],
+    titleKeywords: ["match", "goal", "stadium", "action", "sports"],
+    avoidKeywords: ["comic", "anime", "cosplay"],
+    queryKeywords: ["match", "sports", "action", "stadium"]
+  },
+  generic: {
+    preferredPurposes: ["archive_reference", "differentiation"],
+    titleKeywords: ["editorial", "archive", "reference"],
+    avoidKeywords: ["cosplay", "meme"],
+    queryKeywords: ["editorial", "archive"]
+  }
+};
+
+function scoreCandidateForVariationStyle(
+  candidate: RemixAssetSearchCandidate,
+  targetStyle: RemixTargetStyle
+): number {
+  const preference = VARIATION_ASSET_PREFERENCES[targetStyle] ?? VARIATION_ASSET_PREFERENCES.generic!;
+  const haystack = `${candidate.title} ${candidate.query}`.toLowerCase();
+  let boost = 0;
+
+  if (preference.preferredPurposes.includes(candidate.purpose)) {
+    boost += 14;
+  }
+  for (const keyword of preference.titleKeywords) {
+    if (haystack.includes(keyword.toLowerCase())) {
+      boost += 7;
+    }
+  }
+  for (const keyword of preference.queryKeywords) {
+    if (candidate.query.toLowerCase().includes(keyword.toLowerCase())) {
+      boost += 5;
+    }
+  }
+  for (const keyword of preference.avoidKeywords) {
+    if (haystack.includes(keyword.toLowerCase())) {
+      boost -= 18;
+    }
+  }
+
+  return candidate.combinedScore + boost;
+}
+
+export function selectVariationAssetCandidates(
+  ranked: RemixAssetSearchCandidate[],
+  input: {
+    variationIndex: number;
+    variationCount: number;
+    targetStyle: RemixTargetStyle;
+    minTarget?: number;
+    maxTarget?: number;
+    excludeCandidateIds?: string[];
+  }
+): RemixAssetSearchCandidate[] {
+  const minTarget = input.minTarget ?? 8;
+  const maxTarget = input.maxTarget ?? 12;
+  const excludeIds = new Set(input.excludeCandidateIds ?? []);
+  const variationCount = Math.max(1, input.variationCount);
+
+  const styleRanked = ranked
+    .filter((candidate) => !excludeIds.has(candidate.candidateId))
+    .map((candidate) => ({
+      candidate,
+      styleScore: scoreCandidateForVariationStyle(candidate, input.targetStyle)
+    }))
+    .sort((left, right) => right.styleScore - left.styleScore);
+
+  const chunkSize = Math.max(4, Math.ceil(styleRanked.length / variationCount));
+  const rotatedStart = (input.variationIndex * chunkSize) % Math.max(1, styleRanked.length);
+  const rotated = [
+    ...styleRanked.slice(rotatedStart),
+    ...styleRanked.slice(0, rotatedStart)
+  ].map((entry) => entry.candidate);
+
+  const seen = new Set<string>();
+  const variationPool: RemixAssetSearchCandidate[] = [];
+  for (const candidate of rotated) {
+    const key = normalizeAssetTitleKey(candidate.title);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    variationPool.push(candidate);
+    if (variationPool.length >= maxTarget + 4) break;
+  }
+
+  const selected = selectTopAssetCandidates(variationPool, minTarget, maxTarget);
+  if (selected.length >= minTarget) {
+    return selected;
+  }
+
+  const fallbackPool = ranked
+    .filter((candidate) => !excludeIds.has(candidate.candidateId))
+    .map((candidate) => ({
+      candidate,
+      styleScore: scoreCandidateForVariationStyle(candidate, input.targetStyle)
+    }))
+    .sort((left, right) => right.styleScore - left.styleScore)
+    .map((entry) => entry.candidate);
+
+  const relaxed = selectTopAssetCandidates(fallbackPool, minTarget, maxTarget);
+  return relaxed.length > 0 ? relaxed : selected;
+}
+
+export function buildVariationAssetQueries(
+  baseQueries: string[],
+  targetStyle: RemixTargetStyle,
+  variationIndex: number
+): string[] {
+  const preference = VARIATION_ASSET_PREFERENCES[targetStyle];
+  if (!preference) {
+    return baseQueries;
+  }
+
+  const boosted = baseQueries.map((query, index) => ({
+    query,
+    score:
+      preference.queryKeywords.filter((keyword) =>
+        query.toLowerCase().includes(keyword.toLowerCase())
+      ).length *
+        3 +
+      (baseQueries.length - index)
+  }));
+
+  const rotatedStart = (variationIndex * 2) % Math.max(1, boosted.length);
+  const ordered = [...boosted.slice(rotatedStart), ...boosted.slice(0, rotatedStart)]
+    .sort((left, right) => right.score - left.score)
+    .map((entry) => entry.query);
+
+  return [...new Set(ordered)];
+}
+
 function selectTopAssetCandidates(
   ranked: RemixAssetSearchCandidate[],
   minTarget = 8,
@@ -211,15 +412,22 @@ export function rankRemixAssetCandidates(
         queryPurposeByText.get(query.toLowerCase())
       );
       const qualityScore = computeQualityScore(candidate, purpose, strategy.providerWeights);
+      const description =
+        typeof candidate.metadata?.pageDescription === "string"
+          ? candidate.metadata.pageDescription
+          : typeof candidate.metadata?.description === "string"
+            ? candidate.metadata.description
+            : undefined;
       const relevanceScore = scoreAssetDomainRelevance({
         title: candidate.title,
         query,
         providerId: candidate.providerId,
         analysis,
         strategy,
-        purpose
+        purpose,
+        ...(description ? { description } : {})
       });
-      const combinedScore = Math.round(qualityScore * 0.55 + relevanceScore * 0.45);
+      const combinedScore = Math.round(qualityScore * 0.42 + relevanceScore * 0.58);
       const previewAvailable = Boolean(
         candidate.previewUrl &&
           (isDirectImageUrl(candidate.previewUrl) || candidate.metadata.directImage === true)
@@ -253,9 +461,10 @@ export function rankRemixAssetCandidates(
     })
     .sort((left, right) => right.combinedScore - left.combinedScore);
 
-  applyDefaultAssetSelection(ranked);
+  const deduped = deduplicateRankedCandidates(ranked);
+  applyDefaultAssetSelection(deduped);
 
-  return ranked;
+  return deduped;
 }
 
 function buildStyleTokens(domain: VideoRemixAnalysis["contentIntelligence"]["domain"], franchise: string | null): string[] {
@@ -315,6 +524,11 @@ export function buildRemixAssetDiscoveryPlan(input: {
   niche?: MediaBeastNiche;
   discoveredCandidates?: MediaBeastCandidate[];
   importedAssets?: RemixImportedAssetBinding[];
+  variationIndex?: number;
+  variationCount?: number;
+  targetStyle?: RemixTargetStyle;
+  rankedAssetPool?: RemixAssetSearchCandidate[];
+  excludeAssetCandidateIds?: string[];
 }): RemixAssetDiscoveryPlan {
   const intelligence = input.analysis.contentIntelligence;
   const strategy = resolveRemixAssetDiscoveryStrategy({
@@ -322,7 +536,11 @@ export function buildRemixAssetDiscoveryPlan(input: {
     ...(input.niche ? { niche: input.niche } : {})
   });
   const strategyQueries = buildStrategyAssetQueries(input.analysis, strategy, 14);
-  const uniqueQueries = strategyQueries.map((entry) => entry.query);
+  const baseQueries = strategyQueries.map((entry) => entry.query);
+  const uniqueQueries =
+    input.targetStyle !== undefined && input.variationIndex !== undefined
+      ? buildVariationAssetQueries(baseQueries, input.targetStyle, input.variationIndex)
+      : baseQueries;
   const queryPurposeByText = new Map(
     strategyQueries.map((entry) => [entry.query.toLowerCase(), entry.purpose])
   );
@@ -331,15 +549,24 @@ export function buildRemixAssetDiscoveryPlan(input: {
     input.enableImageSearch !== false ? strategy.providerIds : []
   ) as RemixAssetDiscoveryPlan["imageSearch"]["providerIds"];
 
-  const rankedSearchCandidates = rankRemixAssetCandidates(
-    input.discoveredCandidates ?? [],
-    input.analysis,
-    {
+  const rankedSearchCandidates =
+    input.rankedAssetPool ??
+    rankRemixAssetCandidates(input.discoveredCandidates ?? [], input.analysis, {
       ...(input.niche ? { niche: input.niche } : {}),
       queryPurposeByText
-    }
-  );
-  const searchCandidates = selectTopAssetCandidates(rankedSearchCandidates, 8, 12);
+    });
+
+  const searchCandidates =
+    input.targetStyle !== undefined && input.variationIndex !== undefined
+      ? selectVariationAssetCandidates(rankedSearchCandidates, {
+          variationIndex: input.variationIndex,
+          variationCount: input.variationCount ?? 3,
+          targetStyle: input.targetStyle,
+          ...(input.excludeAssetCandidateIds
+            ? { excludeCandidateIds: input.excludeAssetCandidateIds }
+            : {})
+        })
+      : selectTopAssetCandidates(rankedSearchCandidates, 8, 12);
   applyDefaultAssetSelection(searchCandidates);
 
   const defaultSelectedCandidateIds = searchCandidates
@@ -473,6 +700,7 @@ export async function discoverRemixAssetCandidates(input: {
   ]);
 
   const directQuerySeeds = [
+    ...buildNarrativeHookAssetQueries(input.analysis).map((entry) => entry.query),
     ...entityCoreQueries,
     ...buildEntityAwareAssetQueries(input.analysis).map((entry) => entry.query),
     ...queries
@@ -487,7 +715,7 @@ export async function discoverRemixAssetCandidates(input: {
     if (seenDirectQueries.has(key)) continue;
     seenDirectQueries.add(key);
     uniqueDirectQueries.push(query);
-    if (uniqueDirectQueries.length >= 10) break;
+    if (uniqueDirectQueries.length >= 12) break;
   }
 
   const directBundles = await Promise.all(
@@ -496,7 +724,8 @@ export async function discoverRemixAssetCandidates(input: {
         query,
         maxPerSource: 5,
         entityTerms,
-        includeFlickr: true
+        includeFlickr: true,
+        domain: intelligence.domain
       })
     )
   );

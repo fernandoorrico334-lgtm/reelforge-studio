@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { isSearchSurfaceUrl } from "../discovery/candidate-enrichment.js";
 import type { RemixAssetSearchCandidate } from "./remix-asset-discovery.js";
@@ -36,6 +36,18 @@ function isDirectImageUrl(url: string) {
   } catch {
     return IMAGE_EXTENSIONS.some((ext) => url.toLowerCase().includes(ext));
   }
+}
+
+function resolveLocalAssetPath(url: string, projectRoot: string): string | null {
+  const normalized = url.replace(/\\/g, "/").trim();
+  if (!normalized || /^https?:\/\//i.test(normalized)) return null;
+  if (/^storage\/assets\//i.test(normalized)) {
+    return join(projectRoot, normalized);
+  }
+  if (/^comics-catalog-panels\//i.test(normalized)) {
+    return join(projectRoot, "storage", "assets", normalized);
+  }
+  return null;
 }
 
 function extensionFromUrl(url: string, fallback = ".png") {
@@ -131,6 +143,28 @@ export async function importRemixAssetCandidateToDisk(
   const projectRoot = resolveProjectRoot();
   const batchDir = join(projectRoot, "storage", "assets", "remix-imports", context.remixId);
   await mkdir(batchDir, { recursive: true });
+
+  const localSourcePath =
+    resolveLocalAssetPath(candidate.sourceUrl, projectRoot) ??
+    (candidate.previewUrl ? resolveLocalAssetPath(candidate.previewUrl, projectRoot) : null);
+  if (localSourcePath) {
+    const extension = extensionFromUrl(localSourcePath, ".jpg");
+    const filename = stableFilename(candidate.candidateId, extension);
+    const absolutePath = join(batchDir, filename);
+    await copyFile(localSourcePath, absolutePath);
+    const fileStat = await stat(absolutePath);
+    return {
+      candidateId: candidate.candidateId,
+      success: true,
+      localPath: `storage/assets/remix-imports/${context.remixId}/${filename}`,
+      importMethod: "direct_download",
+      mimeType: mimeFromExtension(extension),
+      fileSizeBytes: fileStat.size,
+      width: null,
+      height: null,
+      errorMessage: null
+    };
+  }
 
   const downloadTargets = [
     candidate.previewUrl,

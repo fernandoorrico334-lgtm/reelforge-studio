@@ -25,8 +25,17 @@ import {
 import { clampShortDuration } from "./short-production-limits.js";
 import {
   getNicheProductionProfile,
-  resolveProductionEmotion
+  resolveProductionEmotion,
+  type ProductionEmotion
 } from "./niche-production-profiles.js";
+import type { NarrationVariantAngle } from "./narration-retention-packs.js";
+import {
+  buildRetentionContextFromCandidate,
+  resolveTargetStyleFromNiche
+} from "./narration-retention-context-bridge.js";
+import { applyRetentionRefinementToOverlay } from "./narration-retention-overlay-hook.js";
+import type { RemixResearchDossier } from "./remix-research-bridge.js";
+import { createChannelDNA } from "../scheduler/channel-dna.js";
 
 const supportedVoicePackIds = [
   "narrator_clean_ptbr",
@@ -54,6 +63,10 @@ export interface NarrationOverlayPlanInput {
   language?: string;
   maxDurationSeconds?: number;
   narrationBias?: string;
+  variationIndex?: number;
+  priorVariationScripts?: string[];
+  priorVariationAngles?: NarrationVariantAngle[];
+  researchDossier?: RemixResearchDossier | null;
 }
 
 export interface NarrationVoiceVariation {
@@ -73,6 +86,8 @@ export interface NarrationVoiceVariation {
   estimatedDurationSeconds: number;
 }
 
+import type { NarrationRetentionOverlayMetadata } from "./narration-retention-adapter.js";
+
 export interface NarrationOverlayPlan {
   language: string;
   voicePackHint: string;
@@ -85,6 +100,7 @@ export interface NarrationOverlayPlan {
   narrationContext: NarrationContentContext;
   suggestedScript: string;
   overlayCaptions: string[];
+  retentionMetadata?: NarrationRetentionOverlayMetadata;
   narrationStylePrompt: string;
   narrationEnginePayload: {
     provider: "mock-tts";
@@ -113,9 +129,11 @@ export function buildNarrationOverlayPlan(
   const profile = input.channelDNA
     ? getNicheProductionProfile(input.channelDNA.niche)
     : null;
-  const productionEmotion = input.channelDNA
-    ? resolveProductionEmotion(input.channelDNA.niche, channelTone)
-    : "curious";
+  const productionEmotion = (
+    input.channelDNA
+      ? resolveProductionEmotion(input.channelDNA.niche, channelTone)
+      : "curious"
+  ) as ProductionEmotion;
   const pacing = resolveNarrationPacingForDuration(
     duration,
     profile?.narrationPacing ?? "balanced"
@@ -143,7 +161,7 @@ export function buildNarrationOverlayPlan(
     minTotalWords: Math.round(duration * 2)
   });
 
-  const narrationBeats = ensureNarrationBeatsSafe(
+  const legacyBeats = ensureNarrationBeatsSafe(
     buildContextualNarrationBeats({
       candidate: input.candidate,
       niche: input.channelDNA?.niche ?? "generic",
@@ -156,7 +174,46 @@ export function buildNarrationOverlayPlan(
     subject
   );
 
-  const suggestedScript = beatsToScript(narrationBeats);
+  const legacyScript = beatsToScript(legacyBeats);
+  const fallbackNiche = input.channelDNA?.niche ?? "generic_broll";
+  const effectiveChannelDNA =
+    input.channelDNA ??
+    createChannelDNA({
+      id: `overlay-${input.candidate.id}`,
+      name: "Overlay Channel",
+      niche: fallbackNiche,
+      tone: channelTone,
+      language,
+      narrationBias: voicePackHint
+    });
+  const targetStyle = resolveTargetStyleFromNiche(
+    effectiveChannelDNA.niche,
+    narrationContext.videoHints
+  );
+  const retentionAnalysis = buildRetentionContextFromCandidate({
+    candidate: input.candidate,
+    channelDNA: effectiveChannelDNA,
+    narrationContext,
+    legacyBeats,
+    ...(input.researchDossier !== undefined ? { researchDossier: input.researchDossier } : {}),
+    maxDurationSeconds: duration
+  });
+  const retentionRefine = applyRetentionRefinementToOverlay({
+    legacyBeats,
+    legacyScript,
+    analysis: retentionAnalysis,
+    targetStyle,
+    productionEmotion,
+    maxDurationSeconds: duration,
+    seed,
+    ...(input.variationIndex !== undefined ? { variationIndex: input.variationIndex } : {}),
+    ...(input.priorVariationScripts ? { priorVariationScripts: input.priorVariationScripts } : {}),
+    ...(input.priorVariationAngles ? { priorVariationAngles: input.priorVariationAngles } : {}),
+    ...(input.researchDossier !== undefined ? { researchDossier: input.researchDossier } : {})
+  });
+
+  const narrationBeats = retentionRefine.narrationBeats;
+  const suggestedScript = retentionRefine.suggestedScript;
   const narrationQuality = validateNarrationScript(suggestedScript);
   const climaxBeat = narrationBeats.find((beat) => beat.role === "climax");
   const estimatedDurationSeconds = estimateScriptDurationSeconds(suggestedScript, pacing);
@@ -197,10 +254,13 @@ export function buildNarrationOverlayPlan(
       beats: narrationBeats,
       script: suggestedScript
     }),
-    hookLine,
+    hookLine: narrationBeats[0]?.text ?? hookLine,
     narrationBeats,
     narrationContext,
     suggestedScript,
+    ...(retentionRefine.retentionMetadata
+      ? { retentionMetadata: retentionRefine.retentionMetadata }
+      : {}),
     overlayCaptions: narrationBeats.map((beat) => beat.caption),
     narrationStylePrompt,
     narrationEnginePayload: {
@@ -222,6 +282,13 @@ export function buildNarrationOverlayPlan(
       "Nao afirmar fatos sensiveis sem fonte confiavel.",
       "Nao narrar como se midia discovery-only fosse asset aprovado.",
       "Nao imitar voz real, celebridade ou personagem.",
+      retentionRefine.retentionMetadata?.usedRetentionEngine
+        ? `NarrationRetentionEngine ativa (score ${retentionRefine.retentionMetadata.narrationScore ?? "n/a"}, angulo ${retentionRefine.retentionMetadata.angle ?? "n/a"}).`
+        : retentionRefine.retentionMetadata?.fallbackMode === "partial_upgrade_on_legacy"
+          ? `NarrationRetentionEngine fallback parcial: ${retentionRefine.retentionMetadata.fallbackReason ?? "motivo nao informado"}.`
+          : retentionRefine.retentionAttempted && retentionRefine.retentionMetadata?.fallbackUsed
+            ? `NarrationRetentionEngine fallback: ${retentionRefine.retentionMetadata.fallbackReason ?? "motivo nao informado"}.`
+            : null,
       narrationQuality.valid
         ? "Script narrativo validado sem metadados ou instrucoes de sistema."
         : `Revisar script: ${narrationQuality.issues.slice(0, 2).join(" | ")}`,
@@ -232,7 +299,7 @@ export function buildNarrationOverlayPlan(
       voicePack
         ? `Voice pack '${voicePack.name}' selecionado para tom '${voicePack.tone}'.`
         : "Voice pack padrao documental aplicado."
-    ]
+    ].filter((note): note is string => Boolean(note))
   };
 }
 

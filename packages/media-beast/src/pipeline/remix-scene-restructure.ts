@@ -38,13 +38,68 @@ export interface RemixSceneStructure {
   narrativeArc: string[];
 }
 
-const ROLE_SEQUENCE: RemixSceneRole[] = [
+const DEFAULT_ROLE_SEQUENCE: RemixSceneRole[] = [
   "hook",
   "context",
   "evidence",
   "climax",
   "outro"
 ];
+
+type VariationScenePacing = "fast" | "cinematic" | "balanced";
+
+interface VariationSceneProfile {
+  roles: RemixSceneRole[];
+  pacing: VariationScenePacing;
+  originalClipBias: number;
+}
+
+const VARIATION_SCENE_PROFILES: Partial<Record<RemixTargetStyle, VariationSceneProfile>> = {
+  documentary: {
+    roles: ["hook", "context", "evidence", "climax", "outro"],
+    pacing: "cinematic",
+    originalClipBias: 0.55
+  },
+  comics: {
+    roles: ["hook", "evidence", "tension", "climax", "outro"],
+    pacing: "fast",
+    originalClipBias: 0.35
+  },
+  dark_cinematic: {
+    roles: ["hook", "tension", "context", "climax", "outro"],
+    pacing: "cinematic",
+    originalClipBias: 0.3
+  },
+  horror: {
+    roles: ["hook", "tension", "evidence", "climax", "outro"],
+    pacing: "cinematic",
+    originalClipBias: 0.28
+  },
+  true_crime: {
+    roles: ["hook", "context", "evidence", "tension", "climax", "outro"],
+    pacing: "balanced",
+    originalClipBias: 0.45
+  },
+  hype_sports: {
+    roles: ["hook", "evidence", "climax", "outro"],
+    pacing: "fast",
+    originalClipBias: 0.65
+  },
+  anime: {
+    roles: ["hook", "tension", "evidence", "climax", "outro"],
+    pacing: "fast",
+    originalClipBias: 0.4
+  },
+  generic: {
+    roles: DEFAULT_ROLE_SEQUENCE,
+    pacing: "balanced",
+    originalClipBias: 0.5
+  }
+};
+
+function resolveVariationSceneProfile(targetStyle: RemixTargetStyle): VariationSceneProfile {
+  return VARIATION_SCENE_PROFILES[targetStyle] ?? VARIATION_SCENE_PROFILES.generic!;
+}
 
 const ROLE_CAPTIONS: Record<RemixSceneRole, string> = {
   hook: "Gancho visual imediato",
@@ -55,25 +110,42 @@ const ROLE_CAPTIONS: Record<RemixSceneRole, string> = {
   outro: "Fechamento memorável"
 };
 
-function sceneCountForDuration(durationSeconds: number, intensity: "medium" | "extreme") {
-  return Math.min(ROLE_SEQUENCE.length, shortSceneCount(durationSeconds, intensity));
+function sceneCountForDuration(
+  durationSeconds: number,
+  intensity: "medium" | "extreme",
+  roleSequence: RemixSceneRole[]
+) {
+  return Math.min(roleSequence.length, shortSceneCount(durationSeconds, intensity));
 }
 
 function assignSourceSegment(
   role: RemixSceneRole,
   index: number,
-  intensity: "medium" | "extreme"
+  intensity: "medium" | "extreme",
+  profile: VariationSceneProfile
 ): RemixSceneSourceSegment {
+  const preferOriginal = (index + Math.round(profile.originalClipBias * 10)) % 3 !== 0;
   if (role === "hook" || role === "climax") {
-    return index % 2 === 0 ? "comfy_reconstruction" : "comfy_insert";
+    return profile.pacing === "fast" || index % 2 === 0
+      ? "comfy_reconstruction"
+      : "comfy_insert";
   }
   if (role === "evidence" && intensity === "extreme") {
-    return index % 3 === 0 ? "broll_overlay" : "original_clip";
+    return profile.pacing === "fast"
+      ? "broll_overlay"
+      : index % 3 === 0
+        ? "broll_overlay"
+        : preferOriginal
+          ? "original_clip"
+          : "comfy_reconstruction";
   }
   if (role === "tension") {
-    return "comfy_insert";
+    return profile.pacing === "cinematic" ? "comfy_insert" : "comfy_reconstruction";
   }
-  return index % 2 === 0 ? "original_clip" : "comfy_reconstruction";
+  if (profile.pacing === "cinematic") {
+    return preferOriginal ? "original_clip" : "comfy_reconstruction";
+  }
+  return index % 2 === 0 ? "comfy_insert" : "broll_overlay";
 }
 
 function transitionForRole(role: RemixSceneRole): string {
@@ -114,17 +186,40 @@ export function buildAggressiveRemixSceneStructure(input: {
   targetStyle: RemixTargetStyle;
   intensity: "medium" | "extreme";
   visualPlan: VisualTransformerPlan;
+  variationIndex?: number;
 }): RemixSceneStructure {
-  const sceneCount = sceneCountForDuration(input.durationSeconds, input.intensity);
+  const profile = resolveVariationSceneProfile(input.targetStyle);
+  const roleSequence = profile.roles;
+  const sceneCount = sceneCountForDuration(
+    input.durationSeconds,
+    input.intensity,
+    roleSequence
+  );
+  const adjustedCuts =
+    profile.pacing === "cinematic"
+      ? input.fastCutPlan.cutTimes.filter((_, index) => index % 2 === 0)
+      : profile.pacing === "fast"
+        ? [
+            ...input.fastCutPlan.cutTimes,
+            ...input.fastCutPlan.cutTimes
+              .flatMap((time, index) => {
+                const next = input.fastCutPlan.cutTimes[index + 1] ?? input.durationSeconds;
+                const gap = next - time;
+                return gap > 1.4 ? [Number((time + gap * 0.55).toFixed(2))] : [];
+              })
+              .filter((time) => time > 0 && time < input.durationSeconds)
+          ].sort((left, right) => left - right)
+        : input.fastCutPlan.cutTimes;
+
   const boundaries = [
     0,
-    ...input.fastCutPlan.cutTimes.slice(0, sceneCount - 1),
+    ...adjustedCuts.slice(0, Math.max(sceneCount - 1, 0)),
     input.durationSeconds
   ];
 
   const segments: RemixSceneSegment[] = [];
   for (let index = 0; index < sceneCount; index += 1) {
-    const role = ROLE_SEQUENCE[index] ?? "context";
+    const role = roleSequence[index] ?? "context";
     const startSeconds = boundaries[index] ?? 0;
     const endSeconds = boundaries[index + 1] ?? input.durationSeconds;
     const comfyVariation =
@@ -138,7 +233,7 @@ export function buildAggressiveRemixSceneStructure(input: {
       role,
       startSeconds: Number(startSeconds.toFixed(2)),
       endSeconds: Number(endSeconds.toFixed(2)),
-      sourceSegment: assignSourceSegment(role, index, input.intensity),
+      sourceSegment: assignSourceSegment(role, index, input.intensity, profile),
       transitionIn: transitionForRole(role),
       effects: effectsForRole(role, input.intensity),
       captionHint: ROLE_CAPTIONS[role],
@@ -156,7 +251,7 @@ export function buildAggressiveRemixSceneStructure(input: {
     segments,
     narrativeArc: [
       `Abertura com ${segments[0]?.sourceSegment ?? "comfy_insert"} para quebrar padrão do original.`,
-      "Reestruturação editorial com cortes, inserts ComfyUI e nova trilha.",
+      `Ritmo ${profile.pacing} com papéis ${roleSequence.slice(0, sceneCount).join(" → ")}.`,
       `Estilo alvo: ${input.targetStyle.replace(/_/g, " ")}.`,
       `${input.visualPlan.comfyVariations.length} variações visuais planejadas para substituir trechos fracos.`
     ]

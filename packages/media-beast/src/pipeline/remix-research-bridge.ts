@@ -11,6 +11,7 @@ import {
 } from "@reelforge/research-collector";
 import type { RemixTargetStyle } from "./remix-types.js";
 import {
+  humanizeOralPtBr,
   optimizeForSpokenDelivery,
   resolveCuriosityFact,
   resolveNarrationVariationAngle,
@@ -600,7 +601,7 @@ export function getRemixResearchCuriosities(
 }
 
 function spokenCuriosityLine(text: string): string {
-  return optimizeForSpokenDelivery(text);
+  return humanizeOralPtBr(optimizeForSpokenDelivery(text));
 }
 
 function blendCuriosityIntoBeat(beatText: string, curiosityText: string, maxWords = 26): string {
@@ -619,6 +620,7 @@ export function adaptCuriosityToRemixStyle(
 ): string {
   const angle = resolveNarrationVariationAngle({
     targetStyle,
+    styleSlotIndex: 0,
     variationIndex,
     ...(domain ? { domain } : {})
   });
@@ -684,8 +686,10 @@ export function injectResearchCuriositiesIntoBeats(
     analysis?.title?.slice(0, 40) ??
     "esse assunto";
 
+  const allowClimaxResearchInject = ["documentary", "true_crime"].includes(targetStyle);
+
   return beats.map((beat) => {
-    if (beat.role === "climax" && climaxCuriosity) {
+    if (beat.role === "climax" && climaxCuriosity && allowClimaxResearchInject) {
       const curiosityLooksOperational =
         analysis && isLowQualityCuriosity(climaxCuriosity.text, analysis);
       const text = curiosityLooksOperational

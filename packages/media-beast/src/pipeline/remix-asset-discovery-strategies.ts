@@ -1,4 +1,9 @@
 import type { MediaBeastNiche, MediaBeastProviderId } from "../providers/types.js";
+import {
+  buildComicsSuperheroDiscoveryQueries,
+  evaluateComicsAssetQuality,
+  isBlockedComicsQuery
+} from "./comics-asset-quality-gate.js";
 import type { RemixContentDomain } from "./remix-content-intelligence.js";
 import type { VideoRemixAnalysis } from "./remix-video-analyzer.js";
 
@@ -30,6 +35,358 @@ export interface RemixAssetDiscoveryStrategy {
 
 const ROLE_SEQUENCE = ["hook", "context", "evidence", "climax", "outro"] as const;
 
+/** Terms that indicate a homonym or off-topic result for a given content domain. */
+export const DOMAIN_NEGATIVE_TERMS: Partial<Record<RemixContentDomain, string[]>> = {
+  comics_superhero: [
+    "metal",
+    "band",
+    "music",
+    "concert",
+    "festival",
+    "rock fest",
+    "rockfest",
+    "party.san",
+    "open air",
+    "gig",
+    "album",
+    "singer",
+    "musician",
+    "thrash",
+    "black metal",
+    "cosplay",
+    "costume",
+    "comic-con",
+    "comic con",
+    "fan convention",
+    "toy fair",
+    "action figure",
+    "lego",
+    "minecraft",
+    "meme",
+    "tattoo",
+    "carnaval",
+    "carnival",
+    "ceramica",
+    "cerâmica",
+    "mma",
+    "ufc",
+    "bellator",
+    "fighter",
+    "mixed martial",
+    "parade",
+    "float",
+    "pogonomyrmex",
+    "venom ant",
+    "spider venom",
+    "snake venom",
+    "biological",
+    "toxin",
+    "poison dart",
+    "insect",
+    "arachnid",
+    "hoodie",
+    "moletom",
+    "sweatshirt",
+    "t-shirt",
+    "merch",
+    "merchandise",
+    "print on demand",
+    "logo only",
+    "logo.png"
+  ],
+  anime: ["cosplay", "costume", "convention", "toy", "figure", "lego", "minecraft", "meme"],
+  sports: ["cosplay", "video game", "minecraft", "anime", "comic"],
+  gaming: ["cosplay", "sports stadium", "football match", "marathon"],
+  true_crime: ["fiction", "movie poster", "cosplay", "fan art"],
+  horror: ["cosplay", "halloween party", "costume contest"],
+  science: ["fiction", "sci-fi movie", "cosplay"],
+  documentary: ["cosplay", "fan art", "meme"],
+  generic: ["cosplay", "meme", "stock photo watermark"]
+};
+
+/** Terms that confirm the asset belongs to the expected domain (disambiguates homonyms). */
+export const DOMAIN_POSITIVE_CONTEXT_TERMS: Partial<Record<RemixContentDomain, string[]>> = {
+  comics_superhero: [
+    "comic",
+    "marvel",
+    "dc comics",
+    "superhero",
+    "spider",
+    "spiderman",
+    "symbiote",
+    "simbiose",
+    "panel",
+    "hq",
+    "quadrinhos",
+    "illustration",
+    "cartoon",
+    "graphic novel",
+    "avengers",
+    "x-men",
+    "stan lee",
+    "carnage",
+    "eddie brock"
+  ],
+  anime: ["anime", "manga", "key visual", "cel", "shonen", "studio"],
+  sports: ["match", "goal", "stadium", "league", "player", "team", "score"],
+  gaming: ["game", "gameplay", "arcade", "esports", "console", "character select"],
+  true_crime: ["newspaper", "investigation", "evidence", "court", "police", "archive"],
+  horror: ["film still", "cinema", "horror movie", "noir"],
+  science: ["laboratory", "research", "scientific", "microscope", "experiment"],
+  documentary: ["archive", "historical", "photograph", "museum", "editorial"],
+  generic: ["editorial", "archive", "photograph", "documentary"]
+};
+
+const THEMATIC_HOOK_KEYWORDS = [
+  "symbiote",
+  "simbiose",
+  "partnership",
+  "partner",
+  "parceiro",
+  "perfeito",
+  "perfect",
+  "bond",
+  "dupla",
+  "duo",
+  "pair",
+  "together",
+  "union",
+  "host",
+  "merge",
+  "combine"
+];
+
+export function normalizeAssetTitleKey(title: string): string {
+  return title
+    .replace(/^file:/i, "")
+    .replace(/\.(jpg|jpeg|png|webp|gif|avif)$/i, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+export function normalizePreviewUrlKey(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const openverseMatch = parsed.pathname.match(/\/images\/([a-f0-9-]+)\//i);
+    if (openverseMatch?.[1]) return `openverse:${openverseMatch[1]}`;
+    const wikiMatch = parsed.pathname.match(/\/commons\/thumb\/[^/]+\/([^/]+)\//i);
+    if (wikiMatch?.[1]) return `wiki:${wikiMatch[1].toLowerCase()}`;
+    parsed.search = "";
+    return parsed.toString().toLowerCase();
+  } catch {
+    return url.split("?")[0]?.toLowerCase() ?? null;
+  }
+}
+
+function countTermMatches(haystack: string, terms: string[]): number {
+  let count = 0;
+  for (const term of terms) {
+    if (term.length > 2 && haystack.includes(term.toLowerCase())) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function scoreHomonymPenalty(input: {
+  domain: RemixContentDomain;
+  title: string;
+  description?: string;
+  entityNames?: string[];
+}): number {
+  const haystack = `${input.title} ${input.description ?? ""}`.toLowerCase();
+  const negativeTerms = DOMAIN_NEGATIVE_TERMS[input.domain] ?? DOMAIN_NEGATIVE_TERMS.generic ?? [];
+  const positiveTerms =
+    DOMAIN_POSITIVE_CONTEXT_TERMS[input.domain] ??
+    DOMAIN_POSITIVE_CONTEXT_TERMS.generic ??
+    [];
+
+  const negativeHits = countTermMatches(haystack, negativeTerms);
+  if (negativeHits === 0) return 0;
+
+  const positiveHits = countTermMatches(haystack, positiveTerms);
+  const entityHits = (input.entityNames ?? []).filter(
+    (name) => name.length > 2 && haystack.includes(name.toLowerCase())
+  ).length;
+
+  let penalty = 0;
+  for (const term of negativeTerms) {
+    if (term.length > 2 && haystack.includes(term.toLowerCase())) {
+      penalty += term.includes(" ") || term.includes(".") ? 28 : 18;
+    }
+  }
+
+  if (positiveHits >= 2) {
+    penalty = Math.round(penalty * 0.35);
+  } else if (positiveHits === 1) {
+    penalty = Math.round(penalty * 0.6);
+  }
+
+  if (entityHits >= 1 && positiveHits === 0 && negativeHits >= 1) {
+    penalty += 35;
+  }
+
+  return Math.min(95, penalty);
+}
+
+export function isAssetHomonymMismatch(input: {
+  domain: RemixContentDomain;
+  title: string;
+  description?: string;
+  entityNames?: string[];
+}): boolean {
+  const haystack = `${input.title} ${input.description ?? ""}`.toLowerCase();
+  const negativeTerms = DOMAIN_NEGATIVE_TERMS[input.domain] ?? DOMAIN_NEGATIVE_TERMS.generic ?? [];
+  const positiveTerms =
+    DOMAIN_POSITIVE_CONTEXT_TERMS[input.domain] ??
+    DOMAIN_POSITIVE_CONTEXT_TERMS.generic ??
+    [];
+
+  const negativeHits = countTermMatches(haystack, negativeTerms);
+  const positiveHits = countTermMatches(haystack, positiveTerms);
+  const entityHits = (input.entityNames ?? []).filter(
+    (name) => name.length > 2 && haystack.includes(name.toLowerCase())
+  ).length;
+
+  if (entityHits >= 1 && positiveHits === 0 && negativeHits >= 1) {
+    return true;
+  }
+
+  if (input.domain === "comics_superhero" && entityHits >= 1 && positiveHits === 0) {
+    const looksLikePersonName =
+      /\b[a-z]+\s+venom\s+[a-z]+\b/i.test(input.title) ||
+      /\bvenom\s+[a-z]+\s+[a-z]+\b/i.test(input.title);
+    if (looksLikePersonName || negativeHits >= 1) {
+      return true;
+    }
+  }
+
+  return scoreHomonymPenalty(input) >= 48;
+}
+
+export function isLowQualityAssetTitle(input: {
+  domain: RemixContentDomain;
+  title: string;
+  description?: string;
+}): boolean {
+  const haystack = `${input.title} ${input.description ?? ""}`.toLowerCase();
+  if (/\.(svg|ico|gif)$/i.test(input.title) && !/comic|panel|meme/i.test(haystack)) {
+    return true;
+  }
+  if (/\b(cosplay|costume)\b/i.test(haystack)) {
+    const positiveHits = countTermMatches(
+      haystack,
+      DOMAIN_POSITIVE_CONTEXT_TERMS[input.domain] ?? []
+    );
+    return positiveHits < 2;
+  }
+  if (/\b(stock photo|shutterstock|getty images|watermark)\b/i.test(haystack)) {
+    return true;
+  }
+  return false;
+}
+
+export function extractThematicTermsFromAnalysis(analysis: VideoRemixAnalysis): string[] {
+  const intelligence = analysis.contentIntelligence;
+  const corpus = [
+    intelligence.narrativeHook,
+    intelligence.narrativeBrief,
+    intelligence.headline,
+    analysis.themeSummary,
+    ...intelligence.actions.map((action) => action.label)
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const terms = THEMATIC_HOOK_KEYWORDS.filter((term) => corpus.includes(term));
+  for (const entity of intelligence.entities.slice(0, 2)) {
+    terms.push(entity.name.toLowerCase());
+  }
+  return [...new Set(terms)];
+}
+
+export function scoreThematicHookBoost(
+  analysis: VideoRemixAnalysis,
+  title: string,
+  query: string
+): number {
+  const thematicTerms = extractThematicTermsFromAnalysis(analysis);
+  if (thematicTerms.length === 0) return 0;
+
+  const haystack = `${title} ${query}`.toLowerCase();
+  let boost = 0;
+  for (const term of thematicTerms) {
+    if (term.length > 2 && haystack.includes(term)) {
+      boost += /symbiote|simbiose|partnership|parceiro|bond|dupla|duo/i.test(term) ? 14 : 8;
+    }
+  }
+
+  const entities = analysis.contentIntelligence.entities;
+  if (entities.length >= 2) {
+    const first = entities[0]!.name.toLowerCase();
+    const second = entities[1]!.name.toLowerCase();
+    if (haystack.includes(first) && haystack.includes(second)) {
+      boost += 16;
+    }
+  }
+
+  return Math.min(48, boost);
+}
+
+export function buildNarrativeHookAssetQueries(
+  analysis: VideoRemixAnalysis
+): Array<{ query: string; purpose: RemixAssetPurpose; priority: number }> {
+  const intelligence = analysis.contentIntelligence;
+  const entities = intelligence.entities;
+  const lead = entities[0]?.name;
+  if (!lead) return [];
+
+  const thematicTerms = extractThematicTermsFromAnalysis(analysis);
+  const queries: Array<{ query: string; purpose: RemixAssetPurpose; priority: number }> = [];
+  const partnerEntity = entities[1]?.name;
+
+  if (partnerEntity) {
+    queries.push({
+      query: `${lead} ${partnerEntity} symbiote comic panel`,
+      purpose: "comic_panel",
+      priority: 11
+    });
+    queries.push({
+      query: `${lead} ${partnerEntity} partnership marvel comic art`,
+      purpose: "character_art",
+      priority: 10
+    });
+    queries.push({
+      query: `Spider-Man Venom symbiote bond comic`,
+      purpose: "comic_panel",
+      priority: 10
+    });
+  }
+
+  if (thematicTerms.some((term) => /symbiote|simbiose|bond|partnership|parceiro|dupla/i.test(term))) {
+    queries.push({
+      query: `${lead} symbiote bond comic illustration`,
+      purpose: "character_art",
+      priority: 9
+    });
+  }
+
+  const hookPhrase = intelligence.narrativeHook.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
+  if (hookPhrase.length > 8) {
+    queries.push({
+      query: `${lead} ${hookPhrase.split(/\s+/).slice(0, 5).join(" ")} comic art`,
+      purpose: "differentiation",
+      priority: 8
+    });
+  }
+
+  return queries;
+}
+
 const BASE_STRATEGIES: Record<RemixContentDomain, RemixAssetDiscoveryStrategy> = {
   comics_superhero: {
     domain: "comics_superhero",
@@ -43,11 +400,14 @@ const BASE_STRATEGIES: Record<RemixContentDomain, RemixAssetDiscoveryStrategy> =
       "generic-web": 5
     },
     queryTemplates: [
-      { template: "{lead} comic book panel high resolution archive", priority: 10, purpose: "comic_panel" },
-      { template: "{franchise} {lead} official art reference editorial", priority: 9, purpose: "character_art" },
-      { template: "{lead} golden age comics scan public domain", priority: 8, purpose: "comic_panel" },
-      { template: "{lead} comic halftone poster noir vertical", priority: 7, purpose: "broll_mood" },
-      { template: "{action} {lead} comic scene composition", priority: 6, purpose: "differentiation" }
+      { template: "{lead} Spider-Man comic panel Marvel symbiote", priority: 12, purpose: "comic_panel" },
+      { template: "{lead} symbiote comic cover Marvel", priority: 11, purpose: "character_art" },
+      { template: "Spider-Man black suit comic panel {lead}", priority: 10, purpose: "comic_panel" },
+      { template: "{lead} Eddie Brock comic art Marvel", priority: 10, purpose: "character_art" },
+      { template: "{lead} vs Spider-Man comic panel", priority: 9, purpose: "comic_panel" },
+      { template: "Marvel {lead} symbiote comic cover HQ", priority: 9, purpose: "character_art" },
+      { template: "{lead} comic book panel high resolution archive", priority: 8, purpose: "comic_panel" },
+      { template: "{franchise} {lead} official art reference editorial", priority: 7, purpose: "character_art" }
     ],
     purposeByProvider: { "comics-archive": "comic_panel" },
     sceneRoleByPurpose: {
@@ -399,12 +759,31 @@ function fillTemplate(template: string, context: ReturnType<typeof buildStrategy
     .trim();
 }
 
+function purposeForComicsQuery(query: string): RemixAssetPurpose {
+  if (/\bcomic panel\b|\bcomic book page\b|\bpanel\b/i.test(query)) return "comic_panel";
+  if (/\bcomic cover\b|\bcover art\b/i.test(query)) return "character_art";
+  return "character_art";
+}
+
 export function buildEntityAwareAssetQueries(
   analysis: VideoRemixAnalysis
 ): Array<{ query: string; purpose: RemixAssetPurpose; priority: number }> {
+  const domain = analysis.contentIntelligence.domain;
   const entities = analysis.contentIntelligence.entities;
   const lead = entities[0]?.name ?? analysis.title.slice(0, 40);
   const queries: Array<{ query: string; purpose: RemixAssetPurpose; priority: number }> = [];
+
+  if (domain === "comics_superhero") {
+    const entityNames = entities.map((entity) => entity.name);
+    for (const [index, query] of buildComicsSuperheroDiscoveryQueries(entityNames).entries()) {
+      queries.push({
+        query,
+        purpose: purposeForComicsQuery(query),
+        priority: 13 - Math.min(index, 10)
+      });
+    }
+    return queries;
+  }
 
   for (let index = 0; index < Math.min(entities.length, 3); index += 1) {
     const entity = entities[index]!;
@@ -461,10 +840,29 @@ export function buildStrategyAssetQueries(
   }));
 
   const fromEntities = buildEntityAwareAssetQueries(analysis);
+  const fromNarrativeHook = buildNarrativeHookAssetQueries(analysis);
+  const fromComicsPremium =
+    strategy.domain === "comics_superhero"
+      ? buildComicsSuperheroDiscoveryQueries(
+          analysis.contentIntelligence.entities.map((entity) => entity.name)
+        ).map((query, index) => ({
+          query,
+          purpose: purposeForComicsQuery(query),
+          priority: 11 - Math.min(index, 8)
+        }))
+      : [];
 
   const unique = new Map<string, { query: string; purpose: RemixAssetPurpose; priority: number }>();
-  for (const entry of [...fromEntities, ...fromTemplates, ...fromIntelligence, ...fromKeywords]) {
+  for (const entry of [
+    ...fromNarrativeHook,
+    ...fromComicsPremium,
+    ...fromEntities,
+    ...fromTemplates,
+    ...fromIntelligence,
+    ...fromKeywords
+  ]) {
     if (!entry.query || entry.query.length < 8) continue;
+    if (strategy.domain === "comics_superhero" && isBlockedComicsQuery(entry.query)) continue;
     const key = entry.query.toLowerCase();
     const existing = unique.get(key);
     if (!existing || entry.priority > existing.priority) {
@@ -514,8 +912,9 @@ export function scoreAssetDomainRelevance(input: {
   analysis: VideoRemixAnalysis;
   strategy: RemixAssetDiscoveryStrategy;
   purpose: RemixAssetPurpose;
+  description?: string;
 }): number {
-  const haystack = `${input.title} ${input.query}`.toLowerCase();
+  const haystack = `${input.title} ${input.query} ${input.description ?? ""}`.toLowerCase();
   let score = input.strategy.providerWeights[input.providerId as MediaBeastProviderId] ?? 6;
 
   for (const entity of input.analysis.contentIntelligence.entities) {
@@ -529,6 +928,12 @@ export function scoreAssetDomainRelevance(input: {
     }
   }
 
+  const positiveTerms =
+    DOMAIN_POSITIVE_CONTEXT_TERMS[input.strategy.domain] ??
+    DOMAIN_POSITIVE_CONTEXT_TERMS.generic ??
+    [];
+  score += countTermMatches(haystack, positiveTerms) * 5;
+
   for (const keyword of input.strategy.visualKeywords) {
     if (haystack.includes(keyword.toLowerCase())) {
       score += 4;
@@ -537,17 +942,67 @@ export function scoreAssetDomainRelevance(input: {
 
   if (input.analysis.contentIntelligence.actions[0]?.label) {
     const action = input.analysis.contentIntelligence.actions[0].label.toLowerCase();
-    if (haystack.includes(action)) {
-      score += 8;
+    const actionTokens = action.split(/[\s/]+/).filter((token) => token.length > 3);
+    for (const token of actionTokens) {
+      if (haystack.includes(token)) score += 5;
     }
   }
 
-  if (input.purpose === "archive_reference" || input.purpose === "documentary_still") {
+  score += scoreThematicHookBoost(input.analysis, input.title, input.query);
+
+  if (input.purpose === "comic_panel" || input.purpose === "character_art") {
+    score += 6;
+  } else if (input.purpose === "archive_reference" || input.purpose === "documentary_still") {
     score += 3;
   }
 
   if (/\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i.test(input.query)) {
     score += 4;
+  }
+
+  const entityNames = input.analysis.contentIntelligence.entities.map((entity) => entity.name);
+  const homonymPenalty = scoreHomonymPenalty({
+    domain: input.strategy.domain,
+    title: input.title,
+    ...(input.description ? { description: input.description } : {}),
+    entityNames
+  });
+  score -= homonymPenalty;
+
+  if (
+    input.strategy.domain === "comics_superhero" &&
+    countTermMatches(haystack, positiveTerms) === 0 &&
+    entityNames.some((name) => name.length > 2 && haystack.includes(name.toLowerCase()))
+  ) {
+    score -= 32;
+  }
+
+  if (isLowQualityAssetTitle({
+    domain: input.strategy.domain,
+    title: input.title,
+    ...(input.description ? { description: input.description } : {})
+  })) {
+    score -= 22;
+  }
+
+  if (input.strategy.domain === "comics_superhero") {
+    const entityNames = input.analysis.contentIntelligence.entities.map((entity) => entity.name);
+    const comicsQuality = evaluateComicsAssetQuality({
+      title: input.title,
+      query: input.query,
+      entities: entityNames,
+      franchise: input.analysis.contentIntelligence.entities[0]?.franchise ?? null,
+      targetStyle: "comics",
+      ...(input.description ? { description: input.description } : {})
+    });
+    if (!comicsQuality.ok) {
+      score -= 85;
+    } else {
+      score += Math.round(comicsQuality.score * 0.4);
+      if (comicsQuality.category === "comic_panel" || comicsQuality.category === "comic_cover") {
+        score += 10;
+      }
+    }
   }
 
   return Math.max(0, Math.round(score));

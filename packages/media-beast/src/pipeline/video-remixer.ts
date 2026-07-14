@@ -31,13 +31,15 @@ import type { NarrationOverlayPlan } from "./narration-overlay.js";
 import {
   buildRemixAssetDiscoveryPlan,
   discoverRemixAssetCandidates,
-  type RemixAssetDiscoveryPlan
+  type RemixAssetDiscoveryPlan,
+  type RemixAssetSearchCandidate
 } from "./remix-asset-discovery.js";
 import {
   enrichCandidateWithContentIntelligence,
   type RemixContentDomain
 } from "./remix-content-intelligence.js";
 import { buildRemixNarrationOverlayPlan } from "./remix-narration-rewriter.js";
+import type { NarrationVariantAngle } from "./narration-retention-packs.js";
 import { analyzeRemixSourceVideo, type VideoRemixAnalysis } from "./remix-video-analyzer.js";
 import {
   getNicheProductionProfile,
@@ -739,14 +741,29 @@ interface RemixSharedContext {
   videoAnalysis: VideoRemixAnalysis;
   sourceCandidate: MediaBeastCandidate;
   discoveredCandidates: Awaited<ReturnType<typeof discoverRemixAssetCandidates>>["candidates"];
+  rankedAssetPool: RemixAssetSearchCandidate[];
   assetDiscoveryWarnings: string[];
+  variationCount: number;
 }
+
+const VARIATION_CUT_ENERGY: Partial<Record<RemixTargetStyle, "high" | "extreme">> = {
+  comics: "extreme",
+  hype_sports: "extreme",
+  anime: "extreme",
+  dark_cinematic: "high",
+  documentary: "high",
+  horror: "high",
+  true_crime: "high"
+};
 
 async function buildRemixPlanForVariation(
   shared: RemixSharedContext,
   options: VideoRemixOptions,
   variationIndex: number,
-  targetStyle: RemixTargetStyle
+  targetStyle: RemixTargetStyle,
+  priorVariationScripts: string[] = [],
+  usedAssetCandidateIds: string[] = [],
+  priorVariationAngles: NarrationVariantAngle[] = []
 ): Promise<VideoRemixPlan> {
   const variationOptions: VideoRemixOptions = {
     ...options,
@@ -793,9 +810,14 @@ async function buildRemixPlanForVariation(
       )
     : transformVisual(sourceCandidate, channelDNA, options.intensity, durationSeconds);
 
+  const cutEnergy =
+    options.intensity === "extreme"
+      ? VARIATION_CUT_ENERGY[targetStyle] ?? "extreme"
+      : VARIATION_CUT_ENERGY[targetStyle] ?? "high";
+
   let fastCutPlan = buildFastCutEditorPlan({
     durationSeconds,
-    energy: options.intensity === "extreme" ? "extreme" : "high",
+    energy: cutEnergy,
     visualPlan,
     emotion: productionEmotion,
     beatMarkers: []
@@ -814,7 +836,8 @@ async function buildRemixPlanForVariation(
         fastCutPlan,
         targetStyle,
         intensity: options.intensity,
-        visualPlan
+        visualPlan,
+        variationIndex
       })
     );
   }
@@ -824,7 +847,8 @@ async function buildRemixPlanForVariation(
     fastCutPlan,
     targetStyle,
     intensity: options.intensity,
-    visualPlan
+    visualPlan,
+    variationIndex
   });
   const musicPlan = buildPremiumAudioScorePlan({
     channelDNA: {
@@ -851,6 +875,8 @@ async function buildRemixPlanForVariation(
         maxDurationSeconds: clampRemixOutputDuration(durationSeconds),
         narrationBias: channelDNA.narrationBias,
         researchDossier: shared.videoAnalysis.researchDossier,
+        priorVariationScripts,
+        priorVariationAngles,
         ...(options.selectedCuriosityIds
           ? { selectedCuriosityIds: options.selectedCuriosityIds }
           : {})
@@ -862,7 +888,12 @@ async function buildRemixPlanForVariation(
     comfyVariations: visualPlan.comfyVariations,
     enableImageSearch: options.enableAssetDiscovery !== false,
     niche: styleProfile.niche,
-    discoveredCandidates: shared.discoveredCandidates
+    discoveredCandidates: shared.discoveredCandidates,
+    rankedAssetPool: shared.rankedAssetPool,
+    variationIndex,
+    variationCount: shared.variationCount,
+    targetStyle,
+    excludeAssetCandidateIds: usedAssetCandidateIds
   });
 
   const captionPlan = buildCaptionRemixPlan({
@@ -1053,6 +1084,7 @@ export async function remixVideoFromSource(
   );
 
   let discoveredCandidates: RemixSharedContext["discoveredCandidates"] = [];
+  let rankedAssetPool: RemixAssetSearchCandidate[] = [];
   const assetDiscoveryWarnings: string[] = [];
   const shouldDiscover =
     options.enableAssetDiscovery !== false && options.executeAssetDiscovery !== false;
@@ -1066,6 +1098,7 @@ export async function remixVideoFromSource(
       maxQueries: 14
     });
     discoveredCandidates = discovery.candidates;
+    rankedAssetPool = discovery.rankedCandidates;
     assetDiscoveryWarnings.push(...discovery.warnings);
   }
 
@@ -1076,7 +1109,9 @@ export async function remixVideoFromSource(
     videoAnalysis,
     sourceCandidate,
     discoveredCandidates,
-    assetDiscoveryWarnings
+    rankedAssetPool,
+    assetDiscoveryWarnings,
+    variationCount
   };
 
   const variationStyles = resolveVariationStyles(
@@ -1086,11 +1121,35 @@ export async function remixVideoFromSource(
     options.variationStyles
   );
 
-  const plans = await Promise.all(
-    variationStyles.map((style, index) =>
-      buildRemixPlanForVariation(shared, options, index, style)
-    )
-  );
+  const plans: VideoRemixPlan[] = [];
+  const priorVariationScripts: string[] = [];
+  const priorVariationAngles: NarrationVariantAngle[] = [];
+  const usedAssetCandidateIds: string[] = [];
+
+  for (let index = 0; index < variationStyles.length; index += 1) {
+    const style = variationStyles[index]!;
+    const plan = await buildRemixPlanForVariation(
+      shared,
+      options,
+      index,
+      style,
+      priorVariationScripts,
+      usedAssetCandidateIds,
+      priorVariationAngles
+    );
+    if (plan.narrationPlan?.suggestedScript) {
+      priorVariationScripts.push(plan.narrationPlan.suggestedScript);
+    }
+    if (plan.narrationPlan?.retentionMetadata?.angle) {
+      priorVariationAngles.push(plan.narrationPlan.retentionMetadata.angle);
+    }
+    for (const asset of plan.assetDiscovery.imageSearch.candidates.slice(0, 5)) {
+      if (!usedAssetCandidateIds.includes(asset.candidateId)) {
+        usedAssetCandidateIds.push(asset.candidateId);
+      }
+    }
+    plans.push(plan);
+  }
 
   const [primaryPlan, ...alternativePlans] = plans;
   if (!primaryPlan) {

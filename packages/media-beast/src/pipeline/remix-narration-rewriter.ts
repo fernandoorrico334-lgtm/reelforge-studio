@@ -11,6 +11,7 @@ import {
   buildNarrationEnginePrompt,
   buildNarrationVoiceVariations,
   buildRemixNarrationBeats,
+  reduceNarrationOverlap,
   buildWordBudget,
   ensureNarrationBeatsSafe,
   estimateScriptDurationSeconds,
@@ -35,6 +36,8 @@ import {
   type RemixResearchDossier
 } from "./remix-research-bridge.js";
 import type { VideoRemixAnalysis } from "./remix-video-analyzer.js";
+import { applyRetentionRefinementToOverlay } from "./narration-retention-overlay-hook.js";
+import type { NarrationVariantAngle } from "./narration-retention-packs.js";
 
 const supportedVoicePackIds = [
   "narrator_clean_ptbr",
@@ -136,6 +139,8 @@ export function buildRemixNarrationOverlayPlan(input: {
   narrationBias?: string;
   researchDossier?: RemixResearchDossier | null;
   selectedCuriosityIds?: string[];
+  priorVariationScripts?: string[];
+  priorVariationAngles?: NarrationVariantAngle[];
 }): NarrationOverlayPlan {
   const language = input.channelDNA.language ?? "pt-BR";
   const channelTone = input.channelDNA.tone;
@@ -209,8 +214,18 @@ export function buildRemixNarrationOverlayPlan(input: {
     input.analysis,
     variationIndex
   );
-  const narrationBeats = finalizeNarrationBeats(
+  const overlapAdjustedBeats = reduceNarrationOverlap(
     injectedBeats.map((beat) => ({
+      role: beat.role,
+      text: beat.text,
+      curiosityTag: beat.curiosityTag,
+      ...(beat.prosody ? { prosody: beat.prosody } : {})
+    })),
+    input.priorVariationScripts ?? [],
+    seed
+  );
+  const narrationBeats = finalizeNarrationBeats(
+    overlapAdjustedBeats.map((beat) => ({
       role: beat.role,
       text: beat.text,
       curiosityTag: beat.curiosityTag,
@@ -228,7 +243,22 @@ export function buildRemixNarrationOverlayPlan(input: {
         : beat.curiosityTag
   }));
 
-  const suggestedScript = beatsToScript(narrationBeats);
+  const retentionRefine = applyRetentionRefinementToOverlay({
+    legacyBeats: narrationBeats,
+    legacyScript: beatsToScript(narrationBeats),
+    analysis: input.analysis,
+    researchDossier: researchDossier,
+    targetStyle: input.targetStyle,
+    variationIndex,
+    productionEmotion,
+    priorVariationScripts: input.priorVariationScripts ?? [],
+    priorVariationAngles: input.priorVariationAngles ?? [],
+    seed,
+    maxDurationSeconds
+  });
+  const finalNarrationBeats = retentionRefine.narrationBeats;
+  const suggestedScript = retentionRefine.suggestedScript;
+
   const estimatedDurationSeconds = estimateScriptDurationSeconds(suggestedScript, pacing);
   const narrationQuality = validateNarrationScript(suggestedScript);
 
@@ -266,7 +296,7 @@ export function buildRemixNarrationOverlayPlan(input: {
   });
 
   const narrationStylePrompt = buildNarrationEnginePrompt({
-    beats: narrationBeats,
+    beats: finalNarrationBeats,
     context: narrationContext,
     channelTone,
     voicePackName: voicePack?.name ?? voicePackHint,
@@ -294,14 +324,17 @@ export function buildRemixNarrationOverlayPlan(input: {
       channelTone: `${channelTone} remix`,
       emotion: productionEmotion,
       pacing,
-      beats: narrationBeats,
+      beats: finalNarrationBeats,
       script: suggestedScript
     }),
-    hookLine: narrationBeats[0]?.text ?? input.analysis.title,
-    narrationBeats,
+    hookLine: finalNarrationBeats[0]?.text ?? input.analysis.title,
+    narrationBeats: finalNarrationBeats,
+    ...(retentionRefine.retentionMetadata
+      ? { retentionMetadata: retentionRefine.retentionMetadata }
+      : {}),
     narrationContext,
     suggestedScript,
-    overlayCaptions: narrationBeats.map((beat) => beat.caption),
+    overlayCaptions: finalNarrationBeats.map((beat) => beat.caption),
     narrationStylePrompt,
     narrationEnginePayload: {
       provider: "mock-tts",
@@ -310,7 +343,7 @@ export function buildRemixNarrationOverlayPlan(input: {
       autoAttach: false,
       textDraft: suggestedScript,
       styleDirective: narrationStylePrompt,
-      beatMap: narrationBeats.map((beat) => ({
+      beatMap: finalNarrationBeats.map((beat) => ({
         role: beat.role,
         text: beat.text,
         curiosityTag: beat.curiosityTag,
@@ -320,6 +353,13 @@ export function buildRemixNarrationOverlayPlan(input: {
     narrationEnginePlan,
     cautionNotes: [
       "Narração reescrita a partir da análise do vídeo — confirme fatos antes de publicar.",
+      retentionRefine.retentionMetadata?.usedRetentionEngine
+        ? `NarrationRetentionEngine ativa (score ${retentionRefine.retentionMetadata.narrationScore ?? "n/a"}, ângulo ${retentionRefine.retentionMetadata.angle ?? "n/a"}).`
+        : retentionRefine.retentionMetadata?.fallbackMode === "partial_upgrade_on_legacy"
+          ? `NarrationRetentionEngine fallback parcial: ${retentionRefine.retentionMetadata.fallbackReason ?? "motivo não informado"}.`
+          : retentionRefine.retentionAttempted && retentionRefine.retentionMetadata?.fallbackUsed
+            ? `NarrationRetentionEngine fallback: ${retentionRefine.retentionMetadata.fallbackReason ?? "motivo não informado"}.`
+            : null,
       narrationQuality.valid
         ? "Script narrativo validado sem metadados ou instruções de sistema."
         : `Revisar script: ${narrationQuality.issues.slice(0, 2).join(" | ")}`,

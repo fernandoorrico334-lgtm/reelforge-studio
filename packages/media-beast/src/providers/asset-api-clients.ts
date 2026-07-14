@@ -1,3 +1,11 @@
+import type { RemixContentDomain } from "../pipeline/remix-content-intelligence.js";
+import {
+  isAssetHomonymMismatch,
+  isLowQualityAssetTitle,
+  normalizeAssetTitleKey,
+  normalizePreviewUrlKey,
+  scoreHomonymPenalty
+} from "../pipeline/remix-asset-discovery-strategies.js";
 import type { MediaBeastCandidate, MediaBeastProviderId } from "./types.js";
 import { stableCandidateId } from "./provider-utils.js";
 
@@ -87,7 +95,30 @@ export function scoreAssetQueryRelevance(
   return score;
 }
 
-function isRelevantAssetTitle(title: string, query: string, entityTerms?: string[]): boolean {
+export interface AssetTitleRelevanceOptions {
+  entityTerms?: string[];
+  domain?: RemixContentDomain;
+  description?: string;
+}
+
+function buildAssetTitleRelevanceOptions(input: {
+  entityTerms?: string[];
+  domain?: RemixContentDomain;
+  description?: string;
+}): AssetTitleRelevanceOptions {
+  return {
+    ...(input.entityTerms?.length ? { entityTerms: input.entityTerms } : {}),
+    ...(input.domain ? { domain: input.domain } : {}),
+    ...(input.description ? { description: input.description } : {})
+  };
+}
+
+function isRelevantAssetTitle(
+  title: string,
+  query: string,
+  options?: AssetTitleRelevanceOptions
+): boolean {
+  const entityTerms = options?.entityTerms;
   const relevance = scoreAssetQueryRelevance(title, query, entityTerms);
   const terms = extractEntityTermsFromQuery(query);
   const mergedTerms = [...new Set([...terms, ...(entityTerms ?? [])])];
@@ -96,11 +127,48 @@ function isRelevantAssetTitle(title: string, query: string, entityTerms?: string
   if (/\.(pdf|djvu|epub)(\b|\.)/i.test(title)) return false;
   if (/essay|manuscript|newspaper page \d/i.test(haystack) && relevance < 16) return false;
 
+  if (options?.domain) {
+    if (
+      isAssetHomonymMismatch({
+        domain: options.domain,
+        title,
+        ...(options.description ? { description: options.description } : {}),
+        ...(entityTerms?.length ? { entityNames: entityTerms } : {})
+      })
+    ) {
+      return false;
+    }
+    if (
+      isLowQualityAssetTitle({
+        domain: options.domain,
+        title,
+        ...(options.description ? { description: options.description } : {})
+      })
+    ) {
+      return false;
+    }
+  }
+
   if (mergedTerms.length === 0) return relevance >= 8;
   const matched = mergedTerms.filter((term) => haystack.includes(term)).length;
   if (matched >= 2) return true;
   if (matched >= 1 && relevance >= 10) return true;
   return relevance >= 14;
+}
+
+function applyHomonymScoreAdjustment(
+  baseScore: number,
+  title: string,
+  options?: AssetTitleRelevanceOptions
+): number {
+  if (!options?.domain) return baseScore;
+  const penalty = scoreHomonymPenalty({
+    domain: options.domain,
+    title,
+    ...(options.description ? { description: options.description } : {}),
+    ...(options.entityTerms?.length ? { entityNames: options.entityTerms } : {})
+  });
+  return Math.max(0, baseScore - penalty);
 }
 
 export function isDirectImageUrl(url: string): boolean {
@@ -193,7 +261,8 @@ interface ArchiveSearchResponse {
 export async function searchInternetArchiveImages(
   query: string,
   maxResults = 6,
-  entityTerms?: string[]
+  entityTerms?: string[],
+  domain?: RemixContentDomain
 ): Promise<MediaBeastCandidate[]> {
   const simplified = simplifyAssetQuery(query, 5);
   if (!simplified) return [];
@@ -217,13 +286,28 @@ export async function searchInternetArchiveImages(
       const relevance = scoreAssetQueryRelevance(title, query, entityTerms);
       return { doc, relevance, title };
     })
-    .filter((entry) => isRelevantAssetTitle(entry.title, query, entityTerms))
+    .filter((entry) =>
+      isRelevantAssetTitle(
+        entry.title,
+        query,
+        buildAssetTitleRelevanceOptions({
+          ...(entityTerms?.length ? { entityTerms } : {}),
+          ...(domain ? { domain } : {}),
+          ...(entry.doc.description ? { description: entry.doc.description } : {})
+        })
+      )
+    )
     .sort((left, right) => right.relevance - left.relevance)
     .slice(0, maxResults)
-    .map(({ doc, relevance }) => {
+    .map(({ doc, relevance, title }) => {
       const identifier = doc.identifier!;
       const itemUrl = `https://archive.org/details/${identifier}`;
       const previewUrl = `https://archive.org/services/img/${identifier}`;
+      const relevanceOptions = buildAssetTitleRelevanceOptions({
+        ...(entityTerms?.length ? { entityTerms } : {}),
+        ...(domain ? { domain } : {}),
+        ...(doc.description ? { description: doc.description } : {})
+      });
 
       return buildImageCandidate({
         providerId: "internet-archive",
@@ -231,7 +315,7 @@ export async function searchInternetArchiveImages(
         sourceUrl: itemUrl,
         previewUrl,
         query,
-        score: 72 + Math.min(24, relevance),
+        score: applyHomonymScoreAdjustment(72 + Math.min(24, relevance), title, relevanceOptions),
         licenseStatus: "unknown",
         riskLevel: "medium",
         reasons: [
@@ -277,6 +361,7 @@ export async function searchOpenverseImages(
     source?: string;
     maxResults?: number;
     entityTerms?: string[];
+    domain?: RemixContentDomain;
   }
 ): Promise<MediaBeastCandidate[]> {
   const providerId = options?.providerId ?? "generic-web";
@@ -299,12 +384,25 @@ export async function searchOpenverseImages(
       const relevance = scoreAssetQueryRelevance(title, query, options?.entityTerms);
       return { item, relevance, title };
     })
-    .filter((entry) => isRelevantAssetTitle(entry.title, query, options?.entityTerms))
+    .filter((entry) =>
+      isRelevantAssetTitle(
+        entry.title,
+        query,
+        buildAssetTitleRelevanceOptions({
+          ...(options?.entityTerms?.length ? { entityTerms: options.entityTerms } : {}),
+          ...(options?.domain ? { domain: options.domain } : {})
+        })
+      )
+    )
     .sort((left, right) => right.relevance - left.relevance)
     .slice(0, maxResults)
-    .map(({ item, relevance }) => {
+    .map(({ item, relevance, title }) => {
       const previewUrl = item.thumbnail ?? item.url!;
       const sourceUrl = item.foreign_landing_url ?? item.url!;
+      const relevanceOptions = buildAssetTitleRelevanceOptions({
+        ...(options?.entityTerms?.length ? { entityTerms: options.entityTerms } : {}),
+        ...(options?.domain ? { domain: options.domain } : {})
+      });
 
       return buildImageCandidate({
         providerId,
@@ -312,7 +410,11 @@ export async function searchOpenverseImages(
         sourceUrl,
         previewUrl,
         query,
-        score: (options?.source === "flickr" ? 68 : 64) + Math.min(24, relevance),
+        score: applyHomonymScoreAdjustment(
+          (options?.source === "flickr" ? 68 : 64) + Math.min(24, relevance),
+          title,
+          relevanceOptions
+        ),
         licenseStatus: mapOpenverseLicense(item.license),
         riskLevel: "low",
         reasons: [
@@ -344,7 +446,8 @@ interface WikimediaSearchResponse {
 export async function searchWikimediaCommonsImages(
   query: string,
   maxResults = 6,
-  entityTerms?: string[]
+  entityTerms?: string[],
+  domain?: RemixContentDomain
 ): Promise<MediaBeastCandidate[]> {
   const simplified = simplifyAssetQuery(query, 5) || query;
   const url = new URL("https://commons.wikimedia.org/w/api.php");
@@ -368,7 +471,11 @@ export async function searchWikimediaCommonsImages(
       if (!info?.thumburl && !info?.url) return null;
 
       const pageTitle = (page.title ?? query).replace(/^File:/i, "");
-      if (!isRelevantAssetTitle(pageTitle, query, entityTerms)) return null;
+      const relevanceOptions = buildAssetTitleRelevanceOptions({
+        ...(entityTerms?.length ? { entityTerms } : {}),
+        ...(domain ? { domain } : {})
+      });
+      if (!isRelevantAssetTitle(pageTitle, query, relevanceOptions)) return null;
 
       const relevance = scoreAssetQueryRelevance(pageTitle, query, entityTerms);
       const previewUrl = info.thumburl ?? info.url!;
@@ -380,7 +487,11 @@ export async function searchWikimediaCommonsImages(
         sourceUrl,
         previewUrl,
         query,
-        score: 70 + Math.min(24, relevance),
+        score: applyHomonymScoreAdjustment(
+          70 + Math.min(24, relevance),
+          pageTitle,
+          relevanceOptions
+        ),
         licenseStatus: "creative_commons",
         riskLevel: "low",
         reasons: [
@@ -403,32 +514,48 @@ export async function searchDirectAssetBundle(input: {
   maxPerSource?: number;
   entityTerms?: string[];
   includeFlickr?: boolean;
+  domain?: RemixContentDomain;
 }): Promise<MediaBeastCandidate[]> {
   const maxPerSource = input.maxPerSource ?? 5;
   const entityTerms = input.entityTerms ?? extractEntityTermsFromQuery(input.query);
+  const domain = input.domain;
   const candidateMap = new Map<string, MediaBeastCandidate>();
+  const seenTitleKeys = new Set<string>();
+  const seenPreviewKeys = new Set<string>();
 
   const [wikimedia, openverse, archive, flickr] = await Promise.all([
-    searchWikimediaCommonsImages(input.query, maxPerSource, entityTerms),
+    searchWikimediaCommonsImages(input.query, maxPerSource, entityTerms, domain),
     searchOpenverseImages(input.query, {
       providerId: "comics-archive",
       maxResults: maxPerSource,
-      entityTerms
+      entityTerms,
+      ...(domain ? { domain } : {})
     }),
-    searchInternetArchiveImages(input.query, maxPerSource, entityTerms),
+    searchInternetArchiveImages(input.query, maxPerSource, entityTerms, domain),
     input.includeFlickr !== false
       ? searchOpenverseImages(input.query, {
           providerId: "flickr",
           source: "flickr",
           maxResults: maxPerSource,
-          entityTerms
+          entityTerms,
+          ...(domain ? { domain } : {})
         })
       : Promise.resolve([])
   ]);
 
   for (const group of [wikimedia, openverse, archive, flickr]) {
     for (const candidate of group) {
-      candidateMap.set(candidate.id, candidate);
+      const titleKey = normalizeAssetTitleKey(candidate.title);
+      const previewKey = normalizePreviewUrlKey(candidate.previewUrl);
+      if (seenTitleKeys.has(titleKey)) continue;
+      if (previewKey && seenPreviewKeys.has(previewKey)) continue;
+
+      seenTitleKeys.add(titleKey);
+      if (previewKey) seenPreviewKeys.add(previewKey);
+      const existing = candidateMap.get(candidate.id);
+      if (!existing || candidate.score > existing.score) {
+        candidateMap.set(candidate.id, candidate);
+      }
     }
   }
 

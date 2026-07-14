@@ -18,6 +18,7 @@ temp/
 *.temp
 terminals/
 agent-tools/
+mcps/
 packages/*/src/*.d.ts.map
 packages/cinematic-engine/src/index.js
 packages/cinematic-engine/src/index.d.ts
@@ -85,3 +86,6 @@ prisma/dev.db-journal
 recovery/extracted-logs/*
 recovery/backups/*
 
+
+storage/editorial/*
+!storage/editorial/.gitkeep

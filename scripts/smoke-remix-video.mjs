@@ -27,7 +27,8 @@ async function main() {
   const plan = await engine.remixExistingVideo(sampleVideoPath, {
     targetStyle: "dark_cinematic",
     intensity: "extreme",
-    durationTarget: 30
+    durationTarget: 30,
+    deepResearch: true
   });
 
   if (!plan.approvalGate.candidateFirst) {

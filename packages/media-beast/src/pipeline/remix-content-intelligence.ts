@@ -1,4 +1,8 @@
 import { detectTopicCase } from "../editorial/topic-knowledge.js";
+import {
+  buildComicsSuperheroDiscoveryQueries,
+  isBlockedComicsQuery
+} from "./comics-asset-quality-gate.js";
 import type { RemixVideoPlatform } from "./remix-video-downloader.js";
 import type { RemixSceneRole } from "./remix-scene-restructure.js";
 
@@ -833,28 +837,27 @@ function buildVisualSearchQueries(
   }
 
   switch (domain) {
-    case "comics_superhero":
-      queries.push(
-        `${lead} comic book panel archive`,
-        `${lead} official art reference editorial`,
-        `${entities[0]?.franchise ?? "Marvel"} ${lead} golden age comics public domain`
-      );
+    case "comics_superhero": {
+      const entityNames = entities.map((entity) => entity.name);
+      queries.push(...buildComicsSuperheroDiscoveryQueries(entityNames));
       if (entities[1]) {
         queries.push(
-          `${lead} ${entities[1].name} marvel comics`,
-          `${entities[1].name} ${lead} symbiote`
+          `${lead} ${entities[1].name} symbiote comic panel Marvel`,
+          `Venom vs ${entities[1].name} comic cover`,
+          `${entities[1].name} black suit comic panel`
         );
       }
       if (/parceiro|partner|simbiose|symbiote/i.test(`${hookPhrase ?? ""} ${action}`)) {
         queries.push(
-          `${lead} symbiote bond comic panel`,
-          `${entities[0]?.franchise ?? "Marvel"} ${lead} partnership comic art`
+          `${lead} symbiote bond comic panel Marvel`,
+          `${entities[0]?.franchise ?? "Marvel"} ${lead} symbiote comic cover`
         );
         if (entities[1]) {
-          queries.push(`${lead} ${entities[1].name} partnership comic art`);
+          queries.push(`${lead} ${entities[1].name} symbiote comic panel`);
         }
       }
       break;
+    }
     case "sports":
       queries.push(
         `${lead} match archive photo press`,
@@ -884,7 +887,9 @@ function buildVisualSearchQueries(
       );
   }
 
-  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))].slice(0, 12);
+  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))]
+    .filter((query) => !isBlockedComicsQuery(query))
+    .slice(0, 12);
 }
 
 function buildComfyPromptFragments(
