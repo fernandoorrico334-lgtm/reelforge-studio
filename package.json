@@ -33,6 +33,7 @@
     "smoke:premium-reel": "node scripts/smoke-premium-reel.mjs",
     "smoke:remix-video": "node scripts/smoke-remix-video.mjs",
     "smoke:reference-comics-match": "node scripts/smoke-reference-comics-match.mjs",
+    "smoke:comic-story-miner": "node scripts/smoke-comic-story-miner.mjs",
     "smoke:hybrid-visual": "node scripts/smoke-hybrid-visual.mjs",
     "smoke:hybrid-visual:render-ready": "node scripts/smoke-hybrid-visual-render-ready.mjs",
     "smoke:generated-gallery": "node scripts/smoke-generated-gallery.mjs",

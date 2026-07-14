@@ -9,6 +9,7 @@ import {
   listMediaBeastNichePresets,
   mediaBeastNiches,
   mediaBeastProviderIds,
+  mineComicStoryVaultFromDirectory,
   remixTargetStyles,
   rebuildRemixNarrationWithResearch,
   remixVideoFromSource,
@@ -396,6 +397,39 @@ export async function handleMediaBeastRoute(
         ...pack,
         candidateFirst: true,
         shortAngleCount: pack.shortAngles.length
+      });
+      return true;
+    }
+
+
+    if (pathname === "/media-beast/comic-story-mine") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const assetDirectory = readString(payload.assetDirectory, "assetDirectory");
+      const maxOpportunities = Math.min(readPositiveInteger(payload.maxOpportunities, 50), 100);
+      const minScoreRaw = payload.minScore === undefined || payload.minScore === null ? 60 : Number(payload.minScore);
+      if (!Number.isFinite(minScoreRaw) || minScoreRaw < 0 || minScoreRaw > 100) {
+        throw new ValidationError("minScore must be between 0 and 100.");
+      }
+
+      const report = await mineComicStoryVaultFromDirectory({
+        assetDirectory,
+        maxOpportunities,
+        minScore: minScoreRaw
+      });
+
+      sendJson(response, 200, {
+        ...report,
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoImportCount: 0,
+          note: "Comic Story Miner only returns short opportunities from local authorized/indexed comic panels. Nothing is rendered or imported automatically."
+        }
       });
       return true;
     }
