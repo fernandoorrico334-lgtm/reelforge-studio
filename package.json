@@ -39,6 +39,7 @@
     "smoke:comic-short-project-bridge": "node scripts/smoke-comic-short-project-bridge.mjs",
     "smoke:comic-premium-director": "node scripts/smoke-comic-premium-director.mjs",
     "smoke:comic-sfx-beat-director": "node scripts/smoke-comic-sfx-beat-director.mjs",
+    "smoke:comic-render-quality-scorer": "node scripts/smoke-comic-render-quality-scorer.mjs",
     "smoke:comic-render-contract": "node scripts/smoke-comic-render-contract.mjs",
     "smoke:comic-studio-create-projects": "node scripts/smoke-comic-studio-create-projects.mjs",
     "smoke:local-comic-ingestion": "node scripts/smoke-local-comic-ingestion.mjs",

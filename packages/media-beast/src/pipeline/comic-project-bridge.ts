@@ -1,4 +1,5 @@
 import { applyComicPremiumDirector, type ComicPremiumDirectorReport } from "./comic-premium-director.js";
+import { scoreComicRenderReadiness, type ComicRenderQualityScorerReport } from "./comic-render-quality-scorer.js";
 import { directComicSfxBeatPlan, type ComicSfxBeatDirectorReport } from "./comic-sfx-beat-director.js";
 import type {
   ComicShortProductionPlan,
@@ -101,6 +102,7 @@ export type ComicProjectBridgePayload = {
     premiumDirector: ComicPremiumDirectorReport;
     smartCrop: ComicPremiumDirectorReport["smartCrop"];
     sfxBeatDirector: ComicSfxBeatDirectorReport;
+    renderQualityScore: ComicRenderQualityScorerReport;
   };
   qualityChecklist: Array<{
     id: string;
@@ -206,7 +208,7 @@ function buildProjectScript(short: ComicShortProductionPlan): string {
   ].join("\n");
 }
 
-function checklistForShort(short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport): ComicProjectBridgePayload["qualityChecklist"] {
+function checklistForShort(short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport, renderQualityScore?: ComicRenderQualityScorerReport): ComicProjectBridgePayload["qualityChecklist"] {
   return [
     {
       id: "manual_rights_review",
@@ -232,6 +234,14 @@ function checklistForShort(short: ComicShortProductionPlan, premiumDirector?: Co
       status: short.narrationScript.length > 80 ? "ready" : "needs_review",
       detail: `${short.qualityReport.narrationLineCount} linhas de narracao planejadas.`
     },
+    ...(renderQualityScore
+      ? [{
+          id: "render_quality_score",
+          label: "Score minimo para render premium",
+          status: renderQualityScore.status === "blocked" ? "blocked" as const : renderQualityScore.status === "render_ready" ? "ready" as const : "needs_review" as const,
+          detail: `score=${renderQualityScore.overallScore}/${renderQualityScore.minimumRecommendedScore}; status=${renderQualityScore.status}; pontos=${renderQualityScore.strengths.join(", ") || "n/a"}.`
+        }]
+      : []),
     ...(premiumDirector
       ? [{
           id: "premium_director_quality",
@@ -260,6 +270,7 @@ export function buildComicShortProjectBridgePayload(input: {
   const short = directed.short;
   const premiumDirector = directed.report;
   const sfxBeatDirector = directComicSfxBeatPlan({ short, premiumDirector });
+  const renderQualityScore = scoreComicRenderReadiness({ short, premiumDirector, sfxBeatDirector });
   const titlePrefix = input.titlePrefix ? `${input.titlePrefix.trim()} ` : "";
   const scenes: ComicProjectBridgeSceneInput[] = short.scenes.map((scene) => ({
     order: scene.order,
@@ -347,10 +358,11 @@ export function buildComicShortProjectBridgePayload(input: {
       zoomPlan: short.zoomPlan,
       premiumDirector,
       smartCrop: premiumDirector.smartCrop,
-      sfxBeatDirector
+      sfxBeatDirector,
+      renderQualityScore
     },
-    qualityChecklist: checklistForShort(short, premiumDirector),
-    warnings: [...short.warnings, ...sfxBeatDirector.warnings, "premium_director_applied", "comic_sfx_beat_director_applied", "manual_sfx_asset_selection_required", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
+    qualityChecklist: checklistForShort(short, premiumDirector, renderQualityScore),
+    warnings: [...short.warnings, ...sfxBeatDirector.warnings, ...renderQualityScore.warnings, ...renderQualityScore.blockers, "comic_render_quality_scorer_applied", "premium_director_applied", "comic_sfx_beat_director_applied", "manual_sfx_asset_selection_required", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
     candidateFirst: true,
     requiresManualApproval: true
   };
