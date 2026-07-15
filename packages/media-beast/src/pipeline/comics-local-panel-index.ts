@@ -244,6 +244,9 @@ export type IndexUserProvidedComicPageInput = {
   ffmpegCommand?: string;
   forceRebuild?: boolean;
   evidenceMode?: "strict" | "broad";
+  ocrEnabled?: boolean;
+  tesseractCommand?: string;
+  ocrLanguages?: string;
 };
 
 export type IndexUserProvidedComicPageResult = {
@@ -1043,6 +1046,196 @@ export async function validatePanelCropIntegrity(input: {
   return { valid: true, rejectReason: null, actualSha256 };
 }
 
+async function runTextCommand(input: {
+  command: string;
+  args: string[];
+  timeoutMs?: number;
+}): Promise<{ stdout: string; stderr: string }> {
+  return await new Promise((resolvePromise, reject) => {
+    const child = spawn(input.command, input.args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error(`${input.command}_timed_out_after_${input.timeoutMs ?? 60000}ms`));
+    }, input.timeoutMs ?? 60000);
+    child.stdout?.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code === 0) resolvePromise({ stdout, stderr });
+      else reject(new Error(`${input.command}_exited_${code}:${stderr.slice(-500)}`));
+    });
+  });
+}
+
+function normalizeOcrLines(text: string): string[] {
+  return text
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => {
+      if (line.length < 2 || /^[-_??.]+$/.test(line)) return false;
+      const letters = line.replace(/[^A-Za-zÀ-ÿ]/g, "");
+      const alphaRatio = letters.length / Math.max(1, line.replace(/\s/g, "").length);
+      return letters.length >= 2 && alphaRatio >= 0.28;
+    })
+    .slice(0, 24);
+}
+
+function classifyOcrSoundEffects(lines: string[]): string[] {
+  return lines
+    .filter((line) => {
+      const letters = line.replace(/[^A-Za-zÀ-ÿ]/g, "");
+      if (letters.length < 2 || letters.length > 16) return false;
+      const upperRatio = letters.replace(/[^A-ZÀ-Ý]/g, "").length / Math.max(1, letters.length);
+      return upperRatio >= 0.72 && /boom|crash|pow|bam|wham|skree|roar|grr|krak|thoom|zap|bang/i.test(line);
+    })
+    .slice(0, 8);
+}
+
+function classifyOcrDialogue(lines: string[]): string[] {
+  const sfx = new Set(classifyOcrSoundEffects(lines));
+  return lines.filter((line) => !sfx.has(line)).slice(0, 12);
+}
+
+function scoreOcrLines(lines: string[]): number {
+  return lines.reduce((score, line) => {
+    const letters = line.replace(/[^A-Za-zÀ-ÿ]/g, "");
+    const words = line.split(/\s+/).filter((word) => /[A-Za-zÀ-ÿ]{3,}/.test(word));
+    const vowelish = /[aeiouáéíóúâêôãõàü]/i.test(letters);
+    const alphaRatio = letters.length / Math.max(1, line.replace(/\s/g, "").length);
+    return score + words.length + (vowelish ? 1 : 0) + (alphaRatio > 0.55 ? 1 : 0);
+  }, 0);
+}
+
+async function preparePanelImageForOcr(input: {
+  panelImagePath: string;
+  ffmpegCommand?: string;
+}): Promise<{ imagePath: string; warning: string | null }> {
+  const ffmpegCommand = input.ffmpegCommand ?? process.env.FFMPEG_PATH ?? "ffmpeg";
+  const outputPath = `${input.panelImagePath}.ocr.png`;
+  try {
+    await runTextCommand({
+      command: ffmpegCommand,
+      args: [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        input.panelImagePath,
+        "-vf",
+        "scale=iw*2:ih*2:flags=lanczos,format=gray,eq=contrast=1.18:brightness=0.01,unsharp=3:3:0.75",
+        "-frames:v",
+        "1",
+        outputPath
+      ],
+      timeoutMs: 90000
+    });
+    return { imagePath: outputPath, warning: null };
+  } catch (error) {
+    return {
+      imagePath: input.panelImagePath,
+      warning: `ocr_preprocess_failed:${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+function resolveTesseractJsPsm(psm: string): "SPARSE_TEXT" | "SINGLE_BLOCK" {
+  return psm === "11" ? "SPARSE_TEXT" : "SINGLE_BLOCK";
+}
+
+async function runTesseractJsOcr(input: {
+  imagePath: string;
+  languages: string;
+  psm: string;
+}): Promise<string> {
+  const { createWorker, PSM } = await import("tesseract.js");
+  const worker = await createWorker(input.languages);
+  try {
+    const psmKey = resolveTesseractJsPsm(input.psm);
+    await worker.setParameters({ tessedit_pageseg_mode: PSM[psmKey] });
+    const result = await worker.recognize(input.imagePath);
+    return result.data.text;
+  } finally {
+    await worker.terminate();
+  }
+}
+
+async function runOcrPass(input: {
+  imagePath: string;
+  command: string;
+  languages: string;
+  psm: string;
+}): Promise<{ lines: string[]; rawText: string; warnings: string[] }> {
+  const warnings: string[] = [];
+  let rawText = "";
+  try {
+    const { stdout } = await runTextCommand({
+      command: input.command,
+      args: [input.imagePath, "stdout", "-l", input.languages, "--psm", input.psm],
+      timeoutMs: 90000
+    });
+    rawText = stdout;
+  } catch (error) {
+    warnings.push(`ocr_cli_failed:${error instanceof Error ? error.message : String(error)}`);
+    try {
+      rawText = await runTesseractJsOcr({ imagePath: input.imagePath, languages: input.languages, psm: input.psm });
+    } catch (fallbackError) {
+      warnings.push(`ocr_tesseractjs_failed:${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
+    }
+  }
+  return { lines: normalizeOcrLines(rawText), rawText, warnings };
+}
+
+async function runPanelOcr(input: {
+  panelImagePath: string;
+  tesseractCommand?: string;
+  languages?: string;
+  ffmpegCommand?: string;
+}): Promise<{ detectedText: string[]; dialogue: string[]; soundEffects: string[]; warning: string | null }> {
+  const command = input.tesseractCommand ?? process.env.TESSERACT_PATH ?? "tesseract";
+  const languages = input.languages ?? process.env.REELFORGE_OCR_LANGUAGES ?? "por+eng";
+  const rawPsm = process.env.REELFORGE_OCR_PSM ?? "6";
+  const preprocessPsm = process.env.REELFORGE_OCR_PREPROCESS_PSM ?? "11";
+  const raw = await runOcrPass({ imagePath: input.panelImagePath, command, languages, psm: rawPsm });
+  let best = { lines: raw.lines, warnings: raw.warnings, mode: "raw", score: scoreOcrLines(raw.lines) };
+
+  if (best.score < 4) {
+    const prepared = await preparePanelImageForOcr({
+      panelImagePath: input.panelImagePath,
+      ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {})
+    });
+    const processed = await runOcrPass({ imagePath: prepared.imagePath, command, languages, psm: preprocessPsm });
+    const processedScore = scoreOcrLines(processed.lines);
+    const processedWarnings = [...(prepared.warning ? [prepared.warning] : []), ...processed.warnings];
+    if (processedScore > best.score) {
+      best = { lines: processed.lines, warnings: processedWarnings, mode: "preprocessed", score: processedScore };
+    } else {
+      best.warnings = [...best.warnings, ...processedWarnings];
+    }
+  }
+
+  const detectedText = best.lines;
+  const soundEffects = classifyOcrSoundEffects(detectedText);
+  const dialogue = classifyOcrDialogue(detectedText);
+  return {
+    detectedText,
+    dialogue,
+    soundEffects,
+    warning: best.warnings.length > 0 ? [...best.warnings, `ocr_mode:${best.mode}`, `ocr_quality_score:${best.score.toFixed(1)}`].join("|") : null
+  };
+}
+
 async function readPagePixelsScaled(input: {
   assetPath: string;
   pageWidth: number;
@@ -1374,6 +1567,15 @@ export async function indexUserProvidedComicPage(
       ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {})
     });
 
+    const ocr = input.ocrEnabled === true
+      ? await runPanelOcr({
+          panelImagePath,
+          ...(input.tesseractCommand ? { tesseractCommand: input.tesseractCommand } : {}),
+          ...(input.ocrLanguages ? { languages: input.ocrLanguages } : {}),
+          ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {})
+        })
+      : { detectedText: [], dialogue: [], soundEffects: [], warning: null };
+
     const regionPromo = isPromotionalPanelRegion({
       title: input.title,
       ...(input.tags !== undefined ? { tags: input.tags } : {}),
@@ -1404,8 +1606,13 @@ export async function indexUserProvidedComicPage(
       panelId,
       panelImagePath,
       panelImageSha256,
-      visual
+      visual,
+      ...(ocr.dialogue.length > 0 ? { ocrDialogue: ocr.dialogue } : {}),
+      ...(ocr.detectedText.length > 0 ? { detectedText: ocr.detectedText } : {})
     });
+    if (ocr.soundEffects.length > 0) {
+      cropEvidence.localEvidence.soundEffects.push(...ocr.soundEffects);
+    }
     const visualFlags = cropEvidence.legacyVisualFlags;
     const evidenceTier = cropEvidence.evidenceTier;
     const localEvidence = cropEvidence.localEvidence;
@@ -1505,7 +1712,7 @@ export async function indexUserProvidedComicPage(
         characters: characterConfidence,
         actions: actionConfidence,
         relationships: relationshipConfidence,
-        text: visual.visualTags.includes("visual_text_heavy") ? 0.72 : 0.12,
+        text: ocr.detectedText.length > 0 || visual.visualTags.includes("visual_text_heavy") ? 0.72 : 0.12,
         overall: overallConfidence
       },
       warnings: [...visual.warnings],
@@ -1550,11 +1757,13 @@ export async function indexUserProvidedComicPage(
         characters: characterConfidence,
         actions: actionConfidence,
         relationships: relationshipConfidence,
-        text: visual.visualTags.includes("visual_text_heavy") ? 0.72 : 0.12,
+        text: ocr.detectedText.length > 0 || visual.visualTags.includes("visual_text_heavy") ? 0.72 : 0.12,
         overall: overallConfidence
       },
       warnings: [
         ...visual.warnings,
+        ...(ocr.warning ? [ocr.warning] : []),
+        ...(ocr.detectedText.length > 0 ? [`ocr_text_lines:${ocr.detectedText.length}`] : []),
         ...(inheritanceCheck.ok ? [] : inheritanceCheck.violations.map((v) => `inheritance:${v}`)),
         ...(wholePageFallback ? ["whole_page_fallback"] : []),
         ...(evidenceTier === "supporting_only" ? ["evidence_tier:supporting_only"] : []),
@@ -2112,6 +2321,9 @@ export async function buildLocalComicPanelIndex(input: {
   forceRebuild?: boolean;
   projectRoot?: string;
   evidenceMode?: "strict" | "broad";
+  ocrEnabled?: boolean;
+  tesseractCommand?: string;
+  ocrLanguages?: string;
 }): Promise<{ index: LocalComicPanelIndex; warnings: string[]; reportPath?: string; contactSheetPath?: string | null }> {
   const assetDirectory = resolve(input.assetDirectory);
   const warnings: string[] = [];
@@ -2136,7 +2348,10 @@ export async function buildLocalComicPanelIndex(input: {
         assetDirectory,
         ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {}),
         ...(input.forceRebuild ? { forceRebuild: true } : {}),
-        ...(input.evidenceMode ? { evidenceMode: input.evidenceMode } : {})
+        ...(input.evidenceMode ? { evidenceMode: input.evidenceMode } : {}),
+        ...(input.ocrEnabled !== undefined ? { ocrEnabled: input.ocrEnabled } : {}),
+        ...(input.tesseractCommand ? { tesseractCommand: input.tesseractCommand } : {}),
+        ...(input.ocrLanguages ? { ocrLanguages: input.ocrLanguages } : {})
       });
       indexedPages.push({
         sourceAssetId: page.id,
@@ -2213,6 +2428,9 @@ export async function upsertLocalComicPanelIndex(input: {
   forceRebuild?: boolean;
   projectRoot?: string;
   evidenceMode?: "strict" | "broad";
+  ocrEnabled?: boolean;
+  tesseractCommand?: string;
+  ocrLanguages?: string;
 }): Promise<{
   index: LocalComicPanelIndex;
   indexPath: string;
@@ -2248,7 +2466,10 @@ export async function upsertLocalComicPanelIndex(input: {
       ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {}),
       ...(input.forceRebuild ? { forceRebuild: true } : {}),
       ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
-      ...(input.evidenceMode ? { evidenceMode: input.evidenceMode } : {})
+      ...(input.evidenceMode ? { evidenceMode: input.evidenceMode } : {}),
+      ...(input.ocrEnabled !== undefined ? { ocrEnabled: input.ocrEnabled } : {}),
+      ...(input.tesseractCommand ? { tesseractCommand: input.tesseractCommand } : {}),
+      ...(input.ocrLanguages ? { ocrLanguages: input.ocrLanguages } : {})
     });
     warnings.push(...buildWarnings);
     const rebuiltByHash = new Map(rebuilt.pages.map((page) => [page.sourceContentHash, page]));
@@ -2312,3 +2533,6 @@ export function findLocalPanelById(
   }
   return null;
 }
+
+
+

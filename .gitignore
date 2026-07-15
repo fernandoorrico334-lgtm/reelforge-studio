@@ -8,12 +8,15 @@ coverage
 CodexTemp/
 *.tsbuildinfo
 *.log
+*.traineddata
 .env
 .env.*
 .DS_Store
 Thumbs.db
 tmp/
 temp/
+tools/
+tools/tesseract/
 *.tmp
 *.temp
 terminals/

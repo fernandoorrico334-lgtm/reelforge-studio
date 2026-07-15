@@ -422,6 +422,9 @@ export async function handleMediaBeastRoute(
         : readPositiveInteger(payload.maxPages, 200);
       const buildIndex = readBoolean(payload.buildIndex, true);
       const forceRebuildIndex = readBoolean(payload.forceRebuildIndex, false);
+      const ocrEnabled = readBoolean(payload.ocrEnabled, false);
+      const tesseractCommand = readOptionalString(payload.tesseractCommand);
+      const ocrLanguages = readOptionalString(payload.ocrLanguages);
       const pdfRasterizerCommand = readOptionalString(payload.pdfRasterizerCommand);
       const pdfDpi = payload.pdfDpi === undefined || payload.pdfDpi === null
         ? undefined
@@ -434,6 +437,9 @@ export async function handleMediaBeastRoute(
         ...(maxPages !== undefined ? { maxPages } : {}),
         ...(pdfRasterizerCommand ? { pdfRasterizerCommand } : {}),
         ...(pdfDpi !== undefined ? { pdfDpi } : {}),
+        ...(ocrEnabled !== undefined ? { ocrEnabled } : {}),
+        ...(tesseractCommand ? { tesseractCommand } : {}),
+        ...(ocrLanguages ? { ocrLanguages } : {}),
         buildIndex,
         forceRebuildIndex
       });

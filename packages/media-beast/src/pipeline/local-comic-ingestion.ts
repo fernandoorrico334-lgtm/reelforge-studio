@@ -303,6 +303,9 @@ export async function ingestLocalComicSource(input: {
   projectRoot?: string;
   ffmpegCommand?: string;
   ffprobeCommand?: string;
+  tesseractCommand?: string;
+  ocrEnabled?: boolean;
+  ocrLanguages?: string;
   pdfRasterizerCommand?: string;
   pdfDpi?: number;
   forceRebuildIndex?: boolean;
@@ -405,6 +408,9 @@ export async function ingestLocalComicSource(input: {
       ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {}),
       ...(input.forceRebuildIndex ? { forceRebuild: true } : {}),
       evidenceMode: "broad",
+      ...(input.ocrEnabled !== undefined ? { ocrEnabled: input.ocrEnabled } : {}),
+      ...(input.tesseractCommand ? { tesseractCommand: input.tesseractCommand } : {}),
+      ...(input.ocrLanguages ? { ocrLanguages: input.ocrLanguages } : {}),
       projectRoot
     });
     index = indexed.index;
