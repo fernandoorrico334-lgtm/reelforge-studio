@@ -25,6 +25,8 @@ export type LocalComicIngestedPage = {
   pageNumber: number;
   contentHash: string;
   bytes: number;
+  width: number;
+  height: number;
 };
 
 export type LocalComicIngestionResult = {
@@ -224,10 +226,42 @@ function safeComicSlug(sourcePath: string): string {
     .slice(0, 80) || "comic";
 }
 
+async function probeImageDimensions(input: {
+  imagePath: string;
+  ffprobeCommand?: string;
+}): Promise<{ width: number; height: number } | null> {
+  try {
+    const { stdout } = await runLocalCommand({
+      command: input.ffprobeCommand ?? process.env.FFPROBE_PATH ?? "ffprobe",
+      args: [
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "csv=p=0:s=x",
+        input.imagePath
+      ],
+      timeoutMs: 30000
+    });
+    const match = stdout.trim().match(/(\d+)x(\d+)/);
+    if (!match?.[1] || !match?.[2]) return null;
+    const width = Number.parseInt(match[1], 10);
+    const height = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+    return { width, height };
+  } catch {
+    return null;
+  }
+}
+
 async function copyImagePagesToAssetDirectory(input: {
   imagePaths: string[];
   assetDirectory: string;
   comicTitle: string;
+  ffprobeCommand?: string;
 }): Promise<LocalComicIngestedPage[]> {
   const pagesDir = join(input.assetDirectory, "pages");
   await mkdir(pagesDir, { recursive: true });
@@ -242,6 +276,10 @@ async function copyImagePagesToAssetDirectory(input: {
       await copyFile(sourcePath, targetPath);
     }
     const fileStat = await stat(targetPath);
+    const dimensions = await probeImageDimensions({
+      imagePath: targetPath,
+      ...(input.ffprobeCommand ? { ffprobeCommand: input.ffprobeCommand } : {})
+    });
     pages.push({
       id: `comic-page-${String(pageNumber).padStart(4, "0")}`,
       sourcePath,
@@ -249,7 +287,9 @@ async function copyImagePagesToAssetDirectory(input: {
       title: `${input.comicTitle} - pagina ${pageNumber}`,
       pageNumber,
       contentHash: await sha256File(targetPath),
-      bytes: fileStat.size
+      bytes: fileStat.size,
+      width: dimensions?.width ?? 0,
+      height: dimensions?.height ?? 0
     });
   }
 
@@ -262,6 +302,7 @@ export async function ingestLocalComicSource(input: {
   comicTitle?: string;
   projectRoot?: string;
   ffmpegCommand?: string;
+  ffprobeCommand?: string;
   pdfRasterizerCommand?: string;
   pdfDpi?: number;
   forceRebuildIndex?: boolean;
@@ -319,7 +360,8 @@ export async function ingestLocalComicSource(input: {
   const pages = await copyImagePagesToAssetDirectory({
     imagePaths: selectedImages,
     assetDirectory,
-    comicTitle
+    comicTitle,
+    ...(input.ffprobeCommand ? { ffprobeCommand: input.ffprobeCommand } : {})
   });
 
   const manifestPath = join(assetDirectory, "manifest.json");
@@ -354,14 +396,15 @@ export async function ingestLocalComicSource(input: {
         title: page.title,
         description: `Imported local comic page ${page.pageNumber} from ${comicTitle}.`,
         tags: ["local-comic", "authorized", "comic-page", `page-${page.pageNumber}`],
-        width: 0,
-        height: 0,
+        width: page.width,
+        height: page.height,
         bytes: page.bytes,
         contentHash: page.contentHash,
         mediaType: "raster"
       })),
       ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {}),
       ...(input.forceRebuildIndex ? { forceRebuild: true } : {}),
+      evidenceMode: "broad",
       projectRoot
     });
     index = indexed.index;

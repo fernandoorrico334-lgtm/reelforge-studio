@@ -243,6 +243,7 @@ export type IndexUserProvidedComicPageInput = {
   assetDirectory: string;
   ffmpegCommand?: string;
   forceRebuild?: boolean;
+  evidenceMode?: "strict" | "broad";
 };
 
 export type IndexUserProvidedComicPageResult = {
@@ -1443,23 +1444,36 @@ export async function indexUserProvidedComicPage(
       1
     );
 
-    let valid = integrity.valid && !regionPromo.reject && isActualPanelCrop && evidenceTier !== "rejected";
+    const broadEvidenceMode = input.evidenceMode === "broad";
+    let valid = broadEvidenceMode
+      ? integrity.valid && !regionPromo.reject
+      : integrity.valid && !regionPromo.reject && isActualPanelCrop && evidenceTier !== "rejected";
     let rejectReason: string | null = null;
     if (!integrity.valid) {
       rejectReason = integrity.rejectReason;
     } else if (wholePageFallback) {
-      valid = false;
-      rejectReason = isOversizedStoryMixedCrop({
-        pageType: treatAsMixed ? "mixed" : pageType,
-        cropAreaRatio
-      })
-        ? "oversized_story_mixed_crop"
-        : "whole_page_fallback";
+      if (broadEvidenceMode) {
+        valid = true;
+        rejectReason = null;
+      } else {
+        valid = false;
+        rejectReason = isOversizedStoryMixedCrop({
+          pageType: treatAsMixed ? "mixed" : pageType,
+          cropAreaRatio
+        })
+          ? "oversized_story_mixed_crop"
+          : "whole_page_fallback";
+      }
     } else if (evidenceTier === "rejected") {
-      valid = false;
-      rejectReason = visualFlags.doctorStrangeVisible
-        ? "forbidden_character_evidence"
-        : "panel_evidence_rejected";
+      if (broadEvidenceMode) {
+        valid = true;
+        rejectReason = null;
+      } else {
+        valid = false;
+        rejectReason = visualFlags.doctorStrangeVisible
+          ? "forbidden_character_evidence"
+          : "panel_evidence_rejected";
+      }
     } else if (regionPromo.reject) {
       rejectReason = regionPromo.reason ?? "promotional_region";
     }
@@ -1543,7 +1557,9 @@ export async function indexUserProvidedComicPage(
         ...visual.warnings,
         ...(inheritanceCheck.ok ? [] : inheritanceCheck.violations.map((v) => `inheritance:${v}`)),
         ...(wholePageFallback ? ["whole_page_fallback"] : []),
-        ...(evidenceTier === "supporting_only" ? ["evidence_tier:supporting_only"] : [])
+        ...(evidenceTier === "supporting_only" ? ["evidence_tier:supporting_only"] : []),
+        ...(broadEvidenceMode && evidenceTier === "rejected" ? ["broad_mode_kept_low_evidence_panel"] : []),
+        ...(broadEvidenceMode && wholePageFallback ? ["broad_mode_kept_whole_page_fallback"] : [])
       ],
       cropAreaRatio,
       estimatedPanelCount: cropPanelEstimate.estimatedPanelCount,
@@ -2095,6 +2111,7 @@ export async function buildLocalComicPanelIndex(input: {
   ffmpegCommand?: string;
   forceRebuild?: boolean;
   projectRoot?: string;
+  evidenceMode?: "strict" | "broad";
 }): Promise<{ index: LocalComicPanelIndex; warnings: string[]; reportPath?: string; contactSheetPath?: string | null }> {
   const assetDirectory = resolve(input.assetDirectory);
   const warnings: string[] = [];
@@ -2118,7 +2135,8 @@ export async function buildLocalComicPanelIndex(input: {
         contentHash: page.contentHash,
         assetDirectory,
         ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {}),
-        ...(input.forceRebuild ? { forceRebuild: true } : {})
+        ...(input.forceRebuild ? { forceRebuild: true } : {}),
+        ...(input.evidenceMode ? { evidenceMode: input.evidenceMode } : {})
       });
       indexedPages.push({
         sourceAssetId: page.id,
@@ -2194,6 +2212,7 @@ export async function upsertLocalComicPanelIndex(input: {
   ffmpegCommand?: string;
   forceRebuild?: boolean;
   projectRoot?: string;
+  evidenceMode?: "strict" | "broad";
 }): Promise<{
   index: LocalComicPanelIndex;
   indexPath: string;
@@ -2228,7 +2247,8 @@ export async function upsertLocalComicPanelIndex(input: {
       pages: pagesToIndex,
       ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {}),
       ...(input.forceRebuild ? { forceRebuild: true } : {}),
-      ...(input.projectRoot ? { projectRoot: input.projectRoot } : {})
+      ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+      ...(input.evidenceMode ? { evidenceMode: input.evidenceMode } : {})
     });
     warnings.push(...buildWarnings);
     const rebuiltByHash = new Map(rebuilt.pages.map((page) => [page.sourceContentHash, page]));
