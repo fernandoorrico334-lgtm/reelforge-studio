@@ -35,6 +35,7 @@
     "smoke:reference-comics-match": "node scripts/smoke-reference-comics-match.mjs",
     "smoke:comic-story-miner": "node scripts/smoke-comic-story-miner.mjs",
     "smoke:comic-shorts-factory": "node scripts/smoke-comic-shorts-factory.mjs",
+    "smoke:comic-quality-gate": "node scripts/smoke-comic-quality-gate.mjs",
     "smoke:comic-short-project-bridge": "node scripts/smoke-comic-short-project-bridge.mjs",
     "smoke:comic-premium-director": "node scripts/smoke-comic-premium-director.mjs",
     "smoke:comic-render-contract": "node scripts/smoke-comic-render-contract.mjs",

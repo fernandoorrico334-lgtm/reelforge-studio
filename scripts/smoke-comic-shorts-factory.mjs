@@ -1,4 +1,4 @@
-﻿import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -109,6 +109,12 @@ async function main() {
   assert(batch.shorts.every((short) => short.scenes.length > 0), "each short needs scenes");
   assert(batch.shorts.every((short) => short.narrationScript.length > 20), "each short needs narration");
   assert(batch.shorts.every((short) => short.qualityReport.hasHook), "each short needs hook");
+  assert(batch.shorts.every((short) => short.estimatedDurationSeconds >= 30), "each short must be at least 30 seconds");
+  assert(batch.shorts.every((short) => short.qualityGate.status !== "rejected"), "each selected short must pass quality gate");
+  assert(batch.shorts.every((short) => short.qualityGate.hasVisualAction), "each selected short needs visual action evidence");
+  assert(batch.shorts.every((short) => short.qualityGate.hasCharacterEvidence), "each selected short needs character evidence");
+  assert(batch.shorts.every((short) => short.qualityGate.hasConflictOrPayoff), "each selected short needs conflict or payoff");
+  assert(batch.shorts.every((short) => short.qualityGate.hasCleanNarration), "each selected short needs clean non-generic narration");
   assert(batch.candidateFirst && batch.requiresManualApproval, "factory must stay candidate-first");
   assert(batch.productionOverview.readinessScore > 0, "expected batch readiness score");
   assert(batch.productionOverview.recommendedProductionOrder.length > 0, "expected recommended production order");
@@ -121,6 +127,7 @@ async function main() {
     selectedCount: batch.selectedCount,
     firstShort: batch.shorts[0].title,
     firstDuration: batch.shorts[0].estimatedDurationSeconds,
+    firstQualityGate: batch.shorts[0].qualityGate,
     firstSceneCount: batch.shorts[0].scenes.length,
     readinessScore: batch.productionOverview.readinessScore,
     estimatedShortsAvailable: batch.productionOverview.estimatedShortsAvailable,

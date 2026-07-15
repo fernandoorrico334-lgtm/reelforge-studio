@@ -1,8 +1,9 @@
 import { directComicCaptionNarration, type ComicCaptionNarrationDirectorReport } from "./comic-caption-narration-director.js";
 import { directComicSmartCrops, type ComicSmartCropDirectorReport } from "./comic-smart-crop-director.js";
-import type {
-  ComicShortProductionPlan,
-  ComicShortScenePlan
+import {
+  evaluateComicShortQualityGate,
+  type ComicShortProductionPlan,
+  type ComicShortScenePlan
 } from "./comic-shorts-factory.js";
 
 export type ComicPremiumDirectorProfile = "comic_viral_reference_antman" | "balanced_comic_story";
@@ -49,6 +50,8 @@ export type ComicPremiumDirectorResult = {
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
+
+const MIN_PREMIUM_COMIC_SHORT_DURATION_SECONDS = 30;
 
 function cleanText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -112,8 +115,35 @@ function captionFromNarration(value: string, role: ComicShortScenePlan["role"]):
 }
 
 function durationForRole(role: ComicShortScenePlan["role"], original: number): number {
-  const target = role === "hook" ? 1.4 : role === "climax" ? 1.2 : role === "payoff" ? 1.6 : 1.8;
-  return Number(clamp(Math.min(original, target), 1.1, 2.2).toFixed(1));
+  const target = role === "hook" ? 4.4 : role === "context" ? 6.2 : role === "development" ? 7.0 : role === "climax" ? 5.6 : 6.0;
+  return Number(clamp(Math.max(original, target), 3.8, 8.5).toFixed(1));
+}
+
+function enforceMinimumDirectedDuration(scenes: ComicShortScenePlan[]): ComicShortScenePlan[] {
+  const total = scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0);
+  if (total >= MIN_PREMIUM_COMIC_SHORT_DURATION_SECONDS || scenes.length === 0) return scenes;
+  const weights: Record<ComicShortScenePlan["role"], number> = {
+    hook: 0.85,
+    context: 1.05,
+    development: 1.25,
+    climax: 1,
+    payoff: 1.05
+  };
+  const totalWeight = scenes.reduce((sum, scene) => sum + weights[scene.role], 0);
+  let remaining = MIN_PREMIUM_COMIC_SHORT_DURATION_SECONDS - total;
+  const expanded = scenes.map((scene) => {
+    const add = remaining > 0 ? (MIN_PREMIUM_COMIC_SHORT_DURATION_SECONDS - total) * (weights[scene.role] / totalWeight) : 0;
+    const durationSeconds = Number(clamp(scene.durationSeconds + add, 3.8, 9.5).toFixed(1));
+    remaining -= durationSeconds - scene.durationSeconds;
+    return { ...scene, durationSeconds };
+  });
+  const expandedTotal = expanded.reduce((sum, scene) => sum + scene.durationSeconds, 0);
+  if (expandedTotal >= MIN_PREMIUM_COMIC_SHORT_DURATION_SECONDS) return expanded;
+  const last = expanded[expanded.length - 1];
+  if (!last) return expanded;
+  return expanded.map((scene, index) => index === expanded.length - 1
+    ? { ...scene, durationSeconds: Number((scene.durationSeconds + (MIN_PREMIUM_COMIC_SHORT_DURATION_SECONDS - expandedTotal)).toFixed(1)) }
+    : scene);
 }
 
 function zoomForScene(scene: ComicShortScenePlan): ComicPremiumSceneDirection["zoomPreset"] {
@@ -183,7 +213,7 @@ function scoreDirections(directions: ComicPremiumSceneDirection[], warnings: str
   if (directions.some((scene) => scene.retentionGoal === "instant_hook")) score += 8;
   if (directions.some((scene) => scene.retentionGoal === "impact_peak")) score += 8;
   if (directions.every((scene) => scene.captionAfter.length <= 72)) score += 6;
-  if (directions.every((scene) => scene.recommendedDurationSeconds <= 2.2)) score += 6;
+  if (directions.every((scene) => scene.recommendedDurationSeconds >= 3.8 && scene.recommendedDurationSeconds <= 8.5)) score += 6;
   score -= warnings.length * 5;
   return clamp(score, 0, 100);
 }
@@ -202,7 +232,7 @@ export function applyComicPremiumDirector(input: {
   if (captionNarration.averageCaptionQualityScore < 70) warnings.push("premium_director:caption_quality_below_target");
   if (smartCrop.averageConfidenceScore < 78) warnings.push("premium_director:smart_crop_below_target");
 
-  const directedScenes: ComicShortScenePlan[] = input.short.scenes.map((scene) => {
+  const rawDirectedScenes: ComicShortScenePlan[] = input.short.scenes.map((scene) => {
     const direction = directions.find((entry) => entry.sceneOrder === scene.order)!;
     const captionNarrationScene = captionNarration.scenes.find((entry) => entry.sceneOrder === scene.order);
     return {
@@ -221,6 +251,11 @@ export function applyComicPremiumDirector(input: {
               : "panel_pan"
     };
   });
+
+  const directedScenes = enforceMinimumDirectedDuration(rawDirectedScenes);
+  if (directedScenes.reduce((sum, scene) => sum + scene.durationSeconds, 0) < MIN_PREMIUM_COMIC_SHORT_DURATION_SECONDS) {
+    warnings.push("premium_director:duration_below_30s_after_distribution");
+  }
 
   const directedShort: ComicShortProductionPlan = {
     ...input.short,
@@ -241,7 +276,8 @@ export function applyComicPremiumDirector(input: {
       ...input.short.approvalChecklist,
       "Revisar se a narra??o premium continua fiel aos paineis.",
       "Confirmar se o zoom semantico nao corta balao importante.",
-      "Validar captions curtas e timing agressivo antes do render."
+      "Validar captions curtas e timing agressivo antes do render.",
+      "Confirmar que o render final preserva minimo de 30 segundos."
     ],
     qualityReport: {
       ...input.short.qualityReport,
@@ -250,6 +286,8 @@ export function applyComicPremiumDirector(input: {
     },
     warnings
   };
+
+  directedShort.qualityGate = evaluateComicShortQualityGate(directedShort);
 
   return {
     short: directedShort,
@@ -271,6 +309,7 @@ export function applyComicPremiumDirector(input: {
         "Comparar render final contra reference DNA em corte medio, caption density e loudness.",
         "Adicionar crop detector por rosto/acao/balao para executar o zoom semantico automaticamente.",
         "Adicionar beat sync de SFX por sceneDirection.sfxCue.",
+        "Comparar retencao de shorts de 30-45s contra cortes ultracurtos para encontrar o ponto ideal.",
         "Renderizar captionCues por palavra/frase curta em vez de legenda unica por cena."
       ]
     }

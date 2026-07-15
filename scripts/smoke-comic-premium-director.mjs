@@ -116,8 +116,9 @@ async function main() {
   assert(directed.short.captionStyleId === "sports_hype", "expected sports_hype captions");
   assert(directed.short.audioMasteringPresetId === "viral_fast_cut", "expected viral mastering");
   assert(directed.short.musicPresetId === "viral_fast_cut", "expected viral music");
-  assert(directed.short.estimatedDurationSeconds < baseShort.estimatedDurationSeconds, "premium direction should tighten duration");
-  assert(directed.short.scenes.every((scene) => scene.durationSeconds <= 2.2), "scenes should be fast-cut ready");
+  assert(directed.short.estimatedDurationSeconds >= 30, "premium direction must preserve minimum 30s duration");
+  assert(directed.short.qualityGate.status !== "rejected", "premium direction must keep short quality-gate safe");
+  assert(directed.short.scenes.every((scene) => scene.durationSeconds >= 3.8 && scene.durationSeconds <= 9.5), "scenes should keep premium pacing while preserving 30s minimum");
   assert(directed.short.scenes.every((scene) => scene.caption === scene.caption.toUpperCase()), "captions should be impact uppercase");
   assert(directed.short.scenes.every((scene) => scene.caption.includes("/") || scene.caption.split(/\s+/).length <= 5), "captions should be cue-ready and compact");
   assert(directed.report.sceneDirections.some((scene) => scene.sfxCue !== "none"), "expected sfx cues");

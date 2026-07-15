@@ -59,6 +59,7 @@ export type ComicShortProductionPlan = {
     narrationLineCount: number;
     warnings: string[];
   };
+  qualityGate: ComicShortQualityGateReport;
   warnings: string[];
   sourcePages: number[];
   productionRank: number;
@@ -69,6 +70,22 @@ export type ComicShortProductionPlan = {
     zoomPreset: "face_focus" | "action_center" | "text_safe_push" | "wide_context" | "impact_detail";
     reason: string;
   }>;
+};
+
+export type ComicShortQualityGateReport = {
+  status: "passed" | "rejected" | "needs_review";
+  score: number;
+  minDurationSeconds: number;
+  durationSeconds: number;
+  hasVisualAction: boolean;
+  hasCharacterEvidence: boolean;
+  hasConflictOrPayoff: boolean;
+  hasCleanNarration: boolean;
+  genericNarrationScore: number;
+  ocrNoiseScore: number;
+  blockers: string[];
+  warnings: string[];
+  reasons: string[];
 };
 
 export type ComicShortsBatchFactoryPlan = {
@@ -98,6 +115,8 @@ export type ComicShortsBatchFactoryPlan = {
 function slug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "comic-short";
 }
+
+const MIN_COMIC_SHORT_DURATION_SECONDS = 30;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -177,6 +196,130 @@ function buildZoomPlan(scenes: ComicShortScenePlan[]): ComicShortProductionPlan[
   }));
 }
 
+function scoreOcrNoise(text: string): number {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return 100;
+  let score = 0;
+  if (/[�ÃÂâ□]/.test(cleaned)) score += 30;
+  if (/(\d)\1{4,}/.test(cleaned)) score += 18;
+  const suspiciousChars = cleaned.match(/[{}[\]<>_=~`|\\]/g)?.length ?? 0;
+  score += Math.min(25, suspiciousChars * 3);
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const brokenLongWords = words.filter((word) => word.length > 18 && !/[aeiouáéíóúãõâêô]/i.test(word)).length;
+  score += Math.min(20, brokenLongWords * 8);
+  const shortFragments = words.filter((word) => /^[bcdfghjklmnpqrstvwxyz]{4,}$/i.test(word)).length;
+  score += Math.min(14, shortFragments * 3);
+  return Math.round(clamp(score, 0, 100));
+}
+
+function scoreGenericNarration(text: string): number {
+  const normalized = text.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!normalized) return 100;
+  const weakPhrases = [
+    "essa sequencia tem forca visual para short",
+    "poucos paineis, leitura rapida",
+    "ponto claro para transformar em narracao",
+    "tem uma curiosidade escondida nessa sequencia",
+    "a hq entrega um momento forte",
+    "funciona bem como short",
+    "momento forte para transformar em short"
+  ];
+  let score = 0;
+  for (const phrase of weakPhrases) {
+    if (normalized.includes(phrase)) score += 18;
+  }
+  const sentences = normalized.split(/[.!?]+/).map((sentence) => sentence.trim()).filter(Boolean);
+  const uniqueSentences = new Set(sentences);
+  if (sentences.length > 2 && uniqueSentences.size <= Math.ceil(sentences.length / 2)) score += 22;
+  if (normalized.length < 220) score += 10;
+  if (!/(mas|porque|entao|quando|antes|depois|virada|perigo|conflito|impacto|revela|vence|perde|quase)/i.test(text)) score += 12;
+  return Math.round(clamp(score, 0, 100));
+}
+
+function sceneHasVisualAction(scene: ComicShortScenePlan): boolean {
+  const evidence = scene.panelVisualEvidence;
+  if (!evidence) return scene.role === "climax" || scene.motion === "impact_cut" || scene.transition === "flash";
+  const storyFunction = String(evidence.storyFunction).toLowerCase();
+  return (
+    evidence.evidenceCounts.actions > 0 ||
+    evidence.evidenceCounts.soundEffects > 0 ||
+    Boolean(evidence.strongestActionLabel) ||
+    /action|fight|climax|impact|transformation|reveal|attack|battle/.test(storyFunction) ||
+    evidence.visualFlags.duoVisible ||
+    evidence.visualFlags.venomVisible ||
+    evidence.visualFlags.symbioteVisible ||
+    evidence.visualFlags.spiderManVisible
+  );
+}
+
+function sceneHasCharacterEvidence(scene: ComicShortScenePlan): boolean {
+  const evidence = scene.panelVisualEvidence;
+  if (!evidence) return false;
+  return evidence.evidenceCounts.characters > 0 && evidence.confidence.characters >= 0.45;
+}
+
+function sceneHasConflictOrPayoff(scene: ComicShortScenePlan): boolean {
+  const evidence = scene.panelVisualEvidence;
+  const relationship = String(evidence?.strongestRelationshipType ?? "").toLowerCase();
+  const storyFunction = String(evidence?.storyFunction ?? "").toLowerCase();
+  return (
+    scene.role === "climax" ||
+    scene.role === "payoff" ||
+    /conflict|host|symbiote|rival|threat|versus|enemy|alliance_break/.test(relationship) ||
+    /climax|reveal|transformation|reaction|payoff|action/.test(storyFunction)
+  );
+}
+
+export function evaluateComicShortQualityGate(short: ComicShortProductionPlan): ComicShortQualityGateReport {
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  const reasons: string[] = [];
+  const durationSeconds = Number(short.estimatedDurationSeconds.toFixed(1));
+  const hasVisualAction = short.scenes.some(sceneHasVisualAction);
+  const hasCharacterEvidence = short.scenes.some(sceneHasCharacterEvidence);
+  const hasConflictOrPayoff = short.scenes.some(sceneHasConflictOrPayoff);
+  const narrationText = short.narrationScript || short.scenes.map((scene) => scene.narration).join(" ");
+  const ocrNoiseScore = scoreOcrNoise(narrationText);
+  const genericNarrationScore = scoreGenericNarration(narrationText);
+  const hasCleanNarration = ocrNoiseScore <= 30 && genericNarrationScore <= 45;
+
+  if (durationSeconds < MIN_COMIC_SHORT_DURATION_SECONDS) blockers.push(`duration_below_30s:${durationSeconds}`);
+  if (!hasVisualAction) blockers.push("missing_visual_action_evidence");
+  if (!hasCharacterEvidence) blockers.push("missing_character_visual_evidence");
+  if (!hasConflictOrPayoff) blockers.push("missing_conflict_or_payoff");
+  if (!hasCleanNarration) blockers.push(`narration_not_clean:generic=${genericNarrationScore}:ocr=${ocrNoiseScore}`);
+  if (short.qualityReport.panelCoverage < 0.8) blockers.push(`panel_coverage_below_80:${short.qualityReport.panelCoverage.toFixed(2)}`);
+  if (short.scenes.length < 4) warnings.push("short_has_few_scenes_for_30s_pacing");
+  if (short.qualityReport.warnings.length > 0) warnings.push(...short.qualityReport.warnings.map((warning) => `quality_report:${warning}`));
+
+  if (durationSeconds >= MIN_COMIC_SHORT_DURATION_SECONDS) reasons.push("duration_minimum_30s_ok");
+  if (hasVisualAction) reasons.push("visual_action_detected");
+  if (hasCharacterEvidence) reasons.push("character_evidence_detected");
+  if (hasConflictOrPayoff) reasons.push("conflict_or_payoff_detected");
+  if (hasCleanNarration) reasons.push("narration_passes_generic_ocr_gate");
+
+  const score = Math.round(clamp(
+    100 - blockers.length * 22 - warnings.length * 4 - genericNarrationScore * 0.18 - ocrNoiseScore * 0.16,
+    0,
+    100
+  ));
+
+  return {
+    status: blockers.length > 0 ? "rejected" : warnings.length > 0 ? "needs_review" : "passed",
+    score,
+    minDurationSeconds: MIN_COMIC_SHORT_DURATION_SECONDS,
+    durationSeconds,
+    hasVisualAction,
+    hasCharacterEvidence,
+    hasConflictOrPayoff,
+    hasCleanNarration,
+    genericNarrationScore,
+    ocrNoiseScore,
+    blockers,
+    warnings,
+    reasons
+  };
+}
 function digestBoost(input: {
   opportunity: ComicShortOpportunity;
   minerReport: ComicStoryMinerReport;
@@ -236,10 +379,11 @@ export function buildComicShortProductionPlan(input: {
           reason: "fallback_panel_sequence"
         }));
   const narrationLines = splitNarration(opportunity.narrationDraft, visualSequence.length);
+  const targetDurationSeconds = clamp(Math.max(opportunity.estimatedDurationSeconds, MIN_COMIC_SHORT_DURATION_SECONDS), MIN_COMIC_SHORT_DURATION_SECONDS, 60);
   const secondsPerScene = clamp(
-    Math.round(opportunity.estimatedDurationSeconds / Math.max(1, visualSequence.length)),
-    3,
-    8
+    Math.ceil(targetDurationSeconds / Math.max(1, visualSequence.length)),
+    4,
+    10
   );
 
   const scenes = visualSequence.map((visual, sceneIndex) => {
@@ -271,7 +415,7 @@ export function buildComicShortProductionPlan(input: {
   const zoomPlan = buildZoomPlan(scenes);
 
 
-  return {
+  const plan = {
     id: `comic-short-${input.index + 1}-${slug(opportunity.title)}`,
     title: opportunity.title,
     sourceOpportunityId: opportunity.id,
@@ -286,6 +430,7 @@ export function buildComicShortProductionPlan(input: {
       "Confirmar que a HQ/material e autorizado para uso.",
       "Revisar se os paineis contam a historia sem contexto inventado.",
       "Revisar narracao antes de renderizar.",
+      "Confirmar que o short tem no minimo 30 segundos de duracao final.",
       "Confirmar legendas, musica e direitos dos assets locais."
     ],
     qualityReport: {
@@ -300,7 +445,9 @@ export function buildComicShortProductionPlan(input: {
     productionRank,
     digestReasons,
     zoomPlan
-  };
+  } as ComicShortProductionPlan;
+  plan.qualityGate = evaluateComicShortQualityGate(plan);
+  return plan;
 }
 
 export function buildComicShortsBatchFactoryPlan(input: {
@@ -315,7 +462,7 @@ export function buildComicShortsBatchFactoryPlan(input: {
   const usedPanelCounts = new Map<string, number>();
   const categoryCounts = new Map<ComicShortOpportunityCategory, number>();
   const rejectedOpportunities: ComicShortsBatchFactoryPlan["rejectedOpportunities"] = [];
-  const selected: ComicShortOpportunity[] = [];
+  const selectedPlans: ComicShortProductionPlan[] = [];
 
   const ranked = [...input.minerReport.opportunities].sort((left, right) => {
     const categoryBias = (categoryCounts.get(left.category) ?? 0) - (categoryCounts.get(right.category) ?? 0);
@@ -326,7 +473,7 @@ export function buildComicShortsBatchFactoryPlan(input: {
   });
 
   for (const opportunity of ranked) {
-    if (selected.length >= targetCount) break;
+    if (selectedPlans.length >= targetCount) break;
     if (opportunity.score < minScore) {
       rejectedOpportunities.push({
         opportunityId: opportunity.id,
@@ -339,14 +486,22 @@ export function buildComicShortsBatchFactoryPlan(input: {
       rejectedOpportunities.push({ opportunityId: opportunity.id, reason: "panel_reuse_limit" });
       continue;
     }
-    selected.push(opportunity);
+    const candidatePlan = buildComicShortProductionPlan({ opportunity, index: selectedPlans.length, minerReport: input.minerReport });
+    if (candidatePlan.qualityGate.status === "rejected") {
+      rejectedOpportunities.push({
+        opportunityId: opportunity.id,
+        reason: `quality_gate:${candidatePlan.qualityGate.blockers.join("|")}`
+      });
+      continue;
+    }
+    selectedPlans.push(candidatePlan);
     categoryCounts.set(opportunity.category, (categoryCounts.get(opportunity.category) ?? 0) + 1);
     for (const panelId of opportunity.panelIds) {
       usedPanelCounts.set(panelId, (usedPanelCounts.get(panelId) ?? 0) + 1);
     }
   }
 
-  const shorts = selected.map((opportunity, index) => buildComicShortProductionPlan({ opportunity, index, minerReport: input.minerReport }));
+  const shorts = selectedPlans;
   const readinessScore = batchReadinessScore(shorts);
 
   return {
@@ -370,6 +525,7 @@ export function buildComicShortsBatchFactoryPlan(input: {
       "Adicionar leitura OCR mais forte por balao/recordatorio para roteiros mais fieis.",
       "Criar tela Comic Studio para aprovar 20 shorts e disparar render em lote.",
       "Adicionar avaliacao visual com zoom automatico no detalhe mais importante de cada painel.",
+      "Quality Gate ativo: rejeitar shorts abaixo de 30s, narracao generica/OCR sujo e cenas sem acao/personagem/payoff.",
       "Adicionar anti-repeticao semantica para evitar 20 shorts com o mesmo gancho."
     ],
     candidateFirst: true,

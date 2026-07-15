@@ -600,7 +600,7 @@ function makeOpportunity(input: {
     angle: `${label} a partir de ${displayThemeName(dominantValue(themes, "sequencia visual"))}`,
     score: scoring.score,
     confidence: clampScore(scoring.score - scoring.warnings.length * 5),
-    estimatedDurationSeconds: Math.max(18, Math.min(45, input.panels.length * 5)),
+    estimatedDurationSeconds: Math.max(30, Math.min(50, input.panels.length * 6)),
     pages,
     panelIds: input.panels.map((panel) => panel.panelId),
     panels: input.panels.map(panelRef),
