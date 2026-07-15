@@ -1,5 +1,6 @@
-﻿import { extname } from "node:path";
+import { extname } from "node:path";
 import type {
+  ComicPanelVisualCropEvidence,
   ComicShortOpportunity,
   ComicShortOpportunityCategory,
   ComicStoryMinerReport
@@ -33,6 +34,7 @@ export type ComicShortScenePlan = {
   caption: string;
   motion: "punch_zoom" | "slow_push" | "panel_pan" | "impact_cut" | "pull_back";
   transition: "cut" | "flash" | "whoosh";
+  panelVisualEvidence?: ComicPanelVisualCropEvidence;
 };
 
 export type ComicShortProductionPlan = {
@@ -253,7 +255,8 @@ export function buildComicShortProductionPlan(input: {
       narration,
       caption: makeCaption(narration),
       motion: motionForRole(visual.role),
-      transition: transitionForRole(visual.role)
+      transition: transitionForRole(visual.role),
+      ...(panel?.visualCropEvidence ? { panelVisualEvidence: panel.visualCropEvidence } : {})
     } satisfies ComicShortScenePlan;
   });
 

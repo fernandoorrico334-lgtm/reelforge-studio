@@ -111,7 +111,7 @@ async function main() {
   assert(captionNarration.averageCaptionQualityScore >= 70, `expected caption quality >= 70, got ${captionNarration.averageCaptionQualityScore}`);
   assert(directed.report.qualityScore >= 80, `expected strong quality score, got ${directed.report.qualityScore}`);
   assert(directed.report.captionNarration.directorId === "comic_caption_narration_v2", "premium report should include V2 caption/narration director");
-  assert(directed.report.smartCrop.directorId === "comic_smart_crop_director_v1", "premium report should include smart crop director");
+  assert(directed.report.smartCrop.directorId === "comic_smart_crop_director_v2", "premium report should include smart crop director");
   assert(directed.report.smartCrop.averageConfidenceScore >= 78, `expected smart crop confidence >= 78, got ${directed.report.smartCrop.averageConfidenceScore}`);
   assert(directed.short.captionStyleId === "sports_hype", "expected sports_hype captions");
   assert(directed.short.audioMasteringPresetId === "viral_fast_cut", "expected viral mastering");

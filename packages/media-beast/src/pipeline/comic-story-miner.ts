@@ -1,4 +1,4 @@
-﻿import { basename } from "node:path";
+import { basename } from "node:path";
 import {
   extractLocalPanelEntityIds,
   extractLocalPanelThemeIds,
@@ -25,6 +25,24 @@ export type ComicShortOpportunityCategory =
   | "cliffhanger"
   | "visual_moment";
 
+export type ComicPanelVisualCropEvidence = {
+  storyFunction: LocalComicPanelEvidence["storyFunction"];
+  quality: LocalComicPanelEvidence["quality"];
+  confidence: Pick<LocalComicPanelEvidence["confidence"], "characters" | "actions" | "relationships" | "text" | "overall">;
+  visualFlags: LocalComicPanelEvidence["visualFlags"];
+  evidenceCounts: {
+    characters: number;
+    actions: number;
+    dialogue: number;
+    narrationBoxes: number;
+    soundEffects: number;
+    detectedText: number;
+  };
+  strongestActionLabel: string | null;
+  strongestRelationshipType: string | null;
+  textSamples: string[];
+};
+
 export type ComicStoryMinerPanelRef = {
   panelId: string;
   pageNumber: number;
@@ -37,6 +55,7 @@ export type ComicStoryMinerPanelRef = {
   localDialogue: string[];
   localNarrationBoxes: string[];
   soundEffects: string[];
+  visualCropEvidence: ComicPanelVisualCropEvidence;
 };
 
 export type ComicPageStorySummary = {
@@ -337,6 +356,11 @@ function panelRelationships(panel: LocalComicPanelEvidence): string[] {
 }
 
 function panelRef(panel: LocalComicPanelEvidence): ComicStoryMinerPanelRef {
+  const strongestAction = [...panel.localEvidence.actions]
+    .sort((left, right) => right.confidence - left.confidence)[0];
+  const strongestRelationship = [...panel.localEvidence.relationships]
+    .sort((left, right) => right.confidence - left.confidence)[0];
+
   return {
     panelId: panel.panelId,
     pageNumber: panel.pageNumber,
@@ -348,7 +372,34 @@ function panelRef(panel: LocalComicPanelEvidence): ComicStoryMinerPanelRef {
     visibleThemes: panelThemes(panel),
     localDialogue: panel.localEvidence.dialogue,
     localNarrationBoxes: panel.localEvidence.narrationBoxes,
-    soundEffects: panel.localEvidence.soundEffects
+    soundEffects: panel.localEvidence.soundEffects,
+    visualCropEvidence: {
+      storyFunction: panel.storyFunction,
+      quality: panel.quality,
+      confidence: {
+        characters: panel.confidence.characters,
+        actions: panel.confidence.actions,
+        relationships: panel.confidence.relationships,
+        text: panel.confidence.text,
+        overall: panel.confidence.overall
+      },
+      visualFlags: panel.visualFlags,
+      evidenceCounts: {
+        characters: panel.localEvidence.characters.length,
+        actions: panel.localEvidence.actions.length,
+        dialogue: panel.localEvidence.dialogue.length,
+        narrationBoxes: panel.localEvidence.narrationBoxes.length,
+        soundEffects: panel.localEvidence.soundEffects.length,
+        detectedText: panel.localEvidence.detectedText.length
+      },
+      strongestActionLabel: strongestAction?.label ?? null,
+      strongestRelationshipType: strongestRelationship?.type ?? null,
+      textSamples: [
+        ...panel.localEvidence.dialogue.slice(0, 2),
+        ...panel.localEvidence.narrationBoxes.slice(0, 1),
+        ...panel.localEvidence.detectedText.slice(0, 1)
+      ]
+    }
   };
 }
 
