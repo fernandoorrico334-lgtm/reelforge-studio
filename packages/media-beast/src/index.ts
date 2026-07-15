@@ -47,6 +47,7 @@ export * from "./pipeline/reference-comics-match-engine.js";
 export * from "./pipeline/comic-story-miner.js";
 export * from "./pipeline/comic-shorts-factory.js";
 export * from "./pipeline/comic-project-bridge.js";
+export * from "./pipeline/comic-premium-director.js";
 export * from "./pipeline/local-comic-ingestion.js";
 export * from "./pipeline/comics-scene-evidence-audit.js";
 export * from "./pipeline/comics-crop-visual-evidence.js";

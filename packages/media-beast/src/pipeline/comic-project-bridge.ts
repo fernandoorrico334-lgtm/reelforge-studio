@@ -1,3 +1,4 @@
+import { applyComicPremiumDirector, type ComicPremiumDirectorReport } from "./comic-premium-director.js";
 import type {
   ComicShortProductionPlan,
   ComicShortScenePlan,
@@ -96,6 +97,7 @@ export type ComicProjectBridgePayload = {
     musicPresetId: string;
     sourcePages: number[];
     zoomPlan: ComicShortProductionPlan["zoomPlan"];
+    premiumDirector: ComicPremiumDirectorReport;
   };
   qualityChecklist: Array<{
     id: string;
@@ -150,18 +152,21 @@ function emphasisWordsForScene(scene: ComicShortScenePlan, short: ComicShortProd
   return words.filter((word) => text.includes(word)).slice(0, 4);
 }
 
-function visualPromptForScene(scene: ComicShortScenePlan, short: ComicShortProductionPlan): string {
+function visualPromptForScene(scene: ComicShortScenePlan, short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport): string {
   return [
     `Use o painel autorizado ${scene.panelId} como visual principal.`,
     `Enquadramento vertical 9:16 com ${scene.motion}.`,
     `Papel narrativo: ${scene.role}.`,
     `Tema do short: ${short.title}.`,
     `Zoom planejado: ${short.zoomPlan.find((entry) => entry.sceneOrder === scene.order)?.zoomPreset ?? "action_center"}.`,
+    ...(premiumDirector
+      ? [premiumDirector.sceneDirections.find((entry) => entry.sceneOrder === scene.order)?.cropInstruction ?? ""]
+      : []),
     "Preservar contexto do quadrinho e evitar inventar eventos que nao aparecem na pagina."
   ].join(" ");
 }
 
-function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProductionPlan): string {
+function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport): string {
   return safeJson({
     source: "comic-short-project-bridge",
     shortId: short.id,
@@ -174,6 +179,7 @@ function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProducti
     motion: scene.motion,
     role: scene.role,
     zoomPlan: short.zoomPlan.find((entry) => entry.sceneOrder === scene.order) ?? null,
+    premiumDirection: premiumDirector?.sceneDirections.find((entry) => entry.sceneOrder === scene.order) ?? null,
     digestReasons: short.digestReasons,
     productionRank: short.productionRank,
     requiresManualAssetImport: true
@@ -193,7 +199,7 @@ function buildProjectScript(short: ComicShortProductionPlan): string {
   ].join("\n");
 }
 
-function checklistForShort(short: ComicShortProductionPlan): ComicProjectBridgePayload["qualityChecklist"] {
+function checklistForShort(short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport): ComicProjectBridgePayload["qualityChecklist"] {
   return [
     {
       id: "manual_rights_review",
@@ -219,6 +225,14 @@ function checklistForShort(short: ComicShortProductionPlan): ComicProjectBridgeP
       status: short.narrationScript.length > 80 ? "ready" : "needs_review",
       detail: `${short.qualityReport.narrationLineCount} linhas de narracao planejadas.`
     },
+    ...(premiumDirector
+      ? [{
+          id: "premium_director_quality",
+          label: "Direcao premium aplicada",
+          status: premiumDirector.qualityScore >= 80 ? "ready" as const : "needs_review" as const,
+          detail: `score=${premiumDirector.qualityScore}; cutPace=${premiumDirector.targetCutPaceSeconds}s; preset=${premiumDirector.referencePresetId}.`
+        }]
+      : []),
     {
       id: "render_not_auto_started",
       label: "Render bloqueado ate aprovacao manual",
@@ -235,7 +249,9 @@ export function buildComicShortProjectBridgePayload(input: {
   editingReferencePresetId?: string | null;
   titlePrefix?: string;
 }): ComicProjectBridgePayload {
-  const short = input.short;
+  const directed = applyComicPremiumDirector({ short: input.short });
+  const short = directed.short;
+  const premiumDirector = directed.report;
   const titlePrefix = input.titlePrefix ? `${input.titlePrefix.trim()} ` : "";
   const scenes: ComicProjectBridgeSceneInput[] = short.scenes.map((scene) => ({
     order: scene.order,
@@ -253,9 +269,9 @@ export function buildComicShortProjectBridgePayload(input: {
     sfxVolume: scene.role === "climax" || scene.role === "hook" ? 0.85 : 0.65,
     visualPreset: short.cinematicPresetId,
     visualSourceMode: "asset_only",
-    visualPrompt: visualPromptForScene(scene, short),
+    visualPrompt: visualPromptForScene(scene, short, premiumDirector),
     negativePrompt: "Nao inventar personagens, nao mudar eventos centrais, nao usar imagens externas sem aprovacao.",
-    visualRecipe: sceneVisualRecipe(scene, short),
+    visualRecipe: sceneVisualRecipe(scene, short, premiumDirector),
     generationStatus: null,
     generationProvider: null,
     generationSeed: null,
@@ -320,10 +336,11 @@ export function buildComicShortProjectBridgePayload(input: {
       audioMasteringPresetId: short.audioMasteringPresetId,
       musicPresetId: short.musicPresetId,
       sourcePages: short.sourcePages,
-      zoomPlan: short.zoomPlan
+      zoomPlan: short.zoomPlan,
+      premiumDirector
     },
-    qualityChecklist: checklistForShort(short),
-    warnings: [...short.warnings, "manual_panel_asset_import_required", "manual_approval_required_before_render"],
+    qualityChecklist: checklistForShort(short, premiumDirector),
+    warnings: [...short.warnings, "premium_director_applied", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
     candidateFirst: true,
     requiresManualApproval: true
   };
