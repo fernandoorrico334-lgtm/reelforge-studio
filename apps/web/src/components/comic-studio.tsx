@@ -217,7 +217,9 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
           targetCount,
           maxProjects: effectiveMaxProjects,
           minScore,
-          titlePrefix: "Comic Studio"
+          titlePrefix: "Comic Studio",
+          editingReferencePresetId: "builtin-comic-viral-reference-antman",
+          templateId: "comic_drama"
         });
         setCreated(response);
       } catch (err) {

@@ -535,6 +535,34 @@ function defaultRecommendationsForCategory(category: EditingReferenceCategory) {
 
 const builtInPresetCatalog: EditingReferencePresetRecord[] = [
   {
+    id: "builtin-comic-viral-reference-antman",
+    referenceId: null,
+    name: "Comic Viral Reference - Antman",
+    slug: "comic-viral-reference-antman",
+    description:
+      "Preset baseado em referencia vertical de HQ/super-heroi: cortes densos, narracao direta, captions cineticas e zoom agressivo em paineis para superar shorts narrativos de cultura pop.",
+    useCase: "viral",
+    cutPace: 0.9,
+    pacing: "hyper",
+    zoomStyle: "aggressive",
+    flashStyle: "high",
+    transitionStyle: "flash_cut",
+    captionStyle: "kinetic",
+    narrationStyle: "hype",
+    musicStyle: "viral",
+    sfxStyle: "high",
+    hookStyle: "explosive",
+    ctaStyle: "strong",
+    microclipPlacement: "multiple",
+    recommendedTemplates: ["comic_drama", "anime_dark", "cinematic_story", "top_3_ranking"],
+    recommendedMusicPresetId: "viral_fast_cut",
+    recommendedAudioMasteringPresetId: "viral_fast_cut",
+    recommendedNarrationVoicePackId: "story_epic_ptbr",
+    defaultShotDurationSeconds: 0.9,
+    notes:
+      "Referencia analisada: 1080x1920, ~80s, 30fps, ~92 mudancas visuais fortes em threshold 0.18, audio medio -15.4 dB/pico -5.7 dB. Usar como piso: rajadas de cortes, captions centrais curtas, zoom/pan continuo nos paineis, SFX de impacto e narra??o sem pausas longas."
+  },
+  {
     id: "builtin-football-flash-pressure",
     referenceId: null,
     name: "Football Flash Pressure",
