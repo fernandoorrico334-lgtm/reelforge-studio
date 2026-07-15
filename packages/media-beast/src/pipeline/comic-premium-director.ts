@@ -1,3 +1,4 @@
+import { directComicCaptionNarration, type ComicCaptionNarrationDirectorReport } from "./comic-caption-narration-director.js";
 import type {
   ComicShortProductionPlan,
   ComicShortScenePlan
@@ -32,6 +33,7 @@ export type ComicPremiumDirectorReport = {
   musicPresetId: "viral_fast_cut";
   audioMasteringPresetId: "viral_fast_cut";
   sceneDirections: ComicPremiumSceneDirection[];
+  captionNarration: ComicCaptionNarrationDirectorReport;
   qualityScore: number;
   warnings: string[];
   nextImprovements: string[];
@@ -189,18 +191,21 @@ export function applyComicPremiumDirector(input: {
   profileId?: ComicPremiumDirectorProfile;
 }): ComicPremiumDirectorResult {
   const profileId = input.profileId ?? "comic_viral_reference_antman";
+  const captionNarration = directComicCaptionNarration({ short: input.short });
   const directions = input.short.scenes.map((scene) => directionForScene(scene, input.short));
   const warnings: string[] = [...input.short.warnings];
   if (input.short.qualityReport.panelCoverage < 1) warnings.push("premium_director:missing_panel_paths");
   if (!input.short.qualityReport.hasClimax) warnings.push("premium_director:missing_climax");
+  if (captionNarration.averageCaptionQualityScore < 70) warnings.push("premium_director:caption_quality_below_target");
 
   const directedScenes: ComicShortScenePlan[] = input.short.scenes.map((scene) => {
     const direction = directions.find((entry) => entry.sceneOrder === scene.order)!;
+    const captionNarrationScene = captionNarration.scenes.find((entry) => entry.sceneOrder === scene.order);
     return {
       ...scene,
       durationSeconds: direction.recommendedDurationSeconds,
-      narration: direction.narrationAfter,
-      caption: direction.captionAfter,
+      narration: captionNarrationScene?.narrationText ?? direction.narrationAfter,
+      caption: captionNarrationScene?.captionText ?? direction.captionAfter,
       transition: direction.transition,
       motion:
         direction.zoomPreset === "impact_detail"
@@ -254,12 +259,14 @@ export function applyComicPremiumDirector(input: {
       musicPresetId: "viral_fast_cut",
       audioMasteringPresetId: "viral_fast_cut",
       sceneDirections: directions,
+      captionNarration,
       qualityScore: scoreDirections(directions, warnings),
       warnings,
       nextImprovements: [
         "Comparar render final contra reference DNA em corte medio, caption density e loudness.",
         "Adicionar crop detector por rosto/acao/balao para executar o zoom semantico automaticamente.",
-        "Adicionar beat sync de SFX por sceneDirection.sfxCue."
+        "Adicionar beat sync de SFX por sceneDirection.sfxCue.",
+        "Renderizar captionCues por palavra/frase curta em vez de legenda unica por cena."
       ]
     }
   };

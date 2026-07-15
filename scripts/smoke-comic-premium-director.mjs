@@ -64,6 +64,7 @@ async function main() {
     mineComicStoryVault,
     buildComicShortsBatchFactoryPlan,
     applyComicPremiumDirector,
+    directComicCaptionNarration,
     buildComicShortProjectBridgePayload
   } = beast;
 
@@ -103,15 +104,20 @@ async function main() {
   const baseShort = batch.shorts[0];
   assert(baseShort, "expected base short");
 
+  const captionNarration = directComicCaptionNarration({ short: baseShort });
   const directed = applyComicPremiumDirector({ short: baseShort });
   assert(directed.report.referencePresetId === "builtin-comic-viral-reference-antman", "expected reference preset");
+  assert(captionNarration.captionCueCount >= baseShort.scenes.length, "expected caption cues for every scene");
+  assert(captionNarration.averageCaptionQualityScore >= 70, `expected caption quality >= 70, got ${captionNarration.averageCaptionQualityScore}`);
   assert(directed.report.qualityScore >= 80, `expected strong quality score, got ${directed.report.qualityScore}`);
+  assert(directed.report.captionNarration.directorId === "comic_caption_narration_v2", "premium report should include V2 caption/narration director");
   assert(directed.short.captionStyleId === "sports_hype", "expected sports_hype captions");
   assert(directed.short.audioMasteringPresetId === "viral_fast_cut", "expected viral mastering");
   assert(directed.short.musicPresetId === "viral_fast_cut", "expected viral music");
   assert(directed.short.estimatedDurationSeconds < baseShort.estimatedDurationSeconds, "premium direction should tighten duration");
   assert(directed.short.scenes.every((scene) => scene.durationSeconds <= 2.2), "scenes should be fast-cut ready");
   assert(directed.short.scenes.every((scene) => scene.caption === scene.caption.toUpperCase()), "captions should be impact uppercase");
+  assert(directed.short.scenes.every((scene) => scene.caption.includes("/") || scene.caption.split(/\s+/).length <= 5), "captions should be cue-ready and compact");
   assert(directed.report.sceneDirections.some((scene) => scene.sfxCue !== "none"), "expected sfx cues");
 
   const payload = buildComicShortProjectBridgePayload({
@@ -127,10 +133,13 @@ async function main() {
     baseDuration: baseShort.estimatedDurationSeconds,
     directedDuration: directed.short.estimatedDurationSeconds,
     qualityScore: directed.report.qualityScore,
+    captionNarrationQuality: directed.report.captionNarration.averageCaptionQualityScore,
+    captionCueCount: directed.report.captionNarration.captionCueCount,
     sceneCount: directed.short.scenes.length,
     firstScene: {
       narration: directed.short.scenes[0].narration,
       caption: directed.short.scenes[0].caption,
+      captionCues: directed.report.captionNarration.scenes[0].captionCues,
       duration: directed.short.scenes[0].durationSeconds,
       sfxCue: directed.report.sceneDirections[0].sfxCue,
       zoomPreset: directed.report.sceneDirections[0].zoomPreset
