@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from "node:path";
+﻿import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -140,6 +140,9 @@ async function main() {
   assert(report.characterMap.some((entry) => entry.name === "deadpool"), "expected character map to include deadpool");
   assert(report.topOpportunities[0].panelIds.length > 0, "top opportunity should include panels");
   assert(report.candidateFirst && report.requiresManualApproval, "expected candidate-first approval gate");
+  assert(report.pageSummaries.length === pages.length, "expected page-by-page summaries");
+  assert(report.issueStoryDigest.estimatedShortsAvailable > 0, "expected issue digest to estimate available shorts");
+  assert(report.issueStoryDigest.recommendedProductionOrder.length > 0, "expected production order");
 
   console.log(JSON.stringify({
     status: "completed",
@@ -148,6 +151,10 @@ async function main() {
     topTitle: report.topOpportunities[0].title,
     topScore: report.topOpportunities[0].score,
     topPanels: report.topOpportunities[0].panelIds,
+    estimatedShortsAvailable: report.issueStoryDigest.estimatedShortsAvailable,
+    bestPages: report.issueStoryDigest.bestPages.slice(0, 5),
+    recommendedProductionOrder: report.issueStoryDigest.recommendedProductionOrder.slice(0, 5),
+    firstPageSummary: report.pageSummaries[0],
     candidateFirst: report.candidateFirst
   }, null, 2));
 }
@@ -156,3 +163,4 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+

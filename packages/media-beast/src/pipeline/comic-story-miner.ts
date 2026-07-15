@@ -1,4 +1,4 @@
-import { basename } from "node:path";
+﻿import { basename } from "node:path";
 import {
   extractLocalPanelEntityIds,
   extractLocalPanelThemeIds,
@@ -37,6 +37,43 @@ export type ComicStoryMinerPanelRef = {
   localDialogue: string[];
   localNarrationBoxes: string[];
   soundEffects: string[];
+};
+
+export type ComicPageStorySummary = {
+  pageNumber: number;
+  pageType: LocalComicPanelIndex["pages"][number]["pageType"];
+  panelCount: number;
+  validPanelCount: number;
+  storyFunctions: string[];
+  dominantCharacters: string[];
+  dominantThemes: string[];
+  dialogueLineCount: number;
+  narrationBoxCount: number;
+  soundEffectCount: number;
+  usableTextSamples: string[];
+  editorialRole: "cover" | "setup" | "context" | "action" | "climax" | "reveal" | "transition" | "non_narrative" | "unknown";
+  shortPotentialScore: number;
+  shortIdeas: Array<{
+    category: ComicShortOpportunityCategory;
+    title: string;
+    reason: string;
+  }>;
+  warnings: string[];
+};
+
+export type ComicIssueStoryDigest = {
+  pageCount: number;
+  narrativePageCount: number;
+  bestPages: number[];
+  strongestCharacters: string[];
+  strongestThemes: string[];
+  actionPages: number[];
+  dialoguePages: number[];
+  climaxPages: number[];
+  revealPages: number[];
+  estimatedShortsAvailable: number;
+  recommendedProductionOrder: number[];
+  warnings: string[];
 };
 
 export type ComicShortOpportunity = {
@@ -86,6 +123,8 @@ export type ComicStoryMinerReport = {
     pages: number[];
   }>;
   opportunityCounts: Record<ComicShortOpportunityCategory, number>;
+  pageSummaries: ComicPageStorySummary[];
+  issueStoryDigest: ComicIssueStoryDigest;
   opportunities: ComicShortOpportunity[];
   topOpportunities: ComicShortOpportunity[];
   warnings: string[];
@@ -525,6 +564,142 @@ function makeOpportunity(input: {
   };
 }
 
+function countValues(values: string[]): Array<[string, number]> {
+  const counts = new Map<string, number>();
+  for (const value of values.filter(Boolean)) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()].sort((left, right) => right[1] - left[1]);
+}
+
+function dominantFunctions(panels: LocalComicPanelEvidence[]): string[] {
+  return countValues(panels.map((panel) => panel.storyFunction)).map(([value]) => value).slice(0, 5);
+}
+
+function inferPageEditorialRole(input: {
+  pageType: LocalComicPanelIndex["pages"][number]["pageType"];
+  panels: LocalComicPanelEvidence[];
+}): ComicPageStorySummary["editorialRole"] {
+  if (["cover", "credits", "advertisement", "catalog", "qr_promo", "editorial", "letters"].includes(input.pageType)) {
+    return input.pageType === "cover" ? "cover" : "non_narrative";
+  }
+  const functions = input.panels.map((panel) => panel.storyFunction);
+  if (functions.some((fn) => ["climax", "action"].includes(fn))) return "climax";
+  if (functions.includes("reveal")) return "reveal";
+  if (functions.includes("dialogue")) return "context";
+  if (functions.includes("setup")) return "setup";
+  if (functions.includes("reaction")) return "transition";
+  return functions.length > 0 ? "context" : "unknown";
+}
+
+function scorePageShortPotential(input: {
+  pageType: LocalComicPanelIndex["pages"][number]["pageType"];
+  panels: LocalComicPanelEvidence[];
+}): { score: number; warnings: string[] } {
+  const warnings: string[] = [];
+  if (["advertisement", "catalog", "qr_promo", "credits", "editorial", "letters"].includes(input.pageType)) {
+    return { score: 0, warnings: [`non_narrative_page:${input.pageType}`] };
+  }
+  const validPanels = input.panels.filter((panel) => panel.valid && !panel.isWholePageFallback);
+  if (validPanels.length === 0) return { score: 0, warnings: ["no_valid_panels"] };
+  const functions = validPanels.map((panel) => panel.storyFunction);
+  const avgVisual = validPanels.reduce((sum, panel) => sum + panel.quality.visualQualityScore, 0) / validPanels.length;
+  const avgCrop = validPanels.reduce((sum, panel) => sum + panel.quality.cropability916Score, 0) / validPanels.length;
+  const textCount = validPanels.reduce((sum, panel) => sum + panel.localEvidence.dialogue.length + panel.localEvidence.narrationBoxes.length, 0);
+  let score = avgVisual * 0.28 + avgCrop * 0.22 + Math.min(24, validPanels.length * 4) + Math.min(14, textCount * 3);
+  if (functions.some((fn) => ["climax", "action", "reveal", "transformation"].includes(fn))) score += 18;
+  if (validPanels.some((panel) => panel.evidenceTier === "direct_evidence")) score += 10;
+  if (validPanels.some((panel) => panel.isWholePageFallback)) {
+    score -= 18;
+    warnings.push("whole_page_fallback_present");
+  }
+  return { score: clampScore(score), warnings };
+}
+
+function buildPageShortIdeas(input: {
+  pageNumber: number;
+  panels: LocalComicPanelEvidence[];
+  characters: string[];
+  themes: string[];
+}): ComicPageStorySummary["shortIdeas"] {
+  const categories = detectCategories({ panels: input.panels, sequence: null }).slice(0, 3);
+  return categories.map((category) => ({
+    category,
+    title: buildOpportunityTitle({
+      category,
+      characters: input.characters,
+      themes: input.themes,
+      pages: [input.pageNumber],
+      panels: input.panels
+    }),
+    reason: `page_${input.pageNumber}:${category}:${dominantValue(input.panels.map((panel) => panel.storyFunction), "story")}`
+  }));
+}
+
+function buildComicPageStorySummaries(index: LocalComicPanelIndex): ComicPageStorySummary[] {
+  return index.pages.map((page) => {
+    const panels = page.panels.filter((panel) => panel.valid);
+    const validPanels = panels.filter((panel) => !panel.isWholePageFallback);
+    const characters = dominantEntitiesForPanels(validPanels).slice(0, 5);
+    const themes = dominantThemesForPanels(validPanels).slice(0, 5);
+    const textSamples = unique(
+      validPanels.flatMap((panel) => [
+        ...panel.localEvidence.narrationBoxes,
+        ...panel.localEvidence.dialogue,
+        ...panel.localEvidence.soundEffects
+      ])
+    ).slice(0, 8);
+    const potential = scorePageShortPotential({ pageType: page.pageType, panels });
+    return {
+      pageNumber: page.pageNumber,
+      pageType: page.pageType,
+      panelCount: page.panels.length,
+      validPanelCount: validPanels.length,
+      storyFunctions: dominantFunctions(validPanels),
+      dominantCharacters: characters,
+      dominantThemes: themes,
+      dialogueLineCount: validPanels.reduce((sum, panel) => sum + panel.localEvidence.dialogue.length, 0),
+      narrationBoxCount: validPanels.reduce((sum, panel) => sum + panel.localEvidence.narrationBoxes.length, 0),
+      soundEffectCount: validPanels.reduce((sum, panel) => sum + panel.localEvidence.soundEffects.length, 0),
+      usableTextSamples: textSamples,
+      editorialRole: inferPageEditorialRole({ pageType: page.pageType, panels: validPanels }),
+      shortPotentialScore: potential.score,
+      shortIdeas: buildPageShortIdeas({ pageNumber: page.pageNumber, panels: validPanels, characters, themes }),
+      warnings: potential.warnings
+    };
+  });
+}
+
+function buildIssueStoryDigest(input: {
+  pageSummaries: ComicPageStorySummary[];
+  panels: LocalComicPanelEvidence[];
+}): ComicIssueStoryDigest {
+  const narrativePages = input.pageSummaries.filter((page) => page.editorialRole !== "non_narrative" && page.editorialRole !== "cover");
+  const bestPages = [...input.pageSummaries]
+    .filter((page) => page.shortPotentialScore >= 45)
+    .sort((left, right) => right.shortPotentialScore - left.shortPotentialScore)
+    .map((page) => page.pageNumber);
+  const actionPages = input.pageSummaries.filter((page) => ["action", "climax"].includes(page.editorialRole)).map((page) => page.pageNumber);
+  const dialoguePages = input.pageSummaries.filter((page) => page.dialogueLineCount + page.narrationBoxCount > 0).map((page) => page.pageNumber);
+  const revealPages = input.pageSummaries.filter((page) => page.editorialRole === "reveal").map((page) => page.pageNumber);
+  const climaxPages = input.pageSummaries.filter((page) => page.editorialRole === "climax").map((page) => page.pageNumber);
+  const estimatedShortsAvailable = Math.max(0, Math.min(30, Math.round(bestPages.length * 0.75 + climaxPages.length * 0.5 + revealPages.length * 0.5)));
+  const warnings: string[] = [];
+  if (bestPages.length < 5) warnings.push("low_page_short_potential_review_needed");
+  if (dialoguePages.length === 0) warnings.push("no_reliable_text_pages_detected");
+  return {
+    pageCount: input.pageSummaries.length,
+    narrativePageCount: narrativePages.length,
+    bestPages: bestPages.slice(0, 20),
+    strongestCharacters: dominantEntitiesForPanels(input.panels).slice(0, 10),
+    strongestThemes: dominantThemesForPanels(input.panels).slice(0, 10),
+    actionPages: actionPages.slice(0, 20),
+    dialoguePages: dialoguePages.slice(0, 20),
+    climaxPages: climaxPages.slice(0, 20),
+    revealPages: revealPages.slice(0, 20),
+    estimatedShortsAvailable,
+    recommendedProductionOrder: unique([...bestPages.slice(0, 12), ...climaxPages.slice(0, 6), ...revealPages.slice(0, 6)]).slice(0, 20),
+    warnings
+  };
+}
 function buildCharacterMap(panels: LocalComicPanelEvidence[]): ComicStoryMinerReport["characterMap"] {
   const map = new Map<string, { panelCount: number; pages: Set<number> }>();
   for (const panel of panels) {
@@ -590,6 +765,9 @@ export function mineComicStoryVault(input: {
     }
   }
 
+  const pageSummaries = buildComicPageStorySummaries(input.index);
+  const issueStoryDigest = buildIssueStoryDigest({ pageSummaries, panels: validPanels });
+
   const minScore = input.minScore ?? 60;
   const ranked = opportunities
     .filter((opportunity) => opportunity.score >= minScore)
@@ -623,6 +801,8 @@ export function mineComicStoryVault(input: {
     characterMap: buildCharacterMap(validPanels).slice(0, 30),
     themeMap: buildThemeMap(validPanels).slice(0, 30),
     opportunityCounts: counts,
+    pageSummaries,
+    issueStoryDigest,
     opportunities: selected,
     topOpportunities: selected.slice(0, 12),
     warnings,
@@ -653,6 +833,21 @@ export async function mineComicStoryVaultFromDirectory(input: {
       opportunityCounts: Object.fromEntries(
         (Object.keys(CATEGORY_LABELS) as ComicShortOpportunityCategory[]).map((category) => [category, 0])
       ) as Record<ComicShortOpportunityCategory, number>,
+      pageSummaries: [],
+      issueStoryDigest: {
+        pageCount: 0,
+        narrativePageCount: 0,
+        bestPages: [],
+        strongestCharacters: [],
+        strongestThemes: [],
+        actionPages: [],
+        dialoguePages: [],
+        climaxPages: [],
+        revealPages: [],
+        estimatedShortsAvailable: 0,
+        recommendedProductionOrder: [],
+        warnings: ["local_comic_panel_index_missing_or_outdated"]
+      },
       opportunities: [],
       topOpportunities: [],
       warnings: ["local_comic_panel_index_missing_or_outdated"],
@@ -667,3 +862,5 @@ export async function mineComicStoryVaultFromDirectory(input: {
     ...(input.minScore !== undefined ? { minScore: input.minScore } : {})
   });
 }
+
+
