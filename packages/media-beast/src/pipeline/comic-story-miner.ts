@@ -126,12 +126,167 @@ function dominantValue(values: string[], fallback = "desconhecido"): string {
   return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? fallback;
 }
 
+const DISPLAY_ENTITY_NAMES: Record<string, string> = {
+  justice_league: "Liga da Justica",
+  godzilla: "Godzilla",
+  kong: "Kong",
+  superman: "Superman",
+  batman: "Batman",
+  wonder_woman: "Mulher-Maravilha",
+  aquaman: "Aquaman",
+  flash: "Flash",
+  green_lantern: "Lanterna Verde",
+  doctor_strange: "Doutor Estranho",
+  spider_man: "Homem-Aranha",
+  "spider-man": "Homem-Aranha",
+  venom: "Venom",
+  symbiote: "Simbionte",
+  deadpool: "Deadpool"
+};
+
+const THEME_LABELS: Record<string, string> = {
+  kaiju_crossover: "crossover de kaijus",
+  hero_team: "equipe de herois",
+  monster_battle: "batalha de monstros",
+  city_destruction: "destruicao urbana",
+  titan_standoff: "confronto de titas",
+  multiverse_crisis: "crise de mundos",
+  partnership: "alianca improvavel",
+  symbiosis: "simbiose",
+  mystical_speech: "misterio sobrenatural",
+  black_suit: "traje sombrio"
+};
+
+function normalizeContextText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ");
+}
+
+function panelContextText(panel: LocalComicPanelEvidence): string {
+  return [
+    panel.parentContext.comicTitle ?? "",
+    panel.parentContext.issueTitle ?? "",
+    panel.parentContext.pageTitle ?? "",
+    ...panel.parentContext.parentTags,
+    panel.sourcePagePath,
+    panel.panelImagePath,
+    ...panel.localEvidence.detectedText,
+    ...panel.localEvidence.dialogue,
+    ...panel.localEvidence.narrationBoxes,
+    ...panel.localEvidence.soundEffects,
+    ...panel.localEvidence.visualThemes
+  ].join(" ");
+}
+
+function inferEntitiesFromComicContext(text: string): string[] {
+  const normalized = normalizeContextText(text);
+  const entities: string[] = [];
+  if (/liga da justica|justice league|superman|batman|wonder woman|mulher maravilha|aquaman|flash|lanterna verde|green lantern/.test(normalized)) {
+    entities.push("justice_league");
+  }
+  if (/godzilla/.test(normalized)) entities.push("godzilla");
+  if (/\bkong\b|king kong/.test(normalized)) entities.push("kong");
+  if (/superman/.test(normalized)) entities.push("superman");
+  if (/batman/.test(normalized)) entities.push("batman");
+  if (/wonder woman|mulher maravilha/.test(normalized)) entities.push("wonder_woman");
+  if (/aquaman/.test(normalized)) entities.push("aquaman");
+  if (/\bflash\b/.test(normalized)) entities.push("flash");
+  if (/lanterna verde|green lantern/.test(normalized)) entities.push("green_lantern");
+  if (/venom/.test(normalized)) entities.push("venom");
+  if (/homem aranha|spider man|spider-man/.test(normalized)) entities.push("spider_man");
+  if (/deadpool/.test(normalized)) entities.push("deadpool");
+  return unique(entities);
+}
+
+function inferThemesFromComicContext(text: string): string[] {
+  const normalized = normalizeContextText(text);
+  const themes: string[] = [];
+  if (/godzilla|\bkong\b|kaiju|titan/.test(normalized)) themes.push("kaiju_crossover");
+  if (/liga da justica|justice league|superman|batman|wonder woman|aquaman|flash/.test(normalized)) themes.push("hero_team");
+  if (/godzilla.*kong|kong.*godzilla|monster|monstro|kaiju/.test(normalized)) themes.push("monster_battle");
+  if (/cidade|city|destruicao|destruction|metropolis|gotham/.test(normalized)) themes.push("city_destruction");
+  if (/versus| vs |confronto|battle|batalha/.test(normalized)) themes.push("titan_standoff");
+  if (/crise|portal|mundo|multiverse|multiverso/.test(normalized)) themes.push("multiverse_crisis");
+  return unique(themes);
+}
+
+function displayEntityName(value: string): string {
+  return DISPLAY_ENTITY_NAMES[value] ?? value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function displayThemeName(value: string): string {
+  return THEME_LABELS[value] ?? value.replace(/_/g, " ");
+}
+
+function dominantEntitiesForPanels(panels: LocalComicPanelEvidence[]): string[] {
+  const counts = new Map<string, number>();
+  for (const panel of panels) {
+    for (const character of panelCharacters(panel)) {
+      counts.set(character, (counts.get(character) ?? 0) + 3);
+    }
+    for (const inferred of inferEntitiesFromComicContext(panelContextText(panel))) {
+      counts.set(inferred, (counts.get(inferred) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .map(([entity]) => entity);
+}
+
+function dominantThemesForPanels(panels: LocalComicPanelEvidence[]): string[] {
+  const counts = new Map<string, number>();
+  for (const panel of panels) {
+    for (const theme of panelThemes(panel)) {
+      counts.set(theme, (counts.get(theme) ?? 0) + 3);
+    }
+    for (const inferred of inferThemesFromComicContext(panelContextText(panel))) {
+      counts.set(inferred, (counts.get(inferred) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .map(([theme]) => theme);
+}
+
+function describePages(pages: number[]): string {
+  if (pages.length === 0) return "nas paginas selecionadas";
+  if (pages.length === 1) return `na pagina ${pages[0]}`;
+  const first = pages[0]!;
+  const last = pages[pages.length - 1]!;
+  return pages.length > 4 ? `entre as paginas ${first} e ${last}` : `nas paginas ${pages.join(", ")}`;
+}
+
+function buildOpportunityTitle(input: {
+  category: ComicShortOpportunityCategory;
+  characters: string[];
+  themes: string[];
+  pages: number[];
+  panels: LocalComicPanelEvidence[];
+}): string {
+  const label = CATEGORY_LABELS[input.category];
+  const displayCharacters = input.characters.slice(0, 3).map(displayEntityName);
+  const theme = displayThemeName(input.themes[0] ?? dominantValue(input.panels.flatMap(panelThemes), "sequencia visual"));
+  if (displayCharacters.length >= 2) return `${label}: ${displayCharacters[0]} contra ${displayCharacters[1]}`;
+  if (displayCharacters.length === 1 && input.category === "fight") return `${label}: ${displayCharacters[0]} no confronto principal`;
+  if (displayCharacters.length === 1) return `${label}: ${displayCharacters[0]} em ${theme}`;
+  return `${label}: ${theme} ${describePages(input.pages)}`;
+}
+
 function panelCharacters(panel: LocalComicPanelEvidence): string[] {
-  return extractLocalPanelEntityIds(panel).map(normalizeBeatEntityName);
+  return unique([
+    ...extractLocalPanelEntityIds(panel).map(normalizeBeatEntityName),
+    ...inferEntitiesFromComicContext(panelContextText(panel))
+  ]);
 }
 
 function panelThemes(panel: LocalComicPanelEvidence): string[] {
-  return extractLocalPanelThemeIds(panel);
+  return unique([
+    ...extractLocalPanelThemeIds(panel),
+    ...inferThemesFromComicContext(panelContextText(panel))
+  ]);
 }
 
 function panelActions(panel: LocalComicPanelEvidence): string[] {
@@ -283,8 +438,8 @@ function buildNarrationDraft(input: {
   themes: string[];
   panels: LocalComicPanelEvidence[];
 }): string {
-  const mainCharacter = input.characters[0] ?? "essa cena";
-  const secondCharacter = input.characters[1];
+  const mainCharacter = input.characters[0] ? displayEntityName(input.characters[0]) : "essa cena";
+  const secondCharacter = input.characters[1] ? displayEntityName(input.characters[1]) : undefined;
   const localLine = compactText(
     input.panels.flatMap((panel) => [...panel.localEvidence.dialogue, ...panel.localEvidence.narrationBoxes]),
     "o painel entrega o contexto sem precisar inventar nada"
@@ -333,20 +488,26 @@ function makeOpportunity(input: {
   sequence: ComicPanelSequence | null;
   index: number;
 }): ComicShortOpportunity {
-  const characters = unique(input.panels.flatMap(panelCharacters));
-  const themes = unique(input.panels.flatMap(panelThemes));
+  const characters = unique(dominantEntitiesForPanels(input.panels));
+  const themes = unique(dominantThemesForPanels(input.panels));
   const scoring = scoreOpportunity(input);
   const label = CATEGORY_LABELS[input.category];
-  const mainCharacter = characters[0] ?? "a HQ";
   const pages = unique(input.panels.map((panel) => panel.pageNumber)).sort((left, right) => left - right);
+  const title = buildOpportunityTitle({
+    category: input.category,
+    characters,
+    themes,
+    pages,
+    panels: input.panels
+  });
   const style = input.category === "fight" ? "viral_fast_cut" : input.category === "reveal" ? "horror_tension" : "comic_drama";
 
   return {
     id: `comic-opportunity-${input.category}-${input.index + 1}`,
-    title: `${label}: ${mainCharacter}${characters[1] ? ` + ${characters[1]}` : ""}`,
+    title,
     category: input.category,
-    hook: `A HQ tem um short de ${label} pronto nas paginas ${pages.join(", ")}.`,
-    angle: `${label} a partir de ${dominantValue(themes, "sequencia visual")}`,
+    hook: `${title} ja tem estrutura de short ${describePages(pages)}.`,
+    angle: `${label} a partir de ${displayThemeName(dominantValue(themes, "sequencia visual"))}`,
     score: scoring.score,
     confidence: clampScore(scoring.score - scoring.warnings.length * 5),
     estimatedDurationSeconds: Math.max(18, Math.min(45, input.panels.length * 5)),
