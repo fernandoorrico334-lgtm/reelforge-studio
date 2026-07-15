@@ -162,6 +162,13 @@ export default async function HomePage() {
           accent="#ff8a7a"
         />
         <DashboardCard
+          href="/comic-studio"
+          title="Comic Studio"
+          value="HQ"
+          description="Leia HQs locais indexadas, descubra shorts e crie projetos reais para revisao e producao."
+          accent="#ffcf70"
+        />
+        <DashboardCard
           href="/projects"
           title="One-Click Production"
           value="Ready"
