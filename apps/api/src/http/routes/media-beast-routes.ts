@@ -9,6 +9,8 @@ import {
   listMediaBeastNichePresets,
   mediaBeastNiches,
   mediaBeastProviderIds,
+  buildComicIngestionPlan,
+  buildComicShortsBatchFactoryPlan,
   mineComicStoryVaultFromDirectory,
   remixTargetStyles,
   rebuildRemixNarrationWithResearch,
@@ -401,6 +403,68 @@ export async function handleMediaBeastRoute(
       return true;
     }
 
+
+
+    if (pathname === "/media-beast/comic-ingestion/plan") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const sourcePath = readString(payload.sourcePath, "sourcePath");
+      const recommendedAssetDirectory = readOptionalString(payload.recommendedAssetDirectory);
+      sendJson(response, 200, {
+        ...buildComicIngestionPlan({
+          sourcePath,
+          ...(recommendedAssetDirectory ? { recommendedAssetDirectory } : {})
+        }),
+        note: "Planning only. Real files remain local and no import/render happens without approval."
+      });
+      return true;
+    }
+
+    if (pathname === "/media-beast/comic-shorts-factory/plan") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const assetDirectory = readString(payload.assetDirectory, "assetDirectory");
+      const targetCount = Math.min(readPositiveInteger(payload.targetCount, 20), 50);
+      const minScoreRaw = payload.minScore === undefined || payload.minScore === null ? 65 : Number(payload.minScore);
+      if (!Number.isFinite(minScoreRaw) || minScoreRaw < 0 || minScoreRaw > 100) {
+        throw new ValidationError("minScore must be between 0 and 100.");
+      }
+
+      const minerReport = await mineComicStoryVaultFromDirectory({
+        assetDirectory,
+        maxOpportunities: Math.max(targetCount * 3, 50),
+        minScore: Math.max(40, minScoreRaw - 15)
+      });
+      const factoryPlan = buildComicShortsBatchFactoryPlan({
+        minerReport,
+        targetCount,
+        minScore: minScoreRaw
+      });
+
+      sendJson(response, 200, {
+        ...factoryPlan,
+        minerSummary: {
+          opportunityCount: minerReport.opportunities.length,
+          topOpportunityCount: minerReport.topOpportunities.length,
+          warnings: minerReport.warnings
+        },
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoRenderCount: 0,
+          note: "Factory returns production-ready plans for review. Rendering remains blocked until manual approval."
+        }
+      });
+      return true;
+    }
 
     if (pathname === "/media-beast/comic-story-mine") {
       if (request.method !== "POST") {
