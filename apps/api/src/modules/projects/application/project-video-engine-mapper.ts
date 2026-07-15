@@ -69,6 +69,7 @@ function mapScene(scene: ProjectScene): BlueprintSceneInput {
     captionPosition: scene.captionPosition,
     captionEmphasisWords: [...scene.captionEmphasisWords],
     energyLevel: scene.energyLevel,
+    visualRecipe: scene.visualRecipe,
     editorialMicroclips: []
   };
 }

@@ -157,6 +157,7 @@ export interface BlueprintSceneInput {
   captionEmphasisWords: string[];
   energyLevel: number | null;
   editorialMicroclips?: BlueprintEditorialMicroclipInput[];
+  visualRecipe?: string | null;
 }
 
 export interface BlueprintProjectInput {
@@ -240,6 +241,39 @@ export interface ProjectCaptionAnalysis {
   scenes: ProjectCaptionAnalysisScene[];
 }
 
+
+export interface RenderBlueprintCaptionCue {
+  cueIndex: number;
+  startSeconds: number;
+  endSeconds: number;
+  text: string;
+  highlightedWords: string[];
+  layout: string | null;
+  animation: string | null;
+  sfxSuggestion: string | null;
+  readingImpactScore: number | null;
+  readingWarnings: string[];
+}
+
+export interface RenderBlueprintSmartCropDirective {
+  sceneOrder: number;
+  panelId: string;
+  pageNumber: number | null;
+  focus: string;
+  normalizedCrop: { x: number; y: number; width: number; height: number };
+  safeCaptionZone: string;
+  cameraMove: string;
+  startScale: number;
+  endScale: number;
+  anchorPoint: { x: number; y: number };
+  holdSeconds: number;
+  motionIntensity: number;
+  textSafety: string;
+  renderInstruction: string;
+  reasons: string[];
+  confidenceScore: number;
+}
+
 export interface RenderBlueprintScene {
   sceneId: string;
   order: number;
@@ -288,6 +322,9 @@ export interface RenderBlueprintScene {
   storyReason: string;
   readingSpeedStatus: CaptionQualityAnalysis["readingSpeedStatus"];
   editorialMicroclips: RenderBlueprintEditorialMicroclip[];
+  smartCropDirective: RenderBlueprintSmartCropDirective | null;
+  captionCues: RenderBlueprintCaptionCue[];
+  premiumVisualRecipe: Record<string, unknown> | null;
   warnings: string[];
   ready: boolean;
 }
@@ -368,6 +405,88 @@ export interface RenderBlueprint {
 
 function roundToSingleDecimal(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function numberFromRecord(record: Record<string, unknown>, key: string, fallback: number): number {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function stringFromRecord(record: Record<string, unknown>, key: string, fallback = ""): string {
+  const value = record[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+function stringArrayFromRecord(record: Record<string, unknown>, key: string): string[] {
+  const value = record[key];
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function parseSceneVisualRecipe(scene: BlueprintSceneInput): Record<string, unknown> | null {
+  if (!scene.visualRecipe?.trim()) return null;
+  try {
+    const parsed = JSON.parse(scene.visualRecipe) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseSmartCropDirective(recipe: Record<string, unknown> | null): RenderBlueprintSmartCropDirective | null {
+  const raw = recipe?.smartCropDirective;
+  if (!isRecord(raw)) return null;
+  const crop = isRecord(raw.normalizedCrop) ? raw.normalizedCrop : {};
+  const anchor = isRecord(raw.anchorPoint) ? raw.anchorPoint : {};
+  return {
+    sceneOrder: numberFromRecord(raw, "sceneOrder", 0),
+    panelId: stringFromRecord(raw, "panelId", ""),
+    pageNumber: typeof raw.pageNumber === "number" ? raw.pageNumber : null,
+    focus: stringFromRecord(raw, "focus", "impact_detail"),
+    normalizedCrop: {
+      x: numberFromRecord(crop, "x", 0),
+      y: numberFromRecord(crop, "y", 0),
+      width: numberFromRecord(crop, "width", 1),
+      height: numberFromRecord(crop, "height", 1)
+    },
+    safeCaptionZone: stringFromRecord(raw, "safeCaptionZone", "lower-third"),
+    cameraMove: stringFromRecord(raw, "cameraMove", "slow_push_center"),
+    startScale: numberFromRecord(raw, "startScale", 1),
+    endScale: numberFromRecord(raw, "endScale", 1),
+    anchorPoint: {
+      x: numberFromRecord(anchor, "x", 0.5),
+      y: numberFromRecord(anchor, "y", 0.5)
+    },
+    holdSeconds: numberFromRecord(raw, "holdSeconds", 0.3),
+    motionIntensity: numberFromRecord(raw, "motionIntensity", 6),
+    textSafety: stringFromRecord(raw, "textSafety", "caption_safe"),
+    renderInstruction: stringFromRecord(raw, "renderInstruction", ""),
+    reasons: stringArrayFromRecord(raw, "reasons"),
+    confidenceScore: numberFromRecord(raw, "confidenceScore", 0)
+  };
+}
+
+function parseCaptionCues(recipe: Record<string, unknown> | null): RenderBlueprintCaptionCue[] {
+  const raw = recipe?.premiumDirection;
+  const nestedCues = isRecord(raw) ? raw.captionCues : undefined;
+  const sceneCues = Array.isArray(nestedCues) ? nestedCues : recipe?.captionCues;
+  if (!Array.isArray(sceneCues)) return [];
+  return sceneCues.filter(isRecord).map((cue, index) => ({
+    cueIndex: numberFromRecord(cue, "cueIndex", index + 1),
+    startSeconds: numberFromRecord(cue, "startSeconds", 0),
+    endSeconds: numberFromRecord(cue, "endSeconds", 0),
+    text: stringFromRecord(cue, "text", ""),
+    highlightedWords: stringArrayFromRecord(cue, "highlightedWords"),
+    layout: typeof cue.layout === "string" ? cue.layout : null,
+    animation: typeof cue.animation === "string" ? cue.animation : null,
+    sfxSuggestion: typeof cue.sfxSuggestion === "string" ? cue.sfxSuggestion : null,
+    readingImpactScore: typeof cue.readingImpactScore === "number" ? cue.readingImpactScore : null,
+    readingWarnings: stringArrayFromRecord(cue, "readingWarnings")
+  })).filter((cue) => cue.text.trim().length > 0);
 }
 
 function normalizeSceneOrder(left: BlueprintSceneInput, right: BlueprintSceneInput) {
@@ -1116,6 +1235,40 @@ export function buildProjectCaptionAnalysis(
   };
 }
 
+
+function buildCaptionExportScenesFromBlueprintScenes(scenes: RenderBlueprintScene[]): Array<{
+  order: number;
+  captionText: string | null;
+  duration: number | null;
+  captionStyle: string | null;
+}> {
+  const exportScenes: Array<{ order: number; captionText: string | null; duration: number | null; captionStyle: string | null }> = [];
+  for (const scene of [...scenes].sort((left, right) => left.order - right.order)) {
+    if (scene.captionCues.length === 0) {
+      exportScenes.push({
+        order: scene.order,
+        captionText: scene.captionText,
+        duration: scene.duration,
+        captionStyle: scene.captionStyle.style.id
+      });
+      continue;
+    }
+    const sceneDuration = scene.duration ?? scene.captionCues.at(-1)?.endSeconds ?? null;
+    const cueTotal = Math.max(...scene.captionCues.map((cue) => cue.endSeconds), sceneDuration ?? 0, 0.1);
+    for (const cue of scene.captionCues) {
+      const cueDuration = Math.max(0.35, cue.endSeconds - cue.startSeconds);
+      const scaledDuration = sceneDuration ? Math.max(0.35, (cueDuration / cueTotal) * sceneDuration) : cueDuration;
+      exportScenes.push({
+        order: scene.order + cue.cueIndex / 100,
+        captionText: cue.text,
+        duration: scaledDuration,
+        captionStyle: scene.captionStyle.style.id
+      });
+    }
+  }
+  return exportScenes;
+}
+
 export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlueprint {
   const orderedScenes = [...project.scenes].sort(normalizeSceneOrder);
   const resolvedTemplate = resolveProjectTemplate(project);
@@ -1145,6 +1298,9 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     const effectiveVisual = resolveEffectiveAsset(scene);
     const effectiveNarration = resolveEffectiveNarration(scene, project);
     const editorialMicroclips = resolveSceneEditorialMicroclips(scene);
+    const premiumVisualRecipe = parseSceneVisualRecipe(scene);
+    const smartCropDirective = parseSmartCropDirective(premiumVisualRecipe);
+    const captionCues = parseCaptionCues(premiumVisualRecipe);
     const warnings: string[] = [];
 
     if (!effectiveVisual.effectiveAssetId) {
@@ -1199,6 +1355,9 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
         role?.reason ?? "Fallback local aplicado por ausencia de papel narrativo.",
       readingSpeedStatus: captionScene?.quality.readingSpeedStatus ?? "slow",
       editorialMicroclips,
+      smartCropDirective,
+      captionCues,
+      premiumVisualRecipe,
       warnings: [...new Set(warnings)],
       ready: warnings.length === 0
     };
@@ -1277,26 +1436,12 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     subtitleExports: {
       srt: generateSrt({
         title: project.title,
-        scenes: orderedScenes.map((scene) => ({
-          order: scene.order,
-          captionText: scene.captionText,
-          duration: scene.duration,
-          captionStyle:
-            captionAnalysis.scenes.find((entry) => entry.sceneId === scene.id)?.resolvedStyle.style.id ??
-            project.defaultCaptionStyle
-        }))
+        scenes: buildCaptionExportScenesFromBlueprintScenes(scenes)
       }),
       ass: generateAssSubtitle(
         {
           title: project.title,
-          scenes: orderedScenes.map((scene) => ({
-            order: scene.order,
-            captionText: scene.captionText,
-            duration: scene.duration,
-            captionStyle:
-              captionAnalysis.scenes.find((entry) => entry.sceneId === scene.id)?.resolvedStyle.style.id ??
-              project.defaultCaptionStyle
-          }))
+          scenes: buildCaptionExportScenesFromBlueprintScenes(scenes)
         },
         defaultCaptionStyle
       )

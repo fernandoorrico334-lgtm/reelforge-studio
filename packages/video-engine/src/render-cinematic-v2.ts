@@ -334,6 +334,34 @@ function toJobRelativePath(jobRoot: string, absolutePath: string) {
   return toForwardSlashes(relative(jobRoot, absolutePath));
 }
 
+
+function buildSubtitleScenes(blueprint: RenderBlueprint) {
+  const subtitleScenes: Array<{ order: number; captionText: string | null; duration: number; captionStyle: string }> = [];
+  for (const scene of [...blueprint.scenes].sort((left, right) => left.order - right.order)) {
+    if (scene.captionCues.length === 0) {
+      subtitleScenes.push({
+        order: scene.order,
+        captionText: scene.captionText ?? scene.narrationText,
+        duration: normalizeSceneDuration(scene.duration),
+        captionStyle: scene.captionStyle.style.id
+      });
+      continue;
+    }
+    const sceneDuration = normalizeSceneDuration(scene.duration);
+    const cueTotal = Math.max(...scene.captionCues.map((cue) => cue.endSeconds), sceneDuration, 0.1);
+    for (const cue of scene.captionCues) {
+      const cueDuration = Math.max(0.35, cue.endSeconds - cue.startSeconds);
+      subtitleScenes.push({
+        order: scene.order + cue.cueIndex / 100,
+        captionText: cue.text,
+        duration: Math.max(0.35, (cueDuration / cueTotal) * sceneDuration),
+        captionStyle: scene.captionStyle.style.id
+      });
+    }
+  }
+  return subtitleScenes;
+}
+
 async function writeSubtitleArtifacts(
   blueprint: RenderBlueprint,
   srtPath: string,
@@ -347,12 +375,7 @@ async function writeSubtitleArtifacts(
     throw new Error("No default caption style is available for subtitle export.");
   }
 
-  const subtitleScenes = blueprint.scenes.map((scene) => ({
-    order: scene.order,
-    captionText: scene.captionText ?? scene.narrationText,
-    duration: normalizeSceneDuration(scene.duration),
-    captionStyle: scene.captionStyle.style.id
-  }));
+  const subtitleScenes = buildSubtitleScenes(blueprint);
 
   await writeFile(
     srtPath,
@@ -513,6 +536,16 @@ function buildColorFilters(plan: ReturnType<typeof resolveCinematicFilterPlan>["
   ];
 }
 
+function normalizedSmartCropFilter(scene: RenderBlueprintScene): string | null {
+  const crop = scene.smartCropDirective?.normalizedCrop;
+  if (!crop) return null;
+  const x = Math.max(0, Math.min(0.98, crop.x));
+  const y = Math.max(0, Math.min(0.98, crop.y));
+  const width = Math.max(0.1, Math.min(1 - x, crop.width));
+  const height = Math.max(0.1, Math.min(1 - y, crop.height));
+  return `crop=iw*${width.toFixed(4)}:ih*${height.toFixed(4)}:iw*${x.toFixed(4)}:ih*${y.toFixed(4)}`;
+}
+
 function buildVideoMotionCropFilter(
   scene: RenderBlueprintScene,
   driftX: number,
@@ -615,7 +648,9 @@ async function renderImageSegment(
     scene.order,
     scene.energyLevel
   );
+  const smartCrop = normalizedSmartCropFilter(scene);
   const filter = joinFilters([
+    smartCrop,
     `scale=${overscan.width}:${overscan.height}:force_original_aspect_ratio=increase`,
     `crop=${overscan.width}:${overscan.height}`,
     `zoompan=z='${zoomExpressions.zoomExpression}':x='${zoomExpressions.xExpression}':y='${zoomExpressions.yExpression}':d=${totalFrames}:s=1080x1920:fps=30`,
@@ -682,7 +717,9 @@ async function renderVideoSegment(
     renderQuality
   });
   const overscan = buildOverscanDimensions(plan.overscanScale);
+  const smartCrop = normalizedSmartCropFilter(scene);
   const filter = joinFilters([
+    smartCrop,
     `scale=${overscan.width}:${overscan.height}:force_original_aspect_ratio=increase`,
     buildVideoMotionCropFilter(
       scene,

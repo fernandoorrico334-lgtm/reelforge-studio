@@ -350,8 +350,20 @@ function getSceneDuration(scene: RenderBlueprintScene) {
   return 4;
 }
 
+function normalizedCropFilter(scene: RenderBlueprintScene): string | null {
+  const crop = scene.smartCropDirective?.normalizedCrop;
+  if (!crop) return null;
+  const x = Math.max(0, Math.min(0.98, crop.x));
+  const y = Math.max(0, Math.min(0.98, crop.y));
+  const width = Math.max(0.1, Math.min(1 - x, crop.width));
+  const height = Math.max(0.1, Math.min(1 - y, crop.height));
+  return `crop=iw*${width.toFixed(4)}:ih*${height.toFixed(4)}:iw*${x.toFixed(4)}:ih*${y.toFixed(4)}`;
+}
+
 function buildVisualFilter(scene: RenderBlueprintScene) {
+  const smartCrop = normalizedCropFilter(scene);
   const filters = [
+    ...(smartCrop ? [smartCrop] : []),
     "scale=1080:1920:force_original_aspect_ratio=increase",
     "crop=1080:1920",
     "setsar=1"
@@ -482,6 +494,34 @@ function buildMicroclipTextOverlayFilter(
   )}':fontcolor=white:fontsize=${fontSize}:x=(w-text_w)/2:y=${yPosition}:box=1:boxcolor=${boxOpacity}:boxborderw=${boxBorder}`;
 }
 
+
+function buildSubtitleScenes(blueprint: RenderBlueprint) {
+  const subtitleScenes: Array<{ order: number; captionText: string | null; duration: number; captionStyle: string }> = [];
+  for (const scene of [...blueprint.scenes].sort((left, right) => left.order - right.order)) {
+    if (scene.captionCues.length === 0) {
+      subtitleScenes.push({
+        order: scene.order,
+        captionText: scene.captionText ?? scene.narrationText,
+        duration: getSceneDuration(scene),
+        captionStyle: scene.captionStyle.style.id
+      });
+      continue;
+    }
+    const sceneDuration = getSceneDuration(scene);
+    const cueTotal = Math.max(...scene.captionCues.map((cue) => cue.endSeconds), sceneDuration, 0.1);
+    for (const cue of scene.captionCues) {
+      const cueDuration = Math.max(0.35, cue.endSeconds - cue.startSeconds);
+      subtitleScenes.push({
+        order: scene.order + cue.cueIndex / 100,
+        captionText: cue.text,
+        duration: Math.max(0.35, (cueDuration / cueTotal) * sceneDuration),
+        captionStyle: scene.captionStyle.style.id
+      });
+    }
+  }
+  return subtitleScenes;
+}
+
 async function writeSubtitleArtifacts(
   blueprint: RenderBlueprint,
   srtPath: string,
@@ -495,12 +535,7 @@ async function writeSubtitleArtifacts(
     throw new Error("No default caption style is available for subtitle export.");
   }
 
-  const subtitleScenes = blueprint.scenes.map((scene) => ({
-    order: scene.order,
-    captionText: scene.captionText ?? scene.narrationText,
-    duration: getSceneDuration(scene),
-    captionStyle: scene.captionStyle.style.id
-  }));
+  const subtitleScenes = buildSubtitleScenes(blueprint);
 
   const srt = generateSrt({
     title: blueprint.title,

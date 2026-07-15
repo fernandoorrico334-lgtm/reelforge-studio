@@ -182,6 +182,8 @@ function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProducti
     zoomPlan: short.zoomPlan.find((entry) => entry.sceneOrder === scene.order) ?? null,
     premiumDirection: premiumDirector?.sceneDirections.find((entry) => entry.sceneOrder === scene.order) ?? null,
     smartCropDirective: premiumDirector?.smartCrop.directives.find((entry) => entry.sceneOrder === scene.order) ?? null,
+    captionNarrationDirection: premiumDirector?.captionNarration.scenes.find((entry) => entry.sceneOrder === scene.order) ?? null,
+    captionCues: premiumDirector?.captionNarration.scenes.find((entry) => entry.sceneOrder === scene.order)?.captionCues ?? [],
     digestReasons: short.digestReasons,
     productionRank: short.productionRank,
     requiresManualAssetImport: true
