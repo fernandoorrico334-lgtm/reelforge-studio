@@ -1077,34 +1077,79 @@ async function runTextCommand(input: {
   });
 }
 
+function ocrLetters(value: string): string {
+  return value.replace(/[^\p{L}]/gu, "");
+}
+
+function ocrWords(value: string): string[] {
+  return value.split(/\s+/).filter((word) => /\p{L}{3,}/u.test(word));
+}
+
+function looksLikeOcrNoise(line: string): boolean {
+  const compact = line.replace(/\s/g, "");
+  const letters = ocrLetters(line);
+  if (compact.length < 3) return true;
+  if (letters.length < 2) return true;
+  const alphaRatio = letters.length / Math.max(1, compact.length);
+  const symbolRatio = line.replace(/[\p{L}\p{N}\s]/gu, "").length / Math.max(1, compact.length);
+  const vowelish = /[aeiou]/i.test(letters.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+  const words = ocrWords(line);
+  const hasDigit = /\d/.test(line);
+  if (alphaRatio < 0.42) return true;
+  if (symbolRatio > 0.38) return true;
+  if (hasDigit && words.length < 2) return true;
+  if (!vowelish && letters.length >= 3) return true;
+  if (letters.length <= 3 && words.length < 2) return true;
+  if (/^(la|ja|id|rw|ss|ds|tv|mn|an|eo|ue|if|cm|dl|rn|vs)$/i.test(line.trim())) return true;
+  return false;
+}
+
 function normalizeOcrLines(text: string): string[] {
   return text
     .replace(/\r/g, "\n")
     .split("\n")
     .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter((line) => {
-      if (line.length < 2 || /^[-_??.]+$/.test(line)) return false;
-      const letters = line.replace(/[^\p{L}]/gu, "");
-      const alphaRatio = letters.length / Math.max(1, line.replace(/\s/g, "").length);
-      return letters.length >= 2 && alphaRatio >= 0.28;
-    })
+    .filter((line) => line.length >= 2 && !/^[-_??.]+$/.test(line))
+    .filter((line) => !looksLikeOcrNoise(line))
     .slice(0, 24);
 }
 
 function classifyOcrSoundEffects(lines: string[]): string[] {
   return lines
     .filter((line) => {
-      const letters = line.replace(/[^\p{L}]/gu, "");
-      if (letters.length < 2 || letters.length > 16) return false;
+      const letters = ocrLetters(line);
+      if (letters.length < 2 || letters.length > 18) return false;
       const upperRatio = letters.replace(/[^A-Z]/g, "").length / Math.max(1, letters.length);
-      return upperRatio >= 0.72 && /boom|crash|pow|bam|wham|skree|roar|grr|krak|thoom|zap|bang/i.test(line);
+      return upperRatio >= 0.72 && /boom|crash|pow|bam|wham|skree|roar|grr|krak|thoom|zap|bang|thrak|krash/i.test(line);
+    })
+    .slice(0, 8);
+}
+
+function classifyOcrNarrationBoxes(lines: string[]): string[] {
+  const sfx = new Set(classifyOcrSoundEffects(lines));
+  return lines
+    .filter((line) => !sfx.has(line))
+    .filter((line) => {
+      const words = ocrWords(line);
+      const punctuationSignal = /[.!?…:]$/.test(line.trim());
+      return words.length >= 5 || (words.length >= 3 && punctuationSignal);
     })
     .slice(0, 8);
 }
 
 function classifyOcrDialogue(lines: string[]): string[] {
   const sfx = new Set(classifyOcrSoundEffects(lines));
-  return lines.filter((line) => !sfx.has(line)).slice(0, 12);
+  const narration = new Set(classifyOcrNarrationBoxes(lines));
+  return lines
+    .filter((line) => !sfx.has(line) && !narration.has(line))
+    .filter((line) => {
+      const words = ocrWords(line);
+      const normalized = line.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const hasDialoguePunctuation = /[!?…]$/.test(line.trim());
+      const hasSpeechShape = /\b(eu|voce|voces|ele|ela|nos|nao|sim|aqui|agora|isso|esse|essa|eles|elas|vamos|pare|olha|quem|quando|onde|porque|como)\b/i.test(normalized);
+      return words.length >= 2 || (words.length >= 1 && (hasDialoguePunctuation || hasSpeechShape));
+    })
+    .slice(0, 12);
 }
 
 function scoreOcrLines(lines: string[]): number {
@@ -1330,7 +1375,7 @@ async function runPanelOcr(input: {
   ffmpegCommand?: string;
   panelWidth?: number;
   panelHeight?: number;
-}): Promise<{ detectedText: string[]; dialogue: string[]; soundEffects: string[]; warning: string | null }> {
+}): Promise<{ detectedText: string[]; dialogue: string[]; narrationBoxes: string[]; soundEffects: string[]; warning: string | null }> {
   const command = input.tesseractCommand ?? process.env.TESSERACT_PATH ?? "tesseract";
   const languages = input.languages ?? process.env.REELFORGE_OCR_LANGUAGES ?? "por+eng";
   const rawPsm = process.env.REELFORGE_OCR_PSM ?? "6";
@@ -1399,9 +1444,11 @@ async function runPanelOcr(input: {
 
   const detectedText = best.lines;
   const soundEffects = classifyOcrSoundEffects(detectedText);
+  const narrationBoxes = classifyOcrNarrationBoxes(detectedText);
   const dialogue = classifyOcrDialogue(detectedText);
   return {
     detectedText,
+    narrationBoxes,
     dialogue,
     soundEffects,
     warning: best.warnings.length > 0 ? [...best.warnings, `ocr_mode:${best.mode}`, `ocr_quality_score:${best.score.toFixed(1)}`].join("|") : null
@@ -1748,7 +1795,7 @@ export async function indexUserProvidedComicPage(
           panelWidth: cropBounds.width,
           panelHeight: cropBounds.height
         })
-      : { detectedText: [], dialogue: [], soundEffects: [], warning: null };
+      : { detectedText: [], dialogue: [], narrationBoxes: [], soundEffects: [], warning: null };
 
     const regionPromo = isPromotionalPanelRegion({
       title: input.title,
@@ -2707,6 +2754,7 @@ export function findLocalPanelById(
   }
   return null;
 }
+
 
 
 

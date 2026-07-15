@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+﻿import { mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -86,6 +86,9 @@ async function main() {
 
   const panels = result.index?.pages?.flatMap((page) => page.panels) ?? [];
   const detectedText = panels.flatMap((panel) => panel.localEvidence?.detectedText ?? []);
+  const dialogue = panels.flatMap((panel) => panel.localEvidence?.dialogue ?? []);
+  const narrationBoxes = panels.flatMap((panel) => panel.localEvidence?.narrationBoxes ?? []);
+  const soundEffects = panels.flatMap((panel) => panel.localEvidence?.soundEffects ?? []);
   if (detectedText.length === 0) {
     console.log(JSON.stringify({
       status: "skipped",
@@ -104,7 +107,12 @@ async function main() {
     pageCount: result.pageCount,
     validPanelCount: result.index?.validPanelCount ?? 0,
     detectedLineCount: detectedText.length,
+    dialogueLineCount: dialogue.length,
+    narrationBoxCount: narrationBoxes.length,
+    soundEffectCount: soundEffects.length,
     detectedLines: detectedText.slice(0, 12),
+    dialogueLines: dialogue.slice(0, 8),
+    narrationBoxes: narrationBoxes.slice(0, 8),
     warnings: result.warnings.slice(0, 5)
   }, null, 2));
 }
@@ -113,3 +121,4 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
