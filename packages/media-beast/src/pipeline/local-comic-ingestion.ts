@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, copyFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
@@ -6,6 +7,7 @@ import { extractPanelImagesFromComicsArchive } from "./comics-catalog-download-i
 import { upsertLocalComicPanelIndex, type LocalComicPanelIndex } from "./comics-local-panel-index.js";
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const DEFAULT_PDF_DPI = 240;
 
 export type LocalComicIngestionSourceType =
   | "pdf"
@@ -63,6 +65,48 @@ async function sha256File(path: string): Promise<string> {
   return createHash("sha256").update(await readFile(path)).digest("hex");
 }
 
+function uniqueNonEmpty(values: Array<string | undefined>): string[] {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]));
+}
+
+async function runLocalCommand(input: {
+  command: string;
+  args: string[];
+  timeoutMs?: number;
+}): Promise<{ stdout: string; stderr: string }> {
+  return await new Promise((resolvePromise, reject) => {
+    const child = spawn(input.command, input.args, {
+      windowsHide: true,
+      shell: false
+    });
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error(`${input.command} timed_out_after_${input.timeoutMs ?? 300000}ms`));
+    }, input.timeoutMs ?? 300000);
+
+    child.stdout?.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        resolvePromise({ stdout, stderr });
+        return;
+      }
+      reject(new Error(`${input.command}_exited_${code}:${stderr.slice(-1000)}`));
+    });
+  });
+}
+
 async function listImageFilesRecursive(root: string): Promise<string[]> {
   const found: string[] = [];
   async function walk(dir: string) {
@@ -77,6 +121,99 @@ async function listImageFilesRecursive(root: string): Promise<string[]> {
   }
   await walk(root);
   return found.sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+}
+
+function normalizeCommandName(command: string): string {
+  return basename(command).toLowerCase().replace(/\.(exe|cmd|bat)$/i, "");
+}
+
+function buildPdfRasterizerCandidates(input: {
+  pdfRasterizerCommand?: string;
+}): string[] {
+  return uniqueNonEmpty([
+    input.pdfRasterizerCommand,
+    process.env.REELFORGE_PDF_RASTERIZER_COMMAND,
+    "pdftoppm",
+    "mutool",
+    "magick"
+  ]);
+}
+
+async function rasterizePdfWithCommand(input: {
+  pdfPath: string;
+  outputDir: string;
+  command: string;
+  dpi: number;
+}): Promise<string[]> {
+  const commandName = normalizeCommandName(input.command);
+  await mkdir(input.outputDir, { recursive: true });
+
+  if (commandName.includes("pdftoppm")) {
+    await runLocalCommand({
+      command: input.command,
+      args: ["-r", String(input.dpi), "-png", input.pdfPath, join(input.outputDir, "page")],
+      timeoutMs: 600000
+    });
+    return listImageFilesRecursive(input.outputDir);
+  }
+
+  if (commandName.includes("mutool")) {
+    await runLocalCommand({
+      command: input.command,
+      args: ["draw", "-r", String(input.dpi), "-o", join(input.outputDir, "page-%04d.png"), input.pdfPath],
+      timeoutMs: 600000
+    });
+    return listImageFilesRecursive(input.outputDir);
+  }
+
+  if (commandName.includes("magick") || commandName.includes("convert")) {
+    await runLocalCommand({
+      command: input.command,
+      args: ["-density", String(input.dpi), input.pdfPath, "-quality", "95", join(input.outputDir, "page-%04d.png")],
+      timeoutMs: 600000
+    });
+    return listImageFilesRecursive(input.outputDir);
+  }
+
+  throw new Error(`unsupported_pdf_rasterizer_command:${input.command}`);
+}
+
+async function rasterizePdfToImages(input: {
+  pdfPath: string;
+  outputDir: string;
+  pdfRasterizerCommand?: string;
+  dpi?: number;
+}): Promise<{ imagePaths: string[]; command: string; attempts: string[] }> {
+  const attempts: string[] = [];
+  const dpi = input.dpi ?? DEFAULT_PDF_DPI;
+  const commands = buildPdfRasterizerCandidates({
+    ...(input.pdfRasterizerCommand ? { pdfRasterizerCommand: input.pdfRasterizerCommand } : {})
+  });
+
+  for (const command of commands) {
+    try {
+      const imagePaths = await rasterizePdfWithCommand({
+        pdfPath: input.pdfPath,
+        outputDir: input.outputDir,
+        command,
+        dpi
+      });
+      if (imagePaths.length > 0) {
+        return { imagePaths, command, attempts };
+      }
+      attempts.push(`${command}:no_pages_generated`);
+    } catch (error) {
+      attempts.push(`${command}:${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  throw new Error(
+    [
+      "pdf_rasterizer_unavailable",
+      "Install Poppler pdftoppm, MuPDF mutool, or ImageMagick magick, or set REELFORGE_PDF_RASTERIZER_COMMAND.",
+      `attempts=${attempts.join(" | ")}`
+    ].join(":")
+  );
 }
 
 function safeComicSlug(sourcePath: string): string {
@@ -125,6 +262,8 @@ export async function ingestLocalComicSource(input: {
   comicTitle?: string;
   projectRoot?: string;
   ffmpegCommand?: string;
+  pdfRasterizerCommand?: string;
+  pdfDpi?: number;
   forceRebuildIndex?: boolean;
   maxPages?: number;
   buildIndex?: boolean;
@@ -144,15 +283,23 @@ export async function ingestLocalComicSource(input: {
   if (sourceType === "unknown") {
     throw new Error(`unsupported_comic_source_type:${sourcePath}`);
   }
-  if (sourceType === "pdf") {
-    throw new Error("pdf_rasterizer_unavailable:convert PDF to image pages or CBZ before ingestion");
-  }
-
   await mkdir(assetDirectory, { recursive: true });
   let sourceImages: string[] = [];
 
   if (sourceType === "image_directory") {
     sourceImages = await listImageFilesRecursive(sourcePath);
+  } else if (sourceType === "pdf") {
+    const rasterized = await rasterizePdfToImages({
+      pdfPath: sourcePath,
+      outputDir: join(assetDirectory, ".pdf-pages"),
+      ...(input.pdfRasterizerCommand ? { pdfRasterizerCommand: input.pdfRasterizerCommand } : {}),
+      ...(input.pdfDpi ? { dpi: input.pdfDpi } : {})
+    });
+    sourceImages = rasterized.imagePaths;
+    warnings.push(`pdf_rasterizer_used:${rasterized.command}`);
+    if (rasterized.attempts.length > 0) {
+      warnings.push(`pdf_rasterizer_fallback_attempts:${rasterized.attempts.join(" | ")}`);
+    }
   } else {
     const extracted = await extractPanelImagesFromComicsArchive({
       archivePath: sourcePath,
@@ -164,6 +311,9 @@ export async function ingestLocalComicSource(input: {
 
   if (sourceImages.length === 0) {
     warnings.push("no_image_pages_found");
+  }
+  if (input.maxPages !== undefined && sourceImages.length > input.maxPages) {
+    warnings.push(`pages_truncated_by_explicit_maxPages:${input.maxPages}/${sourceImages.length}`);
   }
   const selectedImages = sourceImages.slice(0, input.maxPages ?? sourceImages.length);
   const pages = await copyImagePagesToAssetDirectory({

@@ -422,12 +422,18 @@ export async function handleMediaBeastRoute(
         : readPositiveInteger(payload.maxPages, 200);
       const buildIndex = readBoolean(payload.buildIndex, true);
       const forceRebuildIndex = readBoolean(payload.forceRebuildIndex, false);
+      const pdfRasterizerCommand = readOptionalString(payload.pdfRasterizerCommand);
+      const pdfDpi = payload.pdfDpi === undefined || payload.pdfDpi === null
+        ? undefined
+        : readPositiveInteger(payload.pdfDpi, 240);
 
       const result = await ingestLocalComicSource({
         sourcePath,
         ...(assetDirectory ? { assetDirectory } : {}),
         ...(comicTitle ? { comicTitle } : {}),
         ...(maxPages !== undefined ? { maxPages } : {}),
+        ...(pdfRasterizerCommand ? { pdfRasterizerCommand } : {}),
+        ...(pdfDpi !== undefined ? { pdfDpi } : {}),
         buildIndex,
         forceRebuildIndex
       });

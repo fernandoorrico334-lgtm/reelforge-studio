@@ -263,7 +263,7 @@ export function buildComicShortsBatchFactoryPlan(input: {
     shorts,
     rejectedOpportunities,
     nextRecommendedImprovements: [
-      "Adicionar extracao automatica real de PDF/CBZ/CBR para criar o indice de paineis sem preparo manual.",
+      "Instalar um rasterizador local de PDF (Poppler pdftoppm, MuPDF mutool ou ImageMagick magick) para ingestao direta de HQs em PDF.",
       "Adicionar leitura OCR mais forte por balao/recordatorio para roteiros mais fieis.",
       "Criar tela Comic Studio para aprovar 20 shorts e disparar render em lote.",
       "Adicionar avaliacao visual com zoom automatico no detalhe mais importante de cada painel.",
@@ -294,6 +294,9 @@ export function buildComicIngestionPlan(input: {
   const warnings: string[] = [];
   if (sourceType === "unknown") warnings.push("unsupported_comic_source_type");
   if (sourceType === "cbr") warnings.push("cbr_requires_unrar_tooling_available");
+  if (sourceType === "pdf") {
+    warnings.push("pdf_requires_local_rasterizer:pdftoppm_or_mutool_or_magick_or_REELFORGE_PDF_RASTERIZER_COMMAND");
+  }
 
   return {
     sourcePath: input.sourcePath,
@@ -304,8 +307,10 @@ export function buildComicIngestionPlan(input: {
       {
         stepId: "extract_pages",
         title: "Extrair paginas da HQ",
-        status: sourceType === "image_directory" ? "ready" : "requires_tooling",
-        description: "Converter PDF/CBZ/CBR em imagens de paginas ordenadas dentro da pasta local autorizada."
+        status: sourceType === "image_directory" || sourceType === "pdf" ? "ready" : "requires_tooling",
+        description: sourceType === "pdf"
+          ? "Rasterizar todas as paginas do PDF local com pdftoppm, mutool, magick ou REELFORGE_PDF_RASTERIZER_COMMAND, preservando ordem e evidencias."
+          : "Converter CBZ/CBR em imagens de paginas ordenadas dentro da pasta local autorizada."
       },
       {
         stepId: "segment_panels",

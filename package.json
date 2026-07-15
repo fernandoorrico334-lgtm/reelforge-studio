@@ -89,7 +89,8 @@
     "smoke:one-click-prepare-assets": "node scripts/smoke-one-click-prepare-assets.mjs",
     "smoke:one-click-candidate-gate": "node scripts/smoke-one-click-candidate-gate.mjs",
     "smoke:one-click-render-runtime": "node scripts/smoke-one-click-render-runtime.mjs",
-    "demo:golden-path": "node scripts/demo-golden-path.mjs"
+    "demo:golden-path": "node scripts/demo-golden-path.mjs",
+    "smoke:local-comic-pdf-rasterizer": "node scripts/smoke-local-comic-pdf-rasterizer.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"
