@@ -1,4 +1,5 @@
 import { directComicCaptionNarration, type ComicCaptionNarrationDirectorReport } from "./comic-caption-narration-director.js";
+import { directComicSmartCrops, type ComicSmartCropDirectorReport } from "./comic-smart-crop-director.js";
 import type {
   ComicShortProductionPlan,
   ComicShortScenePlan
@@ -34,6 +35,7 @@ export type ComicPremiumDirectorReport = {
   audioMasteringPresetId: "viral_fast_cut";
   sceneDirections: ComicPremiumSceneDirection[];
   captionNarration: ComicCaptionNarrationDirectorReport;
+  smartCrop: ComicSmartCropDirectorReport;
   qualityScore: number;
   warnings: string[];
   nextImprovements: string[];
@@ -193,10 +195,12 @@ export function applyComicPremiumDirector(input: {
   const profileId = input.profileId ?? "comic_viral_reference_antman";
   const captionNarration = directComicCaptionNarration({ short: input.short });
   const directions = input.short.scenes.map((scene) => directionForScene(scene, input.short));
+  const smartCrop = directComicSmartCrops({ short: input.short, premiumDirections: directions });
   const warnings: string[] = [...input.short.warnings];
   if (input.short.qualityReport.panelCoverage < 1) warnings.push("premium_director:missing_panel_paths");
   if (!input.short.qualityReport.hasClimax) warnings.push("premium_director:missing_climax");
   if (captionNarration.averageCaptionQualityScore < 70) warnings.push("premium_director:caption_quality_below_target");
+  if (smartCrop.averageConfidenceScore < 78) warnings.push("premium_director:smart_crop_below_target");
 
   const directedScenes: ComicShortScenePlan[] = input.short.scenes.map((scene) => {
     const direction = directions.find((entry) => entry.sceneOrder === scene.order)!;
@@ -260,6 +264,7 @@ export function applyComicPremiumDirector(input: {
       audioMasteringPresetId: "viral_fast_cut",
       sceneDirections: directions,
       captionNarration,
+      smartCrop,
       qualityScore: scoreDirections(directions, warnings),
       warnings,
       nextImprovements: [

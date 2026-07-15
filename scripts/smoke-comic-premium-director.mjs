@@ -111,6 +111,8 @@ async function main() {
   assert(captionNarration.averageCaptionQualityScore >= 70, `expected caption quality >= 70, got ${captionNarration.averageCaptionQualityScore}`);
   assert(directed.report.qualityScore >= 80, `expected strong quality score, got ${directed.report.qualityScore}`);
   assert(directed.report.captionNarration.directorId === "comic_caption_narration_v2", "premium report should include V2 caption/narration director");
+  assert(directed.report.smartCrop.directorId === "comic_smart_crop_director_v1", "premium report should include smart crop director");
+  assert(directed.report.smartCrop.averageConfidenceScore >= 78, `expected smart crop confidence >= 78, got ${directed.report.smartCrop.averageConfidenceScore}`);
   assert(directed.short.captionStyleId === "sports_hype", "expected sports_hype captions");
   assert(directed.short.audioMasteringPresetId === "viral_fast_cut", "expected viral mastering");
   assert(directed.short.musicPresetId === "viral_fast_cut", "expected viral music");
@@ -127,6 +129,8 @@ async function main() {
   assert(payload.renderBlueprintHints.premiumDirector.qualityScore >= 80, "bridge should include premium director report");
   assert(payload.warnings.includes("premium_director_applied"), "bridge warnings should mark premium director");
   assert(payload.scenes.every((scene) => scene.visualRecipe?.includes("premiumDirection")), "visual recipes should include premium direction");
+  assert(payload.scenes.every((scene) => scene.visualRecipe?.includes("smartCropDirective")), "visual recipes should include smart crop directives");
+  assert(payload.renderBlueprintHints.smartCrop.directives.length === directed.short.scenes.length, "bridge should expose smart crop directives");
 
   console.log(JSON.stringify({
     status: "completed",
@@ -135,6 +139,7 @@ async function main() {
     qualityScore: directed.report.qualityScore,
     captionNarrationQuality: directed.report.captionNarration.averageCaptionQualityScore,
     captionCueCount: directed.report.captionNarration.captionCueCount,
+    smartCropConfidence: directed.report.smartCrop.averageConfidenceScore,
     sceneCount: directed.short.scenes.length,
     firstScene: {
       narration: directed.short.scenes[0].narration,
@@ -142,7 +147,8 @@ async function main() {
       captionCues: directed.report.captionNarration.scenes[0].captionCues,
       duration: directed.short.scenes[0].durationSeconds,
       sfxCue: directed.report.sceneDirections[0].sfxCue,
-      zoomPreset: directed.report.sceneDirections[0].zoomPreset
+      zoomPreset: directed.report.sceneDirections[0].zoomPreset,
+      smartCrop: directed.report.smartCrop.directives[0]
     },
     presetId: directed.report.referencePresetId,
     bridgeHasPremiumDirector: Boolean(payload.renderBlueprintHints.premiumDirector)

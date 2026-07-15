@@ -98,6 +98,7 @@ export type ComicProjectBridgePayload = {
     sourcePages: number[];
     zoomPlan: ComicShortProductionPlan["zoomPlan"];
     premiumDirector: ComicPremiumDirectorReport;
+    smartCrop: ComicPremiumDirectorReport["smartCrop"];
   };
   qualityChecklist: Array<{
     id: string;
@@ -180,6 +181,7 @@ function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProducti
     role: scene.role,
     zoomPlan: short.zoomPlan.find((entry) => entry.sceneOrder === scene.order) ?? null,
     premiumDirection: premiumDirector?.sceneDirections.find((entry) => entry.sceneOrder === scene.order) ?? null,
+    smartCropDirective: premiumDirector?.smartCrop.directives.find((entry) => entry.sceneOrder === scene.order) ?? null,
     digestReasons: short.digestReasons,
     productionRank: short.productionRank,
     requiresManualAssetImport: true
@@ -337,7 +339,8 @@ export function buildComicShortProjectBridgePayload(input: {
       musicPresetId: short.musicPresetId,
       sourcePages: short.sourcePages,
       zoomPlan: short.zoomPlan,
-      premiumDirector
+      premiumDirector,
+      smartCrop: premiumDirector.smartCrop
     },
     qualityChecklist: checklistForShort(short, premiumDirector),
     warnings: [...short.warnings, "premium_director_applied", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
