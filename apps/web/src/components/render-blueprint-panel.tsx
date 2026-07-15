@@ -3,6 +3,7 @@ import type {
   DataSource,
   RenderBlueprintResponse
 } from "../lib/studio-types";
+import { getAssetMediaUrl } from "../lib/studio-api";
 
 interface RenderBlueprintPanelProps {
   blueprint: RenderBlueprintResponse | null;
@@ -64,6 +65,83 @@ function formatDuration(value: number | null | undefined) {
   }
 
   return `${value.toFixed(value >= 10 ? 0 : 1)}s`;
+}
+type RenderBlueprintScene = RenderBlueprintResponse["scenes"][number];
+
+function isPreviewableImageAsset(asset: RenderBlueprintScene["effectiveAsset"]) {
+  if (!asset) {
+    return false;
+  }
+
+  const type = asset.type.toLowerCase();
+  const mimeType = asset.mimeType?.toLowerCase() ?? "";
+  const extension = asset.extension?.toLowerCase() ?? "";
+
+  return (
+    type === "image" ||
+    mimeType.startsWith("image/") ||
+    [".jpg", ".jpeg", ".png", ".webp", ".gif", "jpg", "jpeg", "png", "webp", "gif"].includes(
+      extension
+    )
+  );
+}
+
+function SmartCropPreview({ scene }: { scene: RenderBlueprintScene }) {
+  const directive = scene.smartCropDirective;
+
+  if (!directive) {
+    return null;
+  }
+
+  const previewAsset = scene.effectiveAsset;
+  const previewUrl =
+    scene.effectiveAssetId && isPreviewableImageAsset(previewAsset)
+      ? getAssetMediaUrl(scene.effectiveAssetId)
+      : null;
+
+  return (
+    <div className="relative h-56 overflow-hidden rounded-[1rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]">
+      {previewUrl ? (
+        <>
+          <img
+            src={previewUrl}
+            alt={`Preview do recorte da cena ${scene.order}`}
+            className="absolute inset-0 h-full w-full object-fill opacity-75 saturate-[1.08]"
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent,rgba(0,0,0,0.35))]" />
+          <span className="absolute left-2 top-2 rounded-full border border-cyan-200/25 bg-black/55 px-2 py-1 text-[9px] uppercase tracking-[0.16em] text-cyan-50">
+            preview real
+          </span>
+        </>
+      ) : (
+        <>
+          <div className="absolute inset-3 rounded-xl border border-white/10 bg-black/30" />
+          <span className="absolute left-2 top-2 rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[9px] uppercase tracking-[0.16em] text-mist/65">
+            preview abstrato
+          </span>
+          <p className="absolute bottom-3 left-3 right-3 text-[10px] leading-4 text-mist/55">
+            Importe o painel como asset da cena para ver o crop real.
+          </p>
+        </>
+      )}
+      <div
+        className="absolute border-2 border-cyan-300 bg-cyan-300/15 shadow-[0_0_24px_rgba(103,232,249,0.32)]"
+        style={{
+          left: `${directive.normalizedCrop.x * 100}%`,
+          top: `${directive.normalizedCrop.y * 100}%`,
+          width: `${directive.normalizedCrop.width * 100}%`,
+          height: `${directive.normalizedCrop.height * 100}%`
+        }}
+      />
+      <div
+        className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal shadow-[0_0_18px_rgba(111,241,211,0.75)]"
+        style={{
+          left: `${directive.anchorPoint.x * 100}%`,
+          top: `${directive.anchorPoint.y * 100}%`
+        }}
+      />
+    </div>
+  );
 }
 
 export function RenderBlueprintPanel({
@@ -363,25 +441,7 @@ export function RenderBlueprintPanel({
                     </div>
                     {scene.smartCropDirective ? (
                       <div className="mt-3 grid gap-3 md:grid-cols-[140px_1fr]">
-                        <div className="relative h-56 overflow-hidden rounded-[1rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]">
-                          <div className="absolute inset-3 rounded-xl border border-white/10 bg-black/30" />
-                          <div
-                            className="absolute border-2 border-cyan-300 bg-cyan-300/15 shadow-[0_0_24px_rgba(103,232,249,0.32)]"
-                            style={{
-                              left: `${scene.smartCropDirective.normalizedCrop.x * 100}%`,
-                              top: `${scene.smartCropDirective.normalizedCrop.y * 100}%`,
-                              width: `${scene.smartCropDirective.normalizedCrop.width * 100}%`,
-                              height: `${scene.smartCropDirective.normalizedCrop.height * 100}%`
-                            }}
-                          />
-                          <div
-                            className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal shadow-[0_0_18px_rgba(111,241,211,0.75)]"
-                            style={{
-                              left: `${scene.smartCropDirective.anchorPoint.x * 100}%`,
-                              top: `${scene.smartCropDirective.anchorPoint.y * 100}%`
-                            }}
-                          />
-                        </div>
+                        <SmartCropPreview scene={scene} />
                         <div className="text-xs leading-6 text-mist/68">
                           <p className="text-sm font-semibold text-white">
                             {scene.smartCropDirective.focus} / {scene.smartCropDirective.cameraMove}
