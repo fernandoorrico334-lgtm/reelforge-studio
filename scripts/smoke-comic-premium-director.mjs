@@ -111,6 +111,8 @@ async function main() {
   assert(captionNarration.averageCaptionQualityScore >= 70, `expected caption quality >= 70, got ${captionNarration.averageCaptionQualityScore}`);
   assert(directed.report.qualityScore >= 80, `expected strong quality score, got ${directed.report.qualityScore}`);
   assert(directed.report.captionNarration.directorId === "comic_caption_narration_v2", "premium report should include V2 caption/narration director");
+  assert(directed.report.captionNarration.averagePanelAlignmentScore >= 70, `expected panel/narration alignment >= 70, got ${directed.report.captionNarration.averagePanelAlignmentScore}`);
+  assert(directed.report.captionNarration.scenes.every((scene) => scene.narrationDoctor?.directorId === "comic_narration_doctor_v1"), "each scene should include narration doctor result");
   assert(directed.report.smartCrop.directorId === "comic_smart_crop_director_v2", "premium report should include smart crop director");
   assert(directed.report.smartCrop.averageConfidenceScore >= 78, `expected smart crop confidence >= 78, got ${directed.report.smartCrop.averageConfidenceScore}`);
   assert(directed.short.captionStyleId === "sports_hype", "expected sports_hype captions");
@@ -139,11 +141,13 @@ async function main() {
     directedDuration: directed.short.estimatedDurationSeconds,
     qualityScore: directed.report.qualityScore,
     captionNarrationQuality: directed.report.captionNarration.averageCaptionQualityScore,
+    panelAlignmentScore: directed.report.captionNarration.averagePanelAlignmentScore,
     captionCueCount: directed.report.captionNarration.captionCueCount,
     smartCropConfidence: directed.report.smartCrop.averageConfidenceScore,
     sceneCount: directed.short.scenes.length,
     firstScene: {
       narration: directed.short.scenes[0].narration,
+      narrationDoctor: directed.report.captionNarration.scenes[0].narrationDoctor,
       caption: directed.short.scenes[0].caption,
       captionCues: directed.report.captionNarration.scenes[0].captionCues,
       duration: directed.short.scenes[0].durationSeconds,

@@ -1,6 +1,7 @@
 import { analyzeCaptionQuality, getCaptionStyleById } from "@reelforge/caption-engine";
 import { generateCaptionDirection, type CaptionDirectionCue } from "./caption-direction-engine.js";
 import type { ComicShortProductionPlan, ComicShortScenePlan } from "./comic-shorts-factory.js";
+import { doctorComicSceneNarration, type ComicNarrationDoctorResult } from "./comic-narration-doctor.js";
 
 export type ComicNarrationBeatRole =
   | "hook_shock"
@@ -38,6 +39,7 @@ export type ComicCaptionNarrationSceneDirection = {
   captionCues: ComicCaptionTimingCue[];
   captionQualityScore: number;
   captionWarnings: string[];
+  narrationDoctor: ComicNarrationDoctorResult;
 };
 
 export type ComicCaptionNarrationDirectorReport = {
@@ -47,6 +49,7 @@ export type ComicCaptionNarrationDirectorReport = {
   narrationWordCount: number;
   captionCueCount: number;
   scenes: ComicCaptionNarrationSceneDirection[];
+  averagePanelAlignmentScore: number;
   warnings: string[];
 };
 
@@ -170,7 +173,8 @@ function captionDirectionGoal(role: ComicNarrationBeatRole): string {
 
 function buildSceneDirection(scene: ComicShortScenePlan, short: ComicShortProductionPlan): ComicCaptionNarrationSceneDirection {
   const role = roleForScene(scene);
-  const narrationText = buildNarration(scene, short);
+  const narrationDoctor = doctorComicSceneNarration({ scene, short });
+  const narrationText = narrationDoctor.narrationAfter;
   const captionWords = captionWordsFromNarration(narrationText, short, role);
   const cueTexts = splitCueText(captionWords, role === "hook_shock" || role === "impact_reveal" ? 4 : 5);
   const timings = cueTimings(scene.durationSeconds, cueTexts.length);
@@ -225,10 +229,11 @@ function buildSceneDirection(scene: ComicShortScenePlan, short: ComicShortProduc
       emphasisWords: pickKeywords(narrationText, short),
       oralNotes: "Ler como comentario de cultura pop, frase curta, sem pausa longa e com subida de energia no fim."
     },
-    captionText,
+    captionText: narrationDoctor.captionAfter || captionText,
     captionCues: cues,
     captionQualityScore: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0,
-    captionWarnings: [...direction.warnings, ...cues.flatMap((cue) => cue.readingWarnings)]
+    captionWarnings: [...direction.warnings, ...cues.flatMap((cue) => cue.readingWarnings), ...narrationDoctor.panelAlignment.warnings],
+    narrationDoctor
   };
 }
 
@@ -242,6 +247,9 @@ export function directComicCaptionNarration(input: {
     : 0;
   const narrationWordCount = scenes.reduce((sum, scene) => sum + scene.narrationText.split(/\s+/).filter(Boolean).length, 0);
   const captionCueCount = scenes.reduce((sum, scene) => sum + scene.captionCues.length, 0);
+  const averagePanelAlignmentScore = scenes.length
+    ? Math.round(scenes.reduce((sum, scene) => sum + scene.narrationDoctor.panelAlignment.score, 0) / scenes.length)
+    : 0;
 
   return {
     directorId: "comic_caption_narration_v2",
@@ -250,6 +258,7 @@ export function directComicCaptionNarration(input: {
     narrationWordCount,
     captionCueCount,
     scenes,
+    averagePanelAlignmentScore,
     warnings
   };
 }
