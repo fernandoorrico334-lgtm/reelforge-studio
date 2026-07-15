@@ -1,6 +1,7 @@
 import { applyComicPremiumDirector, type ComicPremiumDirectorReport } from "./comic-premium-director.js";
 import { scoreComicRenderReadiness, type ComicRenderQualityScorerReport } from "./comic-render-quality-scorer.js";
 import { directComicSfxBeatPlan, type ComicSfxBeatDirectorReport } from "./comic-sfx-beat-director.js";
+import { buildComicGoldenRenderQaReport, type ComicGoldenRenderQaReport } from "./comic-golden-render-qa.js";
 import type {
   ComicShortProductionPlan,
   ComicShortScenePlan,
@@ -103,6 +104,7 @@ export type ComicProjectBridgePayload = {
     smartCrop: ComicPremiumDirectorReport["smartCrop"];
     sfxBeatDirector: ComicSfxBeatDirectorReport;
     renderQualityScore: ComicRenderQualityScorerReport;
+    goldenRenderQa: ComicGoldenRenderQaReport;
   };
   qualityChecklist: Array<{
     id: string;
@@ -208,7 +210,7 @@ function buildProjectScript(short: ComicShortProductionPlan): string {
   ].join("\n");
 }
 
-function checklistForShort(short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport, renderQualityScore?: ComicRenderQualityScorerReport): ComicProjectBridgePayload["qualityChecklist"] {
+function checklistForShort(short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport, renderQualityScore?: ComicRenderQualityScorerReport, goldenRenderQa?: ComicGoldenRenderQaReport): ComicProjectBridgePayload["qualityChecklist"] {
   return [
     {
       id: "manual_rights_review",
@@ -242,6 +244,14 @@ function checklistForShort(short: ComicShortProductionPlan, premiumDirector?: Co
           detail: `score=${renderQualityScore.overallScore}/${renderQualityScore.minimumRecommendedScore}; status=${renderQualityScore.status}; pontos=${renderQualityScore.strengths.join(", ") || "n/a"}.`
         }]
       : []),
+    ...(goldenRenderQa
+      ? [{
+          id: "golden_render_qa",
+          label: "Golden Comic Render QA",
+          status: goldenRenderQa.releaseVerdict === "blocked" ? "blocked" as const : goldenRenderQa.releaseVerdict === "ready_to_render" || goldenRenderQa.releaseVerdict === "ready_to_publish_review" ? "ready" as const : "needs_review" as const,
+          detail: `score=${goldenRenderQa.overallScore}; verdict=${goldenRenderQa.releaseVerdict}; duration=${goldenRenderQa.measured.durationSeconds}s; artifact=${goldenRenderQa.measured.renderArtifactStatus}.`
+        }]
+      : []),
     ...(premiumDirector
       ? [{
           id: "premium_director_quality",
@@ -271,6 +281,7 @@ export function buildComicShortProjectBridgePayload(input: {
   const premiumDirector = directed.report;
   const sfxBeatDirector = directComicSfxBeatPlan({ short, premiumDirector });
   const renderQualityScore = scoreComicRenderReadiness({ short, premiumDirector, sfxBeatDirector });
+  const goldenRenderQa = buildComicGoldenRenderQaReport({ short, premiumDirector, sfxBeatDirector, renderQualityScore });
   const titlePrefix = input.titlePrefix ? `${input.titlePrefix.trim()} ` : "";
   const scenes: ComicProjectBridgeSceneInput[] = short.scenes.map((scene) => ({
     order: scene.order,
@@ -359,10 +370,11 @@ export function buildComicShortProjectBridgePayload(input: {
       premiumDirector,
       smartCrop: premiumDirector.smartCrop,
       sfxBeatDirector,
-      renderQualityScore
+      renderQualityScore,
+      goldenRenderQa
     },
-    qualityChecklist: checklistForShort(short, premiumDirector, renderQualityScore),
-    warnings: [...short.warnings, ...sfxBeatDirector.warnings, ...renderQualityScore.warnings, ...renderQualityScore.blockers, "comic_render_quality_scorer_applied", "premium_director_applied", "comic_sfx_beat_director_applied", "manual_sfx_asset_selection_required", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
+    qualityChecklist: checklistForShort(short, premiumDirector, renderQualityScore, goldenRenderQa),
+    warnings: [...short.warnings, ...sfxBeatDirector.warnings, ...renderQualityScore.warnings, ...renderQualityScore.blockers, ...goldenRenderQa.warnings, ...goldenRenderQa.blockers, "comic_render_quality_scorer_applied", "comic_golden_render_qa_applied", "premium_director_applied", "comic_sfx_beat_director_applied", "manual_sfx_asset_selection_required", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
     candidateFirst: true,
     requiresManualApproval: true
   };
