@@ -2954,6 +2954,47 @@ export type RenderBlueprintEffectiveSource =
   | "library"
   | "none";
 
+
+export interface RenderBlueprintCaptionCue {
+  cueIndex: number;
+  startSeconds: number;
+  endSeconds: number;
+  text: string;
+  highlightedWords: string[];
+  layout: string | null;
+  animation: string | null;
+  sfxSuggestion: string | null;
+  readingImpactScore: number | null;
+  readingWarnings: string[];
+}
+
+export interface RenderBlueprintSmartCropDirective {
+  sceneOrder: number;
+  panelId: string;
+  pageNumber: number | null;
+  focus: string;
+  normalizedCrop: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  safeCaptionZone: string;
+  cameraMove: string;
+  startScale: number;
+  endScale: number;
+  anchorPoint: {
+    x: number;
+    y: number;
+  };
+  holdSeconds: number;
+  motionIntensity: number;
+  textSafety: string;
+  renderInstruction: string;
+  reasons: string[];
+  confidenceScore: number;
+}
+
 export interface RenderBlueprintScene {
   sceneId: string;
   order: number;
@@ -3001,6 +3042,9 @@ export interface RenderBlueprintScene {
   storyReason: string;
   readingSpeedStatus: CaptionQualityAnalysis["readingSpeedStatus"];
   editorialMicroclips: RenderBlueprintEditorialMicroclip[];
+  smartCropDirective?: RenderBlueprintSmartCropDirective | null;
+  captionCues?: RenderBlueprintCaptionCue[];
+  premiumVisualRecipe?: Record<string, unknown> | null;
   warnings: string[];
   ready: boolean;
 }

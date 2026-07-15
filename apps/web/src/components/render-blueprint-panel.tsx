@@ -351,6 +351,78 @@ export function RenderBlueprintPanel({
                   resolucao {scene.effectiveAsset?.width ?? "?"}x
                   {scene.effectiveAsset?.height ?? "?"}
                 </p>
+                {scene.smartCropDirective || (scene.captionCues?.length ?? 0) > 0 ? (
+                  <div className="mt-4 rounded-[1.05rem] border border-cyan-300/20 bg-cyan-300/[0.06] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-cyan-100/70">
+                        Premium Comic Direction
+                      </p>
+                      <span className="rounded-full border border-cyan-200/20 bg-black/25 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-cyan-100/75">
+                        {scene.smartCropDirective ? "smart crop" : "caption cues"}
+                      </span>
+                    </div>
+                    {scene.smartCropDirective ? (
+                      <div className="mt-3 grid gap-3 md:grid-cols-[140px_1fr]">
+                        <div className="relative h-56 overflow-hidden rounded-[1rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]">
+                          <div className="absolute inset-3 rounded-xl border border-white/10 bg-black/30" />
+                          <div
+                            className="absolute border-2 border-cyan-300 bg-cyan-300/15 shadow-[0_0_24px_rgba(103,232,249,0.32)]"
+                            style={{
+                              left: `${scene.smartCropDirective.normalizedCrop.x * 100}%`,
+                              top: `${scene.smartCropDirective.normalizedCrop.y * 100}%`,
+                              width: `${scene.smartCropDirective.normalizedCrop.width * 100}%`,
+                              height: `${scene.smartCropDirective.normalizedCrop.height * 100}%`
+                            }}
+                          />
+                          <div
+                            className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-signal shadow-[0_0_18px_rgba(111,241,211,0.75)]"
+                            style={{
+                              left: `${scene.smartCropDirective.anchorPoint.x * 100}%`,
+                              top: `${scene.smartCropDirective.anchorPoint.y * 100}%`
+                            }}
+                          />
+                        </div>
+                        <div className="text-xs leading-6 text-mist/68">
+                          <p className="text-sm font-semibold text-white">
+                            {scene.smartCropDirective.focus} / {scene.smartCropDirective.cameraMove}
+                          </p>
+                          <p className="mt-1">
+                            crop x {scene.smartCropDirective.normalizedCrop.x.toFixed(3)} / y{" "}
+                            {scene.smartCropDirective.normalizedCrop.y.toFixed(3)} / w{" "}
+                            {scene.smartCropDirective.normalizedCrop.width.toFixed(3)} / h{" "}
+                            {scene.smartCropDirective.normalizedCrop.height.toFixed(3)}
+                          </p>
+                          <p className="mt-1">
+                            escala {scene.smartCropDirective.startScale} ? {scene.smartCropDirective.endScale} / hold{" "}
+                            {formatDuration(scene.smartCropDirective.holdSeconds)} / intensidade{" "}
+                            {scene.smartCropDirective.motionIntensity}
+                          </p>
+                          <p className="mt-1">
+                            legenda {scene.smartCropDirective.safeCaptionZone} / texto{" "}
+                            {scene.smartCropDirective.textSafety} / confian?a{" "}
+                            {scene.smartCropDirective.confidenceScore}
+                          </p>
+                          <p className="mt-2 text-cyan-50/80">
+                            {scene.smartCropDirective.renderInstruction}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {(scene.captionCues?.length ?? 0) > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {scene.captionCues?.slice(0, 4).map((cue) => (
+                          <span
+                            key={`${scene.sceneId}-cue-${cue.cueIndex}`}
+                            className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-white"
+                          >
+                            {cue.text} ? {formatDuration(cue.endSeconds - cue.startSeconds)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {scene.editorialMicroclips.length > 0 ? (
                   <div className="mt-4 rounded-[1.05rem] border border-white/10 bg-white/[0.03] p-3">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
