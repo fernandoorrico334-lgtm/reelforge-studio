@@ -10,6 +10,7 @@ import {
   mediaBeastNiches,
   mediaBeastProviderIds,
   buildComicIngestionPlan,
+  buildComicBatchProjectBridgePayload,
   buildComicShortsBatchFactoryPlan,
   ingestLocalComicSource,
   mineComicStoryVaultFromDirectory,
@@ -27,6 +28,9 @@ import {
 } from "@reelforge/media-beast";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AssetRepository } from "../../modules/assets/application/asset-repository.js";
+import type { ChannelRepository } from "../../modules/channels/application/channel-repository.js";
+import type { ProjectRepository } from "../../modules/projects/application/project-repository.js";
+import { createProjectScene, createVideoProject } from "../../modules/projects/application/project-service.js";
 import { importApprovedRemixAssets } from "../../modules/reel-production/application/remix-asset-import-service.js";
 import { ValidationError } from "../../shared/errors.js";
 import {
@@ -272,6 +276,8 @@ function buildRiskPolicyGate(result: {
 
 interface MediaBeastRouteDependencies {
   assetRepository: AssetRepository;
+  channelRepository: ChannelRepository;
+  projectRepository: ProjectRepository;
 }
 
 const REMIX_ASSET_PURPOSES = [
@@ -512,6 +518,95 @@ export async function handleMediaBeastRoute(
           requiresManualApproval: true,
           autoRenderCount: 0,
           note: "Factory returns production-ready plans for review. Rendering remains blocked until manual approval."
+        }
+      });
+      return true;
+    }
+
+    if (pathname === "/media-beast/comic-studio/create-projects") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const assetDirectory = readString(payload.assetDirectory, "assetDirectory");
+      const channelId = readString(payload.channelId, "channelId");
+      const targetCount = Math.min(readPositiveInteger(payload.targetCount, 3), 20);
+      const minScoreRaw = payload.minScore === undefined || payload.minScore === null ? 65 : Number(payload.minScore);
+      if (!Number.isFinite(minScoreRaw) || minScoreRaw < 0 || minScoreRaw > 100) {
+        throw new ValidationError("minScore must be between 0 and 100.");
+      }
+      const maxProjects = Math.min(readPositiveInteger(payload.maxProjects, targetCount), targetCount);
+      const titlePrefix = readOptionalString(payload.titlePrefix) ?? "HQ Short";
+      const templateId = readOptionalString(payload.templateId);
+      const editingReferencePresetId = readOptionalString(payload.editingReferencePresetId);
+
+      const minerReport = await mineComicStoryVaultFromDirectory({
+        assetDirectory,
+        maxOpportunities: Math.max(targetCount * 3, 50),
+        minScore: Math.max(40, minScoreRaw - 15)
+      });
+      const factoryPlan = buildComicShortsBatchFactoryPlan({
+        minerReport,
+        targetCount,
+        minScore: minScoreRaw
+      });
+      const bridgePayload = buildComicBatchProjectBridgePayload({
+        batch: factoryPlan,
+        channelId,
+        maxProjects,
+        titlePrefix,
+        ...(templateId !== undefined ? { templateId } : {}),
+        ...(editingReferencePresetId !== undefined ? { editingReferencePresetId } : {})
+      });
+
+      const createdProjects = [];
+      for (const projectPayload of bridgePayload.projects) {
+        const project = await createVideoProject(
+          dependencies.projectRepository,
+          dependencies.channelRepository,
+          dependencies.assetRepository,
+          projectPayload.project
+        );
+
+        const scenes = [];
+        for (const scenePayload of projectPayload.scenes) {
+          const scene = await createProjectScene(
+            dependencies.projectRepository,
+            dependencies.assetRepository,
+            project.id,
+            scenePayload
+          );
+          scenes.push(scene);
+        }
+
+        createdProjects.push({
+          projectId: project.id,
+          title: project.title,
+          shortId: projectPayload.shortId,
+          sourceOpportunityId: projectPayload.sourceOpportunityId,
+          scenesCreated: scenes.length,
+          panelAssetManifest: projectPayload.panelAssetManifest,
+          renderBlueprintHints: projectPayload.renderBlueprintHints,
+          qualityChecklist: projectPayload.qualityChecklist,
+          warnings: projectPayload.warnings
+        });
+      }
+
+      sendJson(response, 201, {
+        status: "created",
+        createdCount: createdProjects.length,
+        requestedCount: targetCount,
+        batchOverview: bridgePayload.batchOverview,
+        createdProjects,
+        rejectedOpportunities: factoryPlan.rejectedOpportunities,
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoRenderCount: 0,
+          autoImportedAssetCount: 0,
+          note: "Comic Studio created editable VideoProjects and scenes only. Panel assets still require manual review/import and render is not started."
         }
       });
       return true;

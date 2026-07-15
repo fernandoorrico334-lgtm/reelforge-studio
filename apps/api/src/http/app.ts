@@ -306,7 +306,9 @@ export function createApp({
 
     if (
       await handleMediaBeastRoute(request, response, url.pathname, {
-        assetRepository
+        assetRepository,
+        channelRepository,
+        projectRepository
       })
     ) {
       return;
