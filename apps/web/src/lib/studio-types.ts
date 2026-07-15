@@ -3305,6 +3305,128 @@ export interface OneClickBeastPlanSummary {
   canRenderAfterManualApproval: boolean;
 }
 
+
+export interface ComicStudioScenePlan {
+  order: number;
+  role: string;
+  panelId: string;
+  panelImagePath: string | null;
+  pageNumber: number | null;
+  durationSeconds: number;
+  narration: string;
+  caption: string;
+  motion: string;
+  transition: string;
+}
+
+export interface ComicStudioShortPlan {
+  id: string;
+  title: string;
+  sourceOpportunityId: string;
+  category: string;
+  score: number;
+  estimatedDurationSeconds: number;
+  scenes: ComicStudioScenePlan[];
+  narrationScript: string;
+  captionStyleId: string;
+  cinematicPresetId: string;
+  audioMasteringPresetId: string;
+  musicPresetId: string;
+  sourcePages: number[];
+  productionRank: number;
+  digestReasons: string[];
+  zoomPlan: Array<{
+    sceneOrder: number;
+    panelId: string;
+    zoomPreset: string;
+    reason: string;
+  }>;
+  qualityReport: {
+    panelCoverage: number;
+    hasHook: boolean;
+    hasClimax: boolean;
+    narrationLineCount: number;
+    warnings: string[];
+  };
+  warnings: string[];
+}
+
+export interface ComicStudioFactoryPlanResponse {
+  generatedAt: string;
+  requestedCount: number;
+  selectedCount: number;
+  shorts: ComicStudioShortPlan[];
+  productionOverview: {
+    estimatedShortsAvailable: number;
+    recommendedProductionOrder: number[];
+    bestPages: number[];
+    strongestCharacters: string[];
+    strongestThemes: string[];
+    readinessScore: number;
+    warnings: string[];
+  };
+  rejectedOpportunities: Array<{ opportunityId: string; reason: string }>;
+  minerSummary?: {
+    opportunityCount: number;
+    topOpportunityCount: number;
+    warnings: string[];
+  };
+  riskPolicyGate: {
+    candidateFirst: boolean;
+    requiresManualApproval: boolean;
+    autoRenderCount: number;
+    note: string;
+  };
+}
+
+export interface ComicStudioCreateProjectsResponse {
+  status: "created";
+  createdCount: number;
+  requestedCount: number;
+  batchOverview: ComicStudioFactoryPlanResponse["productionOverview"];
+  createdProjects: Array<{
+    projectId: string;
+    title: string;
+    shortId: string;
+    sourceOpportunityId: string;
+    scenesCreated: number;
+    panelAssetManifest: Array<{
+      sceneOrder: number;
+      panelId: string;
+      panelImagePath: string | null;
+      sourcePageNumber: number | null;
+      recommendedAssetCategory: string;
+      recommendedAssetType: string;
+      recommendedTags: string[];
+      importRequired: boolean;
+    }>;
+    renderBlueprintHints: {
+      renderFormat: string;
+      captionStyleId: string;
+      cinematicPresetId: string;
+      audioMasteringPresetId: string;
+      musicPresetId: string;
+      sourcePages: number[];
+      zoomPlan: ComicStudioShortPlan["zoomPlan"];
+    };
+    qualityChecklist: Array<{
+      id: string;
+      label: string;
+      status: "ready" | "needs_review" | "blocked";
+      detail: string;
+    }>;
+    warnings: string[];
+  }>;
+  rejectedOpportunities: Array<{ opportunityId: string; reason: string }>;
+  riskPolicyGate: {
+    candidateFirst: boolean;
+    requiresManualApproval: boolean;
+    autoRenderCount: number;
+    autoImportedAssetCount: number;
+    note: string;
+  };
+}
+
 export interface OneClickProductionResponse {
   runId: string;
   status: ReelProductionRunStatus;

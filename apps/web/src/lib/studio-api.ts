@@ -122,6 +122,8 @@ import type {
   NarrationJob,
   NarrationProviderDescriptor,
   NarrationVoicePack,
+  ComicStudioCreateProjectsResponse,
+  ComicStudioFactoryPlanResponse,
   MediaBeastCatalogResponse,
   EditorialShortPackResponse,
   VideoRemixPlanResponse,
@@ -2485,6 +2487,40 @@ export async function runOneClickProductionRequest(
 ) {
   return requestJson<OneClickProductionResponse>(
     `/reel-production/projects/${encodeURIComponent(projectId)}/run`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+
+export async function runComicStudioPlanRequest(payload: {
+  assetDirectory: string;
+  targetCount?: number;
+  minScore?: number;
+}) {
+  return requestJson<ComicStudioFactoryPlanResponse>(
+    "/media-beast/comic-shorts-factory/plan",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+
+export async function runComicStudioCreateProjectsRequest(payload: {
+  assetDirectory: string;
+  channelId: string;
+  targetCount?: number;
+  maxProjects?: number;
+  minScore?: number;
+  titlePrefix?: string;
+  templateId?: string;
+  editingReferencePresetId?: string;
+}) {
+  return requestJson<ComicStudioCreateProjectsResponse>(
+    "/media-beast/comic-studio/create-projects",
     {
       method: "POST",
       body: JSON.stringify(payload)
