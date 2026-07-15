@@ -11,6 +11,7 @@ import {
   mediaBeastProviderIds,
   buildComicIngestionPlan,
   buildComicShortsBatchFactoryPlan,
+  ingestLocalComicSource,
   mineComicStoryVaultFromDirectory,
   remixTargetStyles,
   rebuildRemixNarrationWithResearch,
@@ -404,6 +405,44 @@ export async function handleMediaBeastRoute(
     }
 
 
+
+
+    if (pathname === "/media-beast/comic-ingestion/run") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const sourcePath = readString(payload.sourcePath, "sourcePath");
+      const assetDirectory = readOptionalString(payload.assetDirectory);
+      const comicTitle = readOptionalString(payload.comicTitle);
+      const maxPages = payload.maxPages === undefined || payload.maxPages === null
+        ? undefined
+        : readPositiveInteger(payload.maxPages, 200);
+      const buildIndex = readBoolean(payload.buildIndex, true);
+      const forceRebuildIndex = readBoolean(payload.forceRebuildIndex, false);
+
+      const result = await ingestLocalComicSource({
+        sourcePath,
+        ...(assetDirectory ? { assetDirectory } : {}),
+        ...(comicTitle ? { comicTitle } : {}),
+        ...(maxPages !== undefined ? { maxPages } : {}),
+        buildIndex,
+        forceRebuildIndex
+      });
+
+      sendJson(response, 200, {
+        ...result,
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoRenderCount: 0,
+          note: "Local comic ingestion only prepares authorized local pages and panel index. Short generation/render still requires manual approval."
+        }
+      });
+      return true;
+    }
 
     if (pathname === "/media-beast/comic-ingestion/plan") {
       if (request.method !== "POST") {
