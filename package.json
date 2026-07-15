@@ -35,6 +35,7 @@
     "smoke:reference-comics-match": "node scripts/smoke-reference-comics-match.mjs",
     "smoke:comic-story-miner": "node scripts/smoke-comic-story-miner.mjs",
     "smoke:comic-shorts-factory": "node scripts/smoke-comic-shorts-factory.mjs",
+    "smoke:comic-short-project-bridge": "node scripts/smoke-comic-short-project-bridge.mjs",
     "smoke:local-comic-ingestion": "node scripts/smoke-local-comic-ingestion.mjs",
     "smoke:hybrid-visual": "node scripts/smoke-hybrid-visual.mjs",
     "smoke:hybrid-visual:render-ready": "node scripts/smoke-hybrid-visual-render-ready.mjs",
