@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+﻿import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -26,10 +26,10 @@ function resolveComicSeriesLabel(title: string): string {
   const lower = title.toLowerCase();
   if (/espiral mortal/i.test(lower)) return "Espiral Mortal";
   if (/simbionte/i.test(lower)) return "Simbionte Homem-Aranha";
-  if (/fcbd|quadrinho gr[aá]tis/i.test(lower)) return "FCBD";
+  if (/fcbd|quadrinho gr[a\u00e1]tis/i.test(lower)) return "FCBD";
   if (/espantoso homem-aranha/i.test(lower)) return "Espantoso Homem-Aranha";
   if (/capa|cover/i.test(lower)) return "Cover";
-  return title.split(/[—-]/)[0]?.trim() || title;
+  return title.split(/[\u2014-]/)[0]?.trim() || title;
 }
 
 export const LOCAL_PANEL_INDEX_VERSION = 3 as const;
@@ -90,7 +90,7 @@ export type LocalComicPanelParentContext = {
   issueTitle?: string;
   pageTitle?: string;
   parentTags: string[];
-  /** Discovery-only entities from page/HQ metadata — never copied into localEvidence. */
+  /** Discovery-only entities from page/HQ metadata; never copied into localEvidence. */
   parentEntities: string[];
 };
 
@@ -1084,7 +1084,7 @@ function normalizeOcrLines(text: string): string[] {
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter((line) => {
       if (line.length < 2 || /^[-_??.]+$/.test(line)) return false;
-      const letters = line.replace(/[^A-Za-zÀ-ÿ]/g, "");
+      const letters = line.replace(/[^\p{L}]/gu, "");
       const alphaRatio = letters.length / Math.max(1, line.replace(/\s/g, "").length);
       return letters.length >= 2 && alphaRatio >= 0.28;
     })
@@ -1094,9 +1094,9 @@ function normalizeOcrLines(text: string): string[] {
 function classifyOcrSoundEffects(lines: string[]): string[] {
   return lines
     .filter((line) => {
-      const letters = line.replace(/[^A-Za-zÀ-ÿ]/g, "");
+      const letters = line.replace(/[^\p{L}]/gu, "");
       if (letters.length < 2 || letters.length > 16) return false;
-      const upperRatio = letters.replace(/[^A-ZÀ-Ý]/g, "").length / Math.max(1, letters.length);
+      const upperRatio = letters.replace(/[^A-Z]/g, "").length / Math.max(1, letters.length);
       return upperRatio >= 0.72 && /boom|crash|pow|bam|wham|skree|roar|grr|krak|thoom|zap|bang/i.test(line);
     })
     .slice(0, 8);
@@ -1109,12 +1109,138 @@ function classifyOcrDialogue(lines: string[]): string[] {
 
 function scoreOcrLines(lines: string[]): number {
   return lines.reduce((score, line) => {
-    const letters = line.replace(/[^A-Za-zÀ-ÿ]/g, "");
-    const words = line.split(/\s+/).filter((word) => /[A-Za-zÀ-ÿ]{3,}/.test(word));
-    const vowelish = /[aeiouáéíóúâêôãõàü]/i.test(letters);
+    const letters = line.replace(/[^\p{L}]/gu, "");
+    const words = line.split(/\s+/).filter((word) => /\p{L}{3,}/u.test(word));
+    const vowelish = /[aeiou]/i.test(letters.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
     const alphaRatio = letters.length / Math.max(1, line.replace(/\s/g, "").length);
     return score + words.length + (vowelish ? 1 : 0) + (alphaRatio > 0.55 ? 1 : 0);
   }, 0);
+}
+type OcrTextRegion = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence: number;
+};
+
+function isLikelyTextPaperPixel(r: number, g: number, b: number): boolean {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  return max >= 205 && min >= 170 && max - min <= 70;
+}
+
+function detectLikelyTextRegions(input: {
+  pixels: Buffer;
+  sampleWidth: number;
+  sampleHeight: number;
+  originalWidth: number;
+  originalHeight: number;
+}): OcrTextRegion[] {
+  const { pixels, sampleWidth, sampleHeight, originalWidth, originalHeight } = input;
+  const visited = new Uint8Array(sampleWidth * sampleHeight);
+  const regions: OcrTextRegion[] = [];
+  const minPixels = Math.max(24, Math.round(sampleWidth * sampleHeight * 0.002));
+  const maxPixels = Math.round(sampleWidth * sampleHeight * 0.5);
+
+  for (let y = 0; y < sampleHeight; y += 1) {
+    for (let x = 0; x < sampleWidth; x += 1) {
+      const index = y * sampleWidth + x;
+      if (visited[index]) continue;
+      const offset = index * 3;
+      if (!isLikelyTextPaperPixel(pixels[offset] ?? 0, pixels[offset + 1] ?? 0, pixels[offset + 2] ?? 0)) {
+        visited[index] = 1;
+        continue;
+      }
+
+      const stack: Array<[number, number]> = [[x, y]];
+      visited[index] = 1;
+      let minX = x;
+      let maxX = x;
+      let minY = y;
+      let maxY = y;
+      let count = 0;
+
+      while (stack.length > 0) {
+        const [cx, cy] = stack.pop() as [number, number];
+        count += 1;
+        minX = Math.min(minX, cx);
+        maxX = Math.max(maxX, cx);
+        minY = Math.min(minY, cy);
+        maxY = Math.max(maxY, cy);
+        const neighbors: Array<[number, number]> = [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]];
+        for (const [nx, ny] of neighbors) {
+          if (nx < 0 || ny < 0 || nx >= sampleWidth || ny >= sampleHeight) continue;
+          const nIndex = ny * sampleWidth + nx;
+          if (visited[nIndex]) continue;
+          const nOffset = nIndex * 3;
+          visited[nIndex] = 1;
+          if (isLikelyTextPaperPixel(pixels[nOffset] ?? 0, pixels[nOffset + 1] ?? 0, pixels[nOffset + 2] ?? 0)) {
+            stack.push([nx, ny]);
+          }
+        }
+      }
+
+      const boxWidth = maxX - minX + 1;
+      const boxHeight = maxY - minY + 1;
+      const aspect = boxWidth / Math.max(1, boxHeight);
+      const fillRatio = count / Math.max(1, boxWidth * boxHeight);
+      if (count < minPixels || count > maxPixels) continue;
+      if (boxWidth < 20 || boxHeight < 10) continue;
+      if (aspect < 0.45 || aspect > 9) continue;
+      if (fillRatio < 0.18) continue;
+
+      const padX = Math.max(8, Math.round(boxWidth * 0.22));
+      const padY = Math.max(8, Math.round(boxHeight * 0.28));
+      const sx = Math.max(0, minX - padX);
+      const sy = Math.max(0, minY - padY);
+      const sw = Math.min(sampleWidth - sx, boxWidth + padX * 2);
+      const sh = Math.min(sampleHeight - sy, boxHeight + padY * 2);
+      const scaleX = originalWidth / sampleWidth;
+      const scaleY = originalHeight / sampleHeight;
+      regions.push({
+        id: `text-region-${regions.length + 1}`,
+        x: Math.max(0, Math.round(sx * scaleX)),
+        y: Math.max(0, Math.round(sy * scaleY)),
+        width: Math.max(8, Math.round(sw * scaleX)),
+        height: Math.max(8, Math.round(sh * scaleY)),
+        confidence: Number(Math.min(0.95, 0.45 + fillRatio * 0.8).toFixed(2))
+      });
+    }
+  }
+
+  return regions
+    .sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y))
+    .slice(0, 8);
+}
+
+async function cropOcrTextRegion(input: {
+  panelImagePath: string;
+  region: OcrTextRegion;
+  index: number;
+  ffmpegCommand?: string;
+}): Promise<string> {
+  const ffmpegCommand = input.ffmpegCommand ?? process.env.FFMPEG_PATH ?? "ffmpeg";
+  const outputPath = `${input.panelImagePath}.ocr-region-${input.index + 1}.png`;
+  await runTextCommand({
+    command: ffmpegCommand,
+    args: [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      input.panelImagePath,
+      "-vf",
+      `crop=${input.region.width}:${input.region.height}:${input.region.x}:${input.region.y}`,
+      "-frames:v",
+      "1",
+      outputPath
+    ],
+    timeoutMs: 90000
+  });
+  return outputPath;
 }
 
 async function preparePanelImageForOcr(input: {
@@ -1202,13 +1328,59 @@ async function runPanelOcr(input: {
   tesseractCommand?: string;
   languages?: string;
   ffmpegCommand?: string;
+  panelWidth?: number;
+  panelHeight?: number;
 }): Promise<{ detectedText: string[]; dialogue: string[]; soundEffects: string[]; warning: string | null }> {
   const command = input.tesseractCommand ?? process.env.TESSERACT_PATH ?? "tesseract";
   const languages = input.languages ?? process.env.REELFORGE_OCR_LANGUAGES ?? "por+eng";
   const rawPsm = process.env.REELFORGE_OCR_PSM ?? "6";
   const preprocessPsm = process.env.REELFORGE_OCR_PREPROCESS_PSM ?? "11";
+  const warnings: string[] = [];
+  const regionLines: string[] = [];
+
+  if (input.panelWidth && input.panelHeight) {
+    try {
+      const sample = await readPagePixelsScaled({
+        assetPath: input.panelImagePath,
+        pageWidth: input.panelWidth,
+        pageHeight: input.panelHeight,
+        ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {})
+      });
+      const regions = detectLikelyTextRegions({
+        pixels: sample.pixels,
+        sampleWidth: sample.sampleWidth,
+        sampleHeight: sample.sampleHeight,
+        originalWidth: input.panelWidth,
+        originalHeight: input.panelHeight
+      });
+
+      for (const [index, region] of regions.entries()) {
+        try {
+          const regionPath = await cropOcrTextRegion({
+            panelImagePath: input.panelImagePath,
+            region,
+            index,
+            ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {})
+          });
+          const pass = await runOcrPass({ imagePath: regionPath, command, languages, psm: rawPsm });
+          regionLines.push(...pass.lines);
+          warnings.push(...pass.warnings);
+        } catch (regionError) {
+          warnings.push(`ocr_region_failed:${regionError instanceof Error ? regionError.message : String(regionError)}`);
+        }
+      }
+      if (regions.length > 0) warnings.push(`ocr_text_regions:${regions.length}`);
+    } catch (regionDetectError) {
+      warnings.push(`ocr_region_detection_failed:${regionDetectError instanceof Error ? regionDetectError.message : String(regionDetectError)}`);
+    }
+  }
+
+  const uniqueRegionLines = Array.from(new Set(regionLines)).slice(0, 24);
+  const regionScore = scoreOcrLines(uniqueRegionLines);
   const raw = await runOcrPass({ imagePath: input.panelImagePath, command, languages, psm: rawPsm });
-  let best = { lines: raw.lines, warnings: raw.warnings, mode: "raw", score: scoreOcrLines(raw.lines) };
+  let best = regionScore > scoreOcrLines(raw.lines)
+    ? { lines: uniqueRegionLines, warnings: [...warnings, ...raw.warnings], mode: "text_regions", score: regionScore }
+    : { lines: raw.lines, warnings: [...warnings, ...raw.warnings], mode: "raw", score: scoreOcrLines(raw.lines) };
 
   if (best.score < 4) {
     const prepared = await preparePanelImageForOcr({
@@ -1219,7 +1391,7 @@ async function runPanelOcr(input: {
     const processedScore = scoreOcrLines(processed.lines);
     const processedWarnings = [...(prepared.warning ? [prepared.warning] : []), ...processed.warnings];
     if (processedScore > best.score) {
-      best = { lines: processed.lines, warnings: processedWarnings, mode: "preprocessed", score: processedScore };
+      best = { lines: processed.lines, warnings: [...best.warnings, ...processedWarnings], mode: "preprocessed", score: processedScore };
     } else {
       best.warnings = [...best.warnings, ...processedWarnings];
     }
@@ -1572,7 +1744,9 @@ export async function indexUserProvidedComicPage(
           panelImagePath,
           ...(input.tesseractCommand ? { tesseractCommand: input.tesseractCommand } : {}),
           ...(input.ocrLanguages ? { languages: input.ocrLanguages } : {}),
-          ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {})
+          ...(input.ffmpegCommand ? { ffmpegCommand: input.ffmpegCommand } : {}),
+          panelWidth: cropBounds.width,
+          panelHeight: cropBounds.height
         })
       : { detectedText: [], dialogue: [], soundEffects: [], warning: null };
 
@@ -2533,6 +2707,7 @@ export function findLocalPanelById(
   }
   return null;
 }
+
 
 
 
