@@ -1,4 +1,4 @@
-import { extname } from "node:path";
+﻿import { extname } from "node:path";
 import type {
   ComicShortOpportunity,
   ComicShortOpportunityCategory,
@@ -58,6 +58,15 @@ export type ComicShortProductionPlan = {
     warnings: string[];
   };
   warnings: string[];
+  sourcePages: number[];
+  productionRank: number;
+  digestReasons: string[];
+  zoomPlan: Array<{
+    sceneOrder: number;
+    panelId: string;
+    zoomPreset: "face_focus" | "action_center" | "text_safe_push" | "wide_context" | "impact_detail";
+    reason: string;
+  }>;
 };
 
 export type ComicShortsBatchFactoryPlan = {
@@ -66,6 +75,15 @@ export type ComicShortsBatchFactoryPlan = {
   requestedCount: number;
   selectedCount: number;
   shorts: ComicShortProductionPlan[];
+  productionOverview: {
+    estimatedShortsAvailable: number;
+    recommendedProductionOrder: number[];
+    bestPages: number[];
+    strongestCharacters: string[];
+    strongestThemes: string[];
+    readinessScore: number;
+    warnings: string[];
+  };
   rejectedOpportunities: Array<{
     opportunityId: string;
     reason: string;
@@ -140,9 +158,69 @@ function makeCaption(line: string): string {
   return line.replace(/\s+/g, " ").trim().slice(0, 88);
 }
 
+function zoomPresetForScene(scene: ComicShortScenePlan): ComicShortProductionPlan["zoomPlan"][number]["zoomPreset"] {
+  if (scene.role === "hook") return "impact_detail";
+  if (scene.role === "climax") return "action_center";
+  if (scene.role === "context") return "wide_context";
+  if (scene.narration.length > 80 || scene.caption.length > 70) return "text_safe_push";
+  return "face_focus";
+}
+
+function buildZoomPlan(scenes: ComicShortScenePlan[]): ComicShortProductionPlan["zoomPlan"] {
+  return scenes.map((scene) => ({
+    sceneOrder: scene.order,
+    panelId: scene.panelId,
+    zoomPreset: zoomPresetForScene(scene),
+    reason: `${scene.role}:${scene.motion}:page${scene.pageNumber ?? "unknown"}`
+  }));
+}
+
+function digestBoost(input: {
+  opportunity: ComicShortOpportunity;
+  minerReport: ComicStoryMinerReport;
+}): number {
+  const digest = input.minerReport.issueStoryDigest;
+  const pages = input.opportunity.pages;
+  let boost = 0;
+  if (pages.some((page) => digest.recommendedProductionOrder.includes(page))) boost += 14;
+  if (pages.some((page) => digest.bestPages.includes(page))) boost += 10;
+  if (pages.some((page) => digest.climaxPages.includes(page))) boost += 10;
+  if (pages.some((page) => digest.revealPages.includes(page))) boost += 8;
+  if (pages.some((page) => digest.dialoguePages.includes(page))) boost += 4;
+  return boost;
+}
+
+function buildDigestReasons(input: {
+  opportunity: ComicShortOpportunity;
+  minerReport: ComicStoryMinerReport;
+}): string[] {
+  const digest = input.minerReport.issueStoryDigest;
+  const reasons: string[] = [];
+  const pages = input.opportunity.pages;
+  if (pages.some((page) => digest.recommendedProductionOrder.includes(page))) reasons.push("digest:recommended_page_order");
+  if (pages.some((page) => digest.bestPages.includes(page))) reasons.push("digest:best_page");
+  if (pages.some((page) => digest.climaxPages.includes(page))) reasons.push("digest:climax_page");
+  if (pages.some((page) => digest.revealPages.includes(page))) reasons.push("digest:reveal_page");
+  if (pages.some((page) => digest.dialoguePages.includes(page))) reasons.push("digest:text_context_page");
+  return reasons;
+}
+
+function batchReadinessScore(shorts: ComicShortProductionPlan[]): number {
+  if (shorts.length === 0) return 0;
+  const average = shorts.reduce((sum, short) => {
+    let score = short.score;
+    if (short.qualityReport.hasHook) score += 5;
+    if (short.qualityReport.hasClimax) score += 8;
+    score += short.qualityReport.panelCoverage * 10;
+    score -= short.qualityReport.warnings.length * 4;
+    return sum + clamp(score, 0, 100);
+  }, 0) / shorts.length;
+  return Math.round(average);
+}
 export function buildComicShortProductionPlan(input: {
   opportunity: ComicShortOpportunity;
   index: number;
+  minerReport?: ComicStoryMinerReport;
 }): ComicShortProductionPlan {
   const opportunity = input.opportunity;
   const style = styleForCategory(opportunity.category);
@@ -183,6 +261,12 @@ export function buildComicShortProductionPlan(input: {
   if (!scenes.some((scene) => scene.role === "hook")) warnings.push("missing_hook_scene");
   if (!scenes.some((scene) => scene.role === "climax")) warnings.push("missing_climax_scene");
   if (scenes.some((scene) => !scene.panelImagePath)) warnings.push("missing_panel_image_path");
+  const digestReasons = input.minerReport
+    ? buildDigestReasons({ opportunity, minerReport: input.minerReport })
+    : [];
+  const productionRank = input.index + 1;
+  const zoomPlan = buildZoomPlan(scenes);
+
 
   return {
     id: `comic-short-${input.index + 1}-${slug(opportunity.title)}`,
@@ -208,7 +292,11 @@ export function buildComicShortProductionPlan(input: {
       narrationLineCount: scenes.length,
       warnings
     },
-    warnings
+    warnings,
+    sourcePages: opportunity.pages,
+    productionRank,
+    digestReasons,
+    zoomPlan
   };
 }
 
@@ -229,7 +317,9 @@ export function buildComicShortsBatchFactoryPlan(input: {
   const ranked = [...input.minerReport.opportunities].sort((left, right) => {
     const categoryBias = (categoryCounts.get(left.category) ?? 0) - (categoryCounts.get(right.category) ?? 0);
     if (categoryBias !== 0) return categoryBias;
-    return right.score - left.score;
+    const leftScore = left.score + digestBoost({ opportunity: left, minerReport: input.minerReport });
+    const rightScore = right.score + digestBoost({ opportunity: right, minerReport: input.minerReport });
+    return rightScore - leftScore;
   });
 
   for (const opportunity of ranked) {
@@ -253,7 +343,8 @@ export function buildComicShortsBatchFactoryPlan(input: {
     }
   }
 
-  const shorts = selected.map((opportunity, index) => buildComicShortProductionPlan({ opportunity, index }));
+  const shorts = selected.map((opportunity, index) => buildComicShortProductionPlan({ opportunity, index, minerReport: input.minerReport }));
+  const readinessScore = batchReadinessScore(shorts);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -261,6 +352,15 @@ export function buildComicShortsBatchFactoryPlan(input: {
     requestedCount: targetCount,
     selectedCount: shorts.length,
     shorts,
+    productionOverview: {
+      estimatedShortsAvailable: input.minerReport.issueStoryDigest.estimatedShortsAvailable,
+      recommendedProductionOrder: input.minerReport.issueStoryDigest.recommendedProductionOrder,
+      bestPages: input.minerReport.issueStoryDigest.bestPages,
+      strongestCharacters: input.minerReport.issueStoryDigest.strongestCharacters,
+      strongestThemes: input.minerReport.issueStoryDigest.strongestThemes,
+      readinessScore,
+      warnings: input.minerReport.issueStoryDigest.warnings
+    },
     rejectedOpportunities,
     nextRecommendedImprovements: [
       "Instalar um rasterizador local de PDF (Poppler pdftoppm, MuPDF mutool ou ImageMagick magick) para ingestao direta de HQs em PDF.",
@@ -335,3 +435,7 @@ export function buildComicIngestionPlan(input: {
     candidateFirst: true
   };
 }
+
+
+
+

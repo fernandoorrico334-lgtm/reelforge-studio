@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from "node:path";
+﻿import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -110,6 +110,10 @@ async function main() {
   assert(batch.shorts.every((short) => short.narrationScript.length > 20), "each short needs narration");
   assert(batch.shorts.every((short) => short.qualityReport.hasHook), "each short needs hook");
   assert(batch.candidateFirst && batch.requiresManualApproval, "factory must stay candidate-first");
+  assert(batch.productionOverview.readinessScore > 0, "expected batch readiness score");
+  assert(batch.productionOverview.recommendedProductionOrder.length > 0, "expected recommended production order");
+  assert(batch.shorts.every((short) => short.zoomPlan.length === short.scenes.length), "each scene needs zoom plan");
+  assert(batch.shorts.every((short) => short.productionRank > 0), "each short needs production rank");
 
   console.log(JSON.stringify({
     status: "completed",
@@ -118,6 +122,10 @@ async function main() {
     firstShort: batch.shorts[0].title,
     firstDuration: batch.shorts[0].estimatedDurationSeconds,
     firstSceneCount: batch.shorts[0].scenes.length,
+    readinessScore: batch.productionOverview.readinessScore,
+    estimatedShortsAvailable: batch.productionOverview.estimatedShortsAvailable,
+    recommendedProductionOrder: batch.productionOverview.recommendedProductionOrder.slice(0, 6),
+    firstZoomPlan: batch.shorts[0].zoomPlan,
     ingestionSourceType: ingestion.sourceType,
     candidateFirst: batch.candidateFirst
   }, null, 2));
@@ -127,3 +135,4 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
