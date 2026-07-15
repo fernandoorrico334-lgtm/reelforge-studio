@@ -1,4 +1,5 @@
 import { applyComicPremiumDirector, type ComicPremiumDirectorReport } from "./comic-premium-director.js";
+import { directComicSfxBeatPlan, type ComicSfxBeatDirectorReport } from "./comic-sfx-beat-director.js";
 import type {
   ComicShortProductionPlan,
   ComicShortScenePlan,
@@ -99,6 +100,7 @@ export type ComicProjectBridgePayload = {
     zoomPlan: ComicShortProductionPlan["zoomPlan"];
     premiumDirector: ComicPremiumDirectorReport;
     smartCrop: ComicPremiumDirectorReport["smartCrop"];
+    sfxBeatDirector: ComicSfxBeatDirectorReport;
   };
   qualityChecklist: Array<{
     id: string;
@@ -167,7 +169,7 @@ function visualPromptForScene(scene: ComicShortScenePlan, short: ComicShortProdu
   ].join(" ");
 }
 
-function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport): string {
+function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport, sfxBeatDirector?: ComicSfxBeatDirectorReport): string {
   return safeJson({
     source: "comic-short-project-bridge",
     shortId: short.id,
@@ -184,6 +186,7 @@ function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProducti
     smartCropDirective: premiumDirector?.smartCrop.directives.find((entry) => entry.sceneOrder === scene.order) ?? null,
     captionNarrationDirection: premiumDirector?.captionNarration.scenes.find((entry) => entry.sceneOrder === scene.order) ?? null,
     captionCues: premiumDirector?.captionNarration.scenes.find((entry) => entry.sceneOrder === scene.order)?.captionCues ?? [],
+    sfxBeatCue: sfxBeatDirector?.cues.find((entry) => entry.sceneOrder === scene.order) ?? null,
     digestReasons: short.digestReasons,
     productionRank: short.productionRank,
     requiresManualAssetImport: true
@@ -256,6 +259,7 @@ export function buildComicShortProjectBridgePayload(input: {
   const directed = applyComicPremiumDirector({ short: input.short });
   const short = directed.short;
   const premiumDirector = directed.report;
+  const sfxBeatDirector = directComicSfxBeatPlan({ short, premiumDirector });
   const titlePrefix = input.titlePrefix ? `${input.titlePrefix.trim()} ` : "";
   const scenes: ComicProjectBridgeSceneInput[] = short.scenes.map((scene) => ({
     order: scene.order,
@@ -275,7 +279,7 @@ export function buildComicShortProjectBridgePayload(input: {
     visualSourceMode: "asset_only",
     visualPrompt: visualPromptForScene(scene, short, premiumDirector),
     negativePrompt: "Nao inventar personagens, nao mudar eventos centrais, nao usar imagens externas sem aprovacao.",
-    visualRecipe: sceneVisualRecipe(scene, short, premiumDirector),
+    visualRecipe: sceneVisualRecipe(scene, short, premiumDirector, sfxBeatDirector),
     generationStatus: null,
     generationProvider: null,
     generationSeed: null,
@@ -342,10 +346,11 @@ export function buildComicShortProjectBridgePayload(input: {
       sourcePages: short.sourcePages,
       zoomPlan: short.zoomPlan,
       premiumDirector,
-      smartCrop: premiumDirector.smartCrop
+      smartCrop: premiumDirector.smartCrop,
+      sfxBeatDirector
     },
     qualityChecklist: checklistForShort(short, premiumDirector),
-    warnings: [...short.warnings, "premium_director_applied", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
+    warnings: [...short.warnings, ...sfxBeatDirector.warnings, "premium_director_applied", "comic_sfx_beat_director_applied", "manual_sfx_asset_selection_required", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
     candidateFirst: true,
     requiresManualApproval: true
   };
