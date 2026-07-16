@@ -2,6 +2,7 @@ import { applyComicPremiumDirector, type ComicPremiumDirectorReport } from "./co
 import { scoreComicRenderReadiness, type ComicRenderQualityScorerReport } from "./comic-render-quality-scorer.js";
 import { directComicSfxBeatPlan, type ComicSfxBeatDirectorReport } from "./comic-sfx-beat-director.js";
 import { buildComicGoldenRenderQaReport, type ComicGoldenRenderQaReport } from "./comic-golden-render-qa.js";
+import { selectComicPanelMoments, type ComicPanelMomentSelectorReport } from "./comic-panel-moment-selector.js";
 import type {
   ComicShortProductionPlan,
   ComicShortScenePlan,
@@ -105,6 +106,7 @@ export type ComicProjectBridgePayload = {
     sfxBeatDirector: ComicSfxBeatDirectorReport;
     renderQualityScore: ComicRenderQualityScorerReport;
     goldenRenderQa: ComicGoldenRenderQaReport;
+    panelMomentSelector: ComicPanelMomentSelectorReport;
   };
   qualityChecklist: Array<{
     id: string;
@@ -159,13 +161,15 @@ function emphasisWordsForScene(scene: ComicShortScenePlan, short: ComicShortProd
   return words.filter((word) => text.includes(word)).slice(0, 4);
 }
 
-function visualPromptForScene(scene: ComicShortScenePlan, short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport): string {
+function visualPromptForScene(scene: ComicShortScenePlan, short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport, panelMomentSelector?: ComicPanelMomentSelectorReport): string {
+  const selectedMoment = panelMomentSelector?.selectedMoments.find((moment) => moment.sceneOrder === scene.order);
   return [
     `Use o painel autorizado ${scene.panelId} como visual principal.`,
     `Enquadramento vertical 9:16 com ${scene.motion}.`,
     `Papel narrativo: ${scene.role}.`,
     `Tema do short: ${short.title}.`,
     `Zoom planejado: ${short.zoomPlan.find((entry) => entry.sceneOrder === scene.order)?.zoomPreset ?? "action_center"}.`,
+    selectedMoment ? `Momento visual escolhido: ${selectedMoment.type}; crop ${JSON.stringify(selectedMoment.normalizedCrop)}; ${selectedMoment.zoomInstruction}` : "",
     ...(premiumDirector
       ? [premiumDirector.sceneDirections.find((entry) => entry.sceneOrder === scene.order)?.cropInstruction ?? ""]
       : []),
@@ -173,7 +177,7 @@ function visualPromptForScene(scene: ComicShortScenePlan, short: ComicShortProdu
   ].join(" ");
 }
 
-function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport, sfxBeatDirector?: ComicSfxBeatDirectorReport): string {
+function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProductionPlan, premiumDirector?: ComicPremiumDirectorReport, sfxBeatDirector?: ComicSfxBeatDirectorReport, panelMomentSelector?: ComicPanelMomentSelectorReport): string {
   return safeJson({
     source: "comic-short-project-bridge",
     shortId: short.id,
@@ -191,6 +195,7 @@ function sceneVisualRecipe(scene: ComicShortScenePlan, short: ComicShortProducti
     captionNarrationDirection: premiumDirector?.captionNarration.scenes.find((entry) => entry.sceneOrder === scene.order) ?? null,
     captionCues: premiumDirector?.captionNarration.scenes.find((entry) => entry.sceneOrder === scene.order)?.captionCues ?? [],
     sfxBeatCue: sfxBeatDirector?.cues.find((entry) => entry.sceneOrder === scene.order) ?? null,
+    selectedPanelMoment: panelMomentSelector?.selectedMoments.find((entry) => entry.sceneOrder === scene.order) ?? null,
     digestReasons: short.digestReasons,
     productionRank: short.productionRank,
     requiresManualAssetImport: true
@@ -282,6 +287,7 @@ export function buildComicShortProjectBridgePayload(input: {
   const sfxBeatDirector = directComicSfxBeatPlan({ short, premiumDirector });
   const renderQualityScore = scoreComicRenderReadiness({ short, premiumDirector, sfxBeatDirector });
   const goldenRenderQa = buildComicGoldenRenderQaReport({ short, premiumDirector, sfxBeatDirector, renderQualityScore });
+  const panelMomentSelector = selectComicPanelMoments({ short });
   const titlePrefix = input.titlePrefix ? `${input.titlePrefix.trim()} ` : "";
   const scenes: ComicProjectBridgeSceneInput[] = short.scenes.map((scene) => ({
     order: scene.order,
@@ -299,9 +305,9 @@ export function buildComicShortProjectBridgePayload(input: {
     sfxVolume: scene.role === "climax" || scene.role === "hook" ? 0.85 : 0.65,
     visualPreset: short.cinematicPresetId,
     visualSourceMode: "asset_only",
-    visualPrompt: visualPromptForScene(scene, short, premiumDirector),
+    visualPrompt: visualPromptForScene(scene, short, premiumDirector, panelMomentSelector),
     negativePrompt: "Nao inventar personagens, nao mudar eventos centrais, nao usar imagens externas sem aprovacao.",
-    visualRecipe: sceneVisualRecipe(scene, short, premiumDirector, sfxBeatDirector),
+    visualRecipe: sceneVisualRecipe(scene, short, premiumDirector, sfxBeatDirector, panelMomentSelector),
     generationStatus: null,
     generationProvider: null,
     generationSeed: null,
@@ -371,10 +377,11 @@ export function buildComicShortProjectBridgePayload(input: {
       smartCrop: premiumDirector.smartCrop,
       sfxBeatDirector,
       renderQualityScore,
-      goldenRenderQa
+      goldenRenderQa,
+      panelMomentSelector
     },
     qualityChecklist: checklistForShort(short, premiumDirector, renderQualityScore, goldenRenderQa),
-    warnings: [...short.warnings, ...sfxBeatDirector.warnings, ...renderQualityScore.warnings, ...renderQualityScore.blockers, ...goldenRenderQa.warnings, ...goldenRenderQa.blockers, "comic_render_quality_scorer_applied", "comic_golden_render_qa_applied", "premium_director_applied", "comic_sfx_beat_director_applied", "manual_sfx_asset_selection_required", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
+    warnings: [...short.warnings, ...sfxBeatDirector.warnings, ...renderQualityScore.warnings, ...renderQualityScore.blockers, ...goldenRenderQa.warnings, ...goldenRenderQa.blockers, ...panelMomentSelector.warnings, "comic_render_quality_scorer_applied", "comic_golden_render_qa_applied", "comic_panel_moment_selector_applied", "premium_director_applied", "comic_sfx_beat_director_applied", "manual_sfx_asset_selection_required", "manual_panel_asset_import_required", "manual_approval_required_before_render"],
     candidateFirst: true,
     requiresManualApproval: true
   };

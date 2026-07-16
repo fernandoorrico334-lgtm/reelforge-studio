@@ -40,6 +40,7 @@
     "smoke:comic-premium-director": "node scripts/smoke-comic-premium-director.mjs",
     "smoke:comic-sfx-beat-director": "node scripts/smoke-comic-sfx-beat-director.mjs",
     "smoke:comic-render-quality-scorer": "node scripts/smoke-comic-render-quality-scorer.mjs",
+    "smoke:comic-panel-moment-selector": "node scripts/smoke-comic-panel-moment-selector.mjs",
     "smoke:comic-golden-render-qa": "node scripts/smoke-comic-golden-render-qa.mjs",
     "smoke:comic-golden-runtime-qa": "node scripts/smoke-comic-golden-runtime-qa.mjs",
     "smoke:comic-final-video-dna": "node scripts/smoke-comic-final-video-dna.mjs",
