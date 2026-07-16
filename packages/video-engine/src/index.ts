@@ -470,25 +470,62 @@ function parseSmartCropDirective(recipe: Record<string, unknown> | null): Render
   };
 }
 
+function normalizeCueEnd(startSeconds: number, endSeconds: number) {
+  return endSeconds > startSeconds ? endSeconds : startSeconds + 0.45;
+}
+
 function parseCaptionCues(recipe: Record<string, unknown> | null): RenderBlueprintCaptionCue[] {
   const raw = recipe?.premiumDirection;
   const nestedCues = isRecord(raw) ? raw.captionCues : undefined;
   const sceneCues = Array.isArray(nestedCues) ? nestedCues : recipe?.captionCues;
-  if (!Array.isArray(sceneCues)) return [];
-  return sceneCues.filter(isRecord).map((cue, index) => ({
-    cueIndex: numberFromRecord(cue, "cueIndex", index + 1),
-    startSeconds: numberFromRecord(cue, "startSeconds", 0),
-    endSeconds: numberFromRecord(cue, "endSeconds", 0),
-    text: stringFromRecord(cue, "text", ""),
-    highlightedWords: stringArrayFromRecord(cue, "highlightedWords"),
-    layout: typeof cue.layout === "string" ? cue.layout : null,
-    animation: typeof cue.animation === "string" ? cue.animation : null,
-    sfxSuggestion: typeof cue.sfxSuggestion === "string" ? cue.sfxSuggestion : null,
-    readingImpactScore: typeof cue.readingImpactScore === "number" ? cue.readingImpactScore : null,
-    readingWarnings: stringArrayFromRecord(cue, "readingWarnings")
-  })).filter((cue) => cue.text.trim().length > 0);
-}
+  if (Array.isArray(sceneCues)) {
+    return sceneCues.filter(isRecord).map((cue, index) => {
+      const startSeconds = numberFromRecord(cue, "startSeconds", 0);
+      const endSeconds = normalizeCueEnd(startSeconds, numberFromRecord(cue, "endSeconds", startSeconds + 0.45));
+      return {
+        cueIndex: numberFromRecord(cue, "cueIndex", index + 1),
+        startSeconds,
+        endSeconds,
+        text: stringFromRecord(cue, "text", ""),
+        highlightedWords: stringArrayFromRecord(cue, "highlightedWords"),
+        layout: typeof cue.layout === "string" ? cue.layout : null,
+        animation: typeof cue.animation === "string" ? cue.animation : null,
+        sfxSuggestion: typeof cue.sfxSuggestion === "string" ? cue.sfxSuggestion : null,
+        readingImpactScore: typeof cue.readingImpactScore === "number" ? cue.readingImpactScore : null,
+        readingWarnings: stringArrayFromRecord(cue, "readingWarnings")
+      };
+    }).filter((cue) => cue.text.trim().length > 0);
+  }
 
+  const captionRenderPlan = recipe?.captionRenderPlan;
+  const wordCues = isRecord(captionRenderPlan) && Array.isArray(captionRenderPlan.wordCues)
+    ? captionRenderPlan.wordCues
+    : [];
+  const emphasisWords = isRecord(captionRenderPlan) ? stringArrayFromRecord(captionRenderPlan, "emphasisWords") : [];
+  const safeZone = isRecord(captionRenderPlan) ? stringFromRecord(captionRenderPlan, "safeZone", "lower-third") : "lower-third";
+  const impactScore = isRecord(captionRenderPlan) ? numberFromRecord(captionRenderPlan, "impactScore", 88) : 88;
+  const planAnimation = isRecord(captionRenderPlan) ? stringFromRecord(captionRenderPlan, "animation", "comic_pop") : "comic_pop";
+
+  return wordCues.filter(isRecord).map((cue, index) => {
+    const startSeconds = numberFromRecord(cue, "startSeconds", index * 0.55);
+    const endSeconds = normalizeCueEnd(startSeconds, numberFromRecord(cue, "endSeconds", startSeconds + 0.55));
+    const text = stringFromRecord(cue, "word", "");
+    const emphasis = stringFromRecord(cue, "emphasis", "punch");
+    const animation = stringFromRecord(cue, "animation", planAnimation);
+    return {
+      cueIndex: index + 1,
+      startSeconds,
+      endSeconds,
+      text,
+      highlightedWords: text ? [text, ...emphasisWords.filter((word) => word.toLowerCase() !== text.toLowerCase()).slice(0, 2)] : emphasisWords.slice(0, 3),
+      layout: safeZone,
+      animation,
+      sfxSuggestion: emphasis === "impact" || animation.includes("slam") || animation.includes("shake") ? "caption_hit" : null,
+      readingImpactScore: impactScore,
+      readingWarnings: []
+    };
+  }).filter((cue) => cue.text.trim().length > 0);
+}
 function normalizeSceneOrder(left: BlueprintSceneInput, right: BlueprintSceneInput) {
   return left.order - right.order;
 }
