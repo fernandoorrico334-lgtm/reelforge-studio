@@ -1,4 +1,4 @@
-export type DataSource = "api" | "mock";
+﻿export type DataSource = "api" | "mock";
 
 export const assetTypes = [
   "IMAGE",
@@ -3613,6 +3613,21 @@ export interface ComicStudioCreateProjectsResponse {
 }
 
 
+export interface ComicArcVisualPlanSummary {
+  directorId: "comic_arc_visual_director_v1";
+  sceneCount: number;
+  averagePanelNarrationAlignmentScore: number;
+  scenes: Array<{
+    panelId: string;
+    pageNumber: number;
+    beatRole: string;
+    primaryTarget: string;
+    panelNarrationAlignmentScore: number;
+    renderInstruction: string;
+    warnings: string[];
+  }>;
+  warnings: string[];
+}
 export interface ComicShortFinalQualityGate {
   qaId: "comic_short_final_quality_gate_v1";
   status: "passed" | "needs_review" | "rejected";
@@ -3651,6 +3666,7 @@ export interface ComicStudioCreateArcProjectsResponse {
       sourcePages: number[];
       panelIds: string[];
       finalQualityGate: ComicShortFinalQualityGate;
+      arcVisualPlan: ComicArcVisualPlanSummary;
       candidateFirst: true;
     };
     qualityChecklist: ComicStudioCreateProjectsResponse["createdProjects"][number]["qualityChecklist"];
@@ -4024,3 +4040,6 @@ export interface DashboardSnapshot {
     renders: DataSource;
   };
 }
+
+
+

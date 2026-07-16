@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from "node:path";
+﻿import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -106,7 +106,11 @@ async function main() {
   assert(batch.projects.length === 1, "expected one project payload");
   const payload = batch.projects[0];
   const gate = payload.renderBlueprintHints.finalQualityGate;
+  const visualPlan = payload.renderBlueprintHints.arcVisualPlan;
   assert(gate.qaId === "comic_short_final_quality_gate_v1", "expected final qa id");
+  assert(visualPlan.directorId === "comic_arc_visual_director_v1", "expected arc visual director");
+  assert(visualPlan.sceneCount === payload.scenes.length, "visual plan must cover every scene");
+  assert(visualPlan.averagePanelNarrationAlignmentScore >= 72, "visual alignment must be production safe");
   assert(gate.checks.durationSeconds >= 30, "duration must be at least 30s");
   assert(gate.checks.hasHook === true, "hook required");
   assert(gate.checks.hasClimax === true, "climax required");
@@ -141,7 +145,9 @@ async function main() {
       blockers: gate.blockers,
       warnings: gate.warnings,
       strengths: gate.strengths,
-      durationSeconds: gate.checks.durationSeconds
+      durationSeconds: gate.checks.durationSeconds,
+      averagePanelNarrationAlignmentScore: gate.checks.averagePanelNarrationAlignmentScore,
+      visualPlanScore: visualPlan.averagePanelNarrationAlignmentScore
     },
     rejectedGate: {
       status: rejected.status,
@@ -156,3 +162,5 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+

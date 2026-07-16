@@ -1,6 +1,7 @@
 import type { ComicStoryArcV2 } from "./comic-story-arc-miner-v2.js";
 import type { ComicArcScriptDoctorV2Result } from "./comic-arc-script-doctor-v2.js";
 import type { ComicProjectBridgeSceneInput, ComicProjectPanelAssetManifestEntry } from "./comic-project-bridge.js";
+import type { directComicArcVisualPlan } from "./comic-arc-visual-director.js";
 
 export type ComicShortFinalQaStatus = "passed" | "needs_review" | "rejected";
 
@@ -28,6 +29,7 @@ export type ComicShortFinalQaReport = {
     genericNarrationSignals: string[];
     missingPanelScenes: number;
     repeatedPanelCount: number;
+    averagePanelNarrationAlignmentScore: number;
   };
   nextActions: string[];
 };
@@ -38,6 +40,7 @@ export type ComicShortFinalQaInput = {
   scenes: ComicProjectBridgeSceneInput[];
   panelAssetManifest: ComicProjectPanelAssetManifestEntry[];
   targetDurationSeconds: number;
+  arcVisualPlan?: ReturnType<typeof directComicArcVisualPlan>;
 };
 
 const genericNarrationPatterns = [
@@ -78,6 +81,7 @@ export function evaluateComicShortFinalQualityGate(input: ComicShortFinalQaInput
   const missingPanelScenes = input.scenes.filter((scene) => !scene.visualPrompt?.trim() && !scene.visualRecipe?.trim()).length;
   const repeatedPanelCount = Math.max(0, panelIds.length - uniquePanelIds.length);
   const averageSceneDuration = input.scenes.length > 0 ? totalDuration / input.scenes.length : 0;
+  const averagePanelNarrationAlignmentScore = input.arcVisualPlan?.averagePanelNarrationAlignmentScore ?? 0;
 
   const blockers: string[] = [];
   const warnings: string[] = [];
@@ -96,11 +100,14 @@ export function evaluateComicShortFinalQualityGate(input: ComicShortFinalQaInput
   if (missingPanelScenes > 0) blockers.push("scenes_missing_visual_panel_reference");
   if (repeatedPanelCount > Math.max(1, Math.floor(panelIds.length * 0.35))) warnings.push("too_many_reused_panels");
   if (averageSceneDuration > 9) warnings.push("scene_pace_too_slow_for_shorts");
+  if (input.arcVisualPlan && averagePanelNarrationAlignmentScore < 72) blockers.push("panel_narration_alignment_below_minimum");
+  else if (input.arcVisualPlan && averagePanelNarrationAlignmentScore < 82) warnings.push("panel_narration_alignment_needs_review");
   if (input.arc.visualStrengthScore >= 85) strengths.push("strong_visual_arc");
   if (input.script.humanScore >= 90) strengths.push("human_narration_ready");
   if (input.script.retentionScore >= 85) strengths.push("strong_retention_structure");
   if (roles.has("hook") && roles.has("climax") && roles.has("payoff")) strengths.push("complete_story_shape");
   if (uniquePanelIds.length >= Math.min(4, input.scenes.length)) strengths.push("panel_variety_ready");
+  if (averagePanelNarrationAlignmentScore >= 86) strengths.push("panel_narration_alignment_ready");
 
   let score = 100;
   score -= blockers.length * 20;
@@ -123,6 +130,7 @@ export function evaluateComicShortFinalQualityGate(input: ComicShortFinalQaInput
   if (blockers.includes("scenes_missing_visual_panel_reference")) nextActions.push("Selecionar paineis reais para todas as cenas antes do render.");
   if (warnings.includes("scene_pace_too_slow_for_shorts")) nextActions.push("Dividir cenas longas em cortes menores com zoom/SFX.");
   if (warnings.includes("too_many_reused_panels")) nextActions.push("Substituir paineis repetidos por alternativas da mesma pagina/arco.");
+  if (blockers.includes("panel_narration_alignment_below_minimum") || warnings.includes("panel_narration_alignment_needs_review")) nextActions.push("Trocar painel ou reescrever narracao para provar exatamente o que aparece no quadro.");
   if (nextActions.length === 0) nextActions.push("Revisar direitos, importar paineis aprovados e validar render blueprint antes do render final.");
 
   return {
@@ -148,7 +156,8 @@ export function evaluateComicShortFinalQualityGate(input: ComicShortFinalQaInput
       averageSceneDurationSeconds: Math.round(averageSceneDuration * 10) / 10,
       genericNarrationSignals: narrationSignals,
       missingPanelScenes,
-      repeatedPanelCount
+      repeatedPanelCount,
+      averagePanelNarrationAlignmentScore
     },
     nextActions
   };

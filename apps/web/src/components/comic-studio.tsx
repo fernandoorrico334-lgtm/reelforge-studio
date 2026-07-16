@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
@@ -483,6 +483,9 @@ function CreatedArcProjects({ result }: { result: ComicStudioCreateArcProjectsRe
               <span className={`rounded-full border px-4 py-2 text-xs ${project.renderBlueprintHints.finalQualityGate.status === "passed" ? "border-emerald-300/30 text-emerald-200" : project.renderBlueprintHints.finalQualityGate.status === "rejected" ? "border-rose-300/30 text-rose-100" : "border-amber-300/30 text-amber-100"}`}>
                 Final QA {project.renderBlueprintHints.finalQualityGate.score}/{project.renderBlueprintHints.finalQualityGate.minimumScore}
               </span>
+              <span className="rounded-full border border-cyan-300/25 px-4 py-2 text-xs text-cyan-100">
+                Visual match {project.renderBlueprintHints.arcVisualPlan.averagePanelNarrationAlignmentScore}/100
+              </span>
             </div>
             {project.renderBlueprintHints.finalQualityGate.blockers.length > 0 || project.renderBlueprintHints.finalQualityGate.warnings.length > 0 ? (
               <p className="mt-3 text-xs leading-5 text-mist/58">
@@ -732,6 +735,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
     </div>
   );
 }
+
 
 
 
