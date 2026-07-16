@@ -1,4 +1,4 @@
-import {
+﻿import {
   buildEditorialShortPack,
   createChannelDNA,
   createMediaBeastEngine,
@@ -170,6 +170,23 @@ function readStringArray(value: unknown, fieldName: string) {
   return value.map((item) => item.trim()).filter(Boolean);
 }
 
+function readOptionalStringArray(value: unknown, fieldName: string): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  return readStringArray(value, fieldName);
+}
+
+function readApprovedPanelIdsByArc(value: unknown): Record<string, string[]> {
+  if (value === undefined || value === null) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("approvedPanelIdsByArcId must be an object keyed by arc id.");
+  }
+
+  const result: Record<string, string[]> = {};
+  for (const [arcId, panelIds] of Object.entries(value)) {
+    result[arcId] = readStringArray(panelIds, `approvedPanelIdsByArcId.${arcId}`);
+  }
+  return result;
+}
 function readProviderIds(value: unknown): MediaBeastProviderId[] {
   return readStringArray(value, "providerIds").map((providerId) => {
     if (!mediaBeastProviderIds.includes(providerId as MediaBeastProviderId)) {
@@ -668,6 +685,8 @@ export async function handleMediaBeastRoute(
       const titlePrefix = readOptionalString(payload.titlePrefix) ?? "Comic Arc";
       const templateId = readOptionalString(payload.templateId);
       const editingReferencePresetId = readOptionalString(payload.editingReferencePresetId);
+      const approvedArcIds = readOptionalStringArray(payload.approvedArcIds, "approvedArcIds");
+      const approvedPanelIdsByArcId = readApprovedPanelIdsByArc(payload.approvedPanelIdsByArcId);
 
       const minerReport = await mineComicStoryVaultFromDirectory({
         assetDirectory,
@@ -683,8 +702,21 @@ export async function handleMediaBeastRoute(
         ...(editingReferencePresetId !== undefined ? { editingReferencePresetId } : {})
       });
 
+      const approvedArcSet = approvedArcIds ? new Set(approvedArcIds) : null;
+      const projectPayloads = arcPayload.projects.filter((projectPayload) => {
+        if (approvedArcSet && !approvedArcSet.has(projectPayload.arcId)) return false;
+        const approvedPanelIds = approvedPanelIdsByArcId[projectPayload.arcId];
+        if (!approvedPanelIds) return true;
+        const approvedPanelSet = new Set(approvedPanelIds);
+        return projectPayload.panelAssetManifest.every((panel) => approvedPanelSet.has(panel.panelId));
+      });
+
+      if (approvedArcIds && projectPayloads.length === 0) {
+        throw new ValidationError("No approved comic arc projects passed the visual review gate.");
+      }
+
       const createdProjects = [];
-      for (const projectPayload of arcPayload.projects) {
+      for (const projectPayload of projectPayloads) {
         const project = await createVideoProject(
           dependencies.projectRepository,
           dependencies.channelRepository,
@@ -728,7 +760,7 @@ export async function handleMediaBeastRoute(
           recommendedScriptCount: minerReport.storyArcMinerV2?.scriptDoctor.recommendedScripts.length ?? 0
         },
         createdProjects,
-        warnings: arcPayload.warnings,
+        warnings: [`visual_review_gate_applied`, ...arcPayload.warnings],
         riskPolicyGate: {
           candidateFirst: true,
           requiresManualApproval: true,
@@ -757,6 +789,8 @@ export async function handleMediaBeastRoute(
       const titlePrefix = readOptionalString(payload.titlePrefix) ?? "HQ Short";
       const templateId = readOptionalString(payload.templateId);
       const editingReferencePresetId = readOptionalString(payload.editingReferencePresetId);
+      const approvedArcIds = readOptionalStringArray(payload.approvedArcIds, "approvedArcIds");
+      const approvedPanelIdsByArcId = readApprovedPanelIdsByArc(payload.approvedPanelIdsByArcId);
 
       const minerReport = await mineComicStoryVaultFromDirectory({
         assetDirectory,
@@ -1210,3 +1244,7 @@ export async function handleMediaBeastRoute(
     return true;
   }
 }
+
+
+
+

@@ -1,4 +1,4 @@
-import { getAudioMoodPresets } from "@reelforge/audio-engine";
+﻿import { getAudioMoodPresets } from "@reelforge/audio-engine";
 import { getCaptionStyles } from "@reelforge/caption-engine";
 import {
   buildBeatSyncPlan,
@@ -2538,6 +2538,8 @@ export async function runComicStudioCreateArcProjectsRequest(payload: {
   titlePrefix?: string;
   templateId?: string;
   editingReferencePresetId?: string;
+  approvedArcIds?: string[];
+  approvedPanelIdsByArcId?: Record<string, string[]>;
 }) {
   return requestJson<ComicStudioCreateArcProjectsResponse>(
     "/media-beast/comic-studio/create-arc-projects",
@@ -3570,3 +3572,5 @@ export function getRenderThumbnailUrl(renderJobId: string) {
     `/media/renders/${encodeURIComponent(renderJobId)}/thumbnail`
   );
 }
+
+

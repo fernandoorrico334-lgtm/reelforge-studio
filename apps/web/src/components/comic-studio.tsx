@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
@@ -16,6 +16,30 @@ import type {
   StudioChannel
 } from "../lib/studio-types";
 
+type PanelReviewStatus = "pending" | "approved" | "rejected";
+
+type PanelReviewMap = Record<string, PanelReviewStatus>;
+
+function panelReviewKey(arcId: string, panelId: string, index: number) {
+  return `${arcId}:${panelId}:${index}`;
+}
+
+function getApprovedArcReview(plan: ComicStudioFactoryPlanResponse | null, panelReview: PanelReviewMap) {
+  const approvedArcIds: string[] = [];
+  const approvedPanelIdsByArcId: Record<string, string[]> = {};
+  const arcs = plan?.arcStudio?.recommendedShorts ?? [];
+
+  for (const arc of arcs) {
+    const previews = arc.panelPreviews ?? [];
+    if (previews.length === 0) continue;
+    const allApproved = previews.every((panel, index) => panelReview[panelReviewKey(arc.id, panel.panelId, index)] === "approved");
+    if (!allApproved) continue;
+    approvedArcIds.push(arc.id);
+    approvedPanelIdsByArcId[arc.id] = previews.map((panel) => panel.panelId);
+  }
+
+  return { approvedArcIds, approvedPanelIdsByArcId };
+}
 function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
 }
@@ -165,15 +189,23 @@ function CreatedProjects({ result }: { result: ComicStudioCreateProjectsResponse
 function ArcStudioPanel({
   plan,
   onCreateArcProjects,
-  disabled
+  disabled,
+  panelReview,
+  onSetPanelReview,
+  onApproveArc
 }: {
   plan: ComicStudioFactoryPlanResponse;
   onCreateArcProjects: () => void;
   disabled: boolean;
+  panelReview: PanelReviewMap;
+  onSetPanelReview: (key: string, status: PanelReviewStatus) => void;
+  onApproveArc: (arcId: string) => void;
 }) {
   const arcStudio = plan.arcStudio;
   if (!arcStudio || arcStudio.recommendedShorts.length === 0) return null;
   const scriptByArcId = new Map(arcStudio.recommendedScripts.map((script) => [script.arcId, script]));
+  const review = getApprovedArcReview(plan, panelReview);
+  const approvedArcCount = review.approvedArcIds.length;
 
   return (
     <section className="space-y-5 rounded-[2rem] border border-signal/20 bg-[radial-gradient(circle_at_top_right,rgba(99,255,225,0.12),transparent_30%),rgba(255,255,255,0.035)] p-6">
@@ -188,10 +220,10 @@ function ArcStudioPanel({
         <button
           type="button"
           onClick={onCreateArcProjects}
-          disabled={disabled}
+          disabled={disabled || approvedArcCount === 0}
           className="rounded-full bg-signal px-5 py-3 text-sm font-semibold text-black shadow-[0_0_35px_rgba(99,255,225,0.18)] disabled:opacity-50"
         >
-          Criar projetos premium por arco
+          Criar projetos premium por arco ({approvedArcCount})
         </button>
       </div>
 
@@ -217,6 +249,10 @@ function ArcStudioPanel({
       <div className="grid gap-4 xl:grid-cols-2">
         {arcStudio.recommendedShorts.slice(0, 6).map((arc) => {
           const script = scriptByArcId.get(arc.id);
+          const previews = arc.panelPreviews ?? [];
+          const approvedPanelCount = previews.filter((panel, index) => panelReview[panelReviewKey(arc.id, panel.panelId, index)] === "approved").length;
+          const rejectedPanelCount = previews.filter((panel, index) => panelReview[panelReviewKey(arc.id, panel.panelId, index)] === "rejected").length;
+          const arcReviewReady = previews.length > 0 && approvedPanelCount === previews.length;
           return (
             <article key={arc.id} className="rounded-[1.5rem] border border-white/10 bg-black/25 p-5">
               <div className="flex items-start justify-between gap-4">
@@ -247,31 +283,80 @@ function ArcStudioPanel({
                 <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.025] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs uppercase tracking-[0.22em] text-mist/45">Contact sheet do arco</p>
-                    <span className="text-xs text-mist/45">{arc.panelPreviews.length} paineis</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-mist/45">{approvedPanelCount}/{arc.panelPreviews.length} aprovados</span>
+                      <button
+                        type="button"
+                        onClick={() => onApproveArc(arc.id)}
+                        className="rounded-full border border-signal/30 px-3 py-1 text-[11px] font-semibold text-signal hover:bg-signal/10"
+                      >
+                        Aprovar todos
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                    {arc.panelPreviews.map((panel, index) => (
-                      <div key={`${arc.id}-${panel.panelId}-${index}`} className="overflow-hidden rounded-2xl border border-white/10 bg-black/35">
-                        <div className="aspect-[9/13] bg-gradient-to-br from-white/10 to-black/40">
-                          {panel.previewUrl ? (
-                            <img
-                              src={getComicPanelPreviewUrl(panel.previewUrl)}
-                              alt={`Painel ${panel.panelId}`}
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center px-3 text-center text-[11px] text-mist/45">
-                              Preview indisponivel
+                    {arc.panelPreviews.map((panel, index) => {
+                      const reviewKey = panelReviewKey(arc.id, panel.panelId, index);
+                      const status = panelReview[reviewKey] ?? "pending";
+                      return (
+                        <div
+                          key={`${arc.id}-${panel.panelId}-${index}`}
+                          className={`overflow-hidden rounded-2xl border bg-black/35 transition ${
+                            status === "approved"
+                              ? "border-emerald-300/55 shadow-[0_0_28px_rgba(110,231,183,0.12)]"
+                              : status === "rejected"
+                                ? "border-rose-300/45 opacity-65"
+                                : "border-white/10"
+                          }`}
+                        >
+                          <div className="aspect-[9/13] bg-gradient-to-br from-white/10 to-black/40">
+                            {panel.previewUrl ? (
+                              <img
+                                src={getComicPanelPreviewUrl(panel.previewUrl)}
+                                alt={`Painel ${panel.panelId}`}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center px-3 text-center text-[11px] text-mist/45">
+                                Preview indisponivel
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-2 p-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">{panel.role ?? "beat"}</p>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] ${
+                                status === "approved"
+                                  ? "bg-emerald-300 text-black"
+                                  : status === "rejected"
+                                    ? "bg-rose-300/20 text-rose-100"
+                                    : "bg-white/10 text-mist/55"
+                              }`}>
+                                {status === "approved" ? "OK" : status === "rejected" ? "Fora" : "Pendente"}
+                              </span>
                             </div>
-                          )}
+                            <p className="text-[11px] text-mist/50">pag. {panel.pageNumber ?? "?"} / {panel.panelId}</p>
+                            <div className="grid grid-cols-2 gap-1">
+                              <button
+                                type="button"
+                                onClick={() => onSetPanelReview(reviewKey, "approved")}
+                                className="rounded-full bg-emerald-300/90 px-2 py-1 text-[10px] font-semibold text-black"
+                              >
+                                Aprovar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onSetPanelReview(reviewKey, "rejected")}
+                                className="rounded-full border border-rose-300/30 px-2 py-1 text-[10px] font-semibold text-rose-100"
+                              >
+                                Rejeitar
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="space-y-1 p-2">
-                          <p className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">{panel.role ?? "beat"}</p>
-                          <p className="text-[11px] text-mist/50">pag. {panel.pageNumber ?? "?"} / {panel.panelId}</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
@@ -355,6 +440,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
   const [plan, setPlan] = useState<ComicStudioFactoryPlanResponse | null>(null);
   const [created, setCreated] = useState<ComicStudioCreateProjectsResponse | null>(null);
   const [createdArcProjects, setCreatedArcProjects] = useState<ComicStudioCreateArcProjectsResponse | null>(null);
+  const [panelReview, setPanelReview] = useState<PanelReviewMap>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -376,6 +462,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
     setError(null);
     setCreated(null);
     setCreatedArcProjects(null);
+    setPanelReview({});
     startTransition(async () => {
       try {
         const next = await runComicStudioPlanRequest({
@@ -391,9 +478,30 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
     });
   }
 
+  function setPanelReviewStatus(key: string, status: PanelReviewStatus) {
+    setPanelReview((current) => ({ ...current, [key]: status }));
+  }
+
+  function approveAllPanelsForArc(arcId: string) {
+    const arc = plan?.arcStudio?.recommendedShorts.find((item) => item.id === arcId);
+    if (!arc?.panelPreviews?.length) return;
+    setPanelReview((current) => {
+      const next = { ...current };
+      arc.panelPreviews?.forEach((panel, index) => {
+        next[panelReviewKey(arc.id, panel.panelId, index)] = "approved";
+      });
+      return next;
+    });
+  }
+
   function createArcProjects() {
     if (!channelId) {
       setError("Crie ou selecione um canal antes de criar projetos por arco.");
+      return;
+    }
+    const review = getApprovedArcReview(plan, panelReview);
+    if (review.approvedArcIds.length === 0) {
+      setError("Aprove todos os paineis de pelo menos um arco antes de criar projetos premium.");
       return;
     }
     setError(null);
@@ -407,7 +515,9 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
           minScore,
           titlePrefix: "Comic Arc",
           editingReferencePresetId: "builtin-comic-viral-reference-antman",
-          templateId: "comic_story_premium"
+          templateId: "comic_story_premium",
+          approvedArcIds: review.approvedArcIds,
+          approvedPanelIdsByArcId: review.approvedPanelIdsByArcId
         });
         setCreatedArcProjects(response);
       } catch (err) {
@@ -519,6 +629,9 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
           plan={plan}
           onCreateArcProjects={createArcProjects}
           disabled={isPending || !channelId}
+          panelReview={panelReview}
+          onSetPanelReview={setPanelReviewStatus}
+          onApproveArc={approveAllPanelsForArc}
         />
       ) : null}
 
@@ -544,3 +657,14 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
