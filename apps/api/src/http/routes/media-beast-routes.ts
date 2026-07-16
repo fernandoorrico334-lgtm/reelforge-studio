@@ -1,4 +1,4 @@
-﻿import {
+import {
   buildEditorialShortPack,
   createChannelDNA,
   createMediaBeastEngine,
@@ -187,6 +187,25 @@ function readApprovedPanelIdsByArc(value: unknown): Record<string, string[]> {
   }
   return result;
 }
+
+function readPanelReplacementsByArc(value: unknown): Record<string, Record<string, string>> {
+  if (value === undefined || value === null) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("selectedPanelReplacementsByArcId must be an object keyed by arc id.");
+  }
+
+  const result: Record<string, Record<string, string>> = {};
+  for (const [arcId, replacements] of Object.entries(value)) {
+    if (!replacements || typeof replacements !== "object" || Array.isArray(replacements)) {
+      throw new ValidationError(`selectedPanelReplacementsByArcId.${arcId} must be an object keyed by original panel id.`);
+    }
+    result[arcId] = {};
+    for (const [originalPanelId, replacementPanelId] of Object.entries(replacements)) {
+      result[arcId][originalPanelId] = readString(replacementPanelId, `selectedPanelReplacementsByArcId.${arcId}.${originalPanelId}`);
+    }
+  }
+  return result;
+}
 function readProviderIds(value: unknown): MediaBeastProviderId[] {
   return readStringArray(value, "providerIds").map((providerId) => {
     if (!mediaBeastProviderIds.includes(providerId as MediaBeastProviderId)) {
@@ -302,6 +321,18 @@ type ComicArcPanelPreview = {
   previewUrl: string | null;
   role: string | null;
   reason: string | null;
+  score: number;
+  alternatives: ComicArcPanelAlternative[];
+};
+
+type ComicArcPanelAlternative = {
+  panelId: string;
+  pageNumber: number | null;
+  panelImagePath: string | null;
+  previewUrl: string | null;
+  score: number;
+  storyFunction: string | null;
+  reasons: string[];
 };
 
 function normalizeWorkspacePath(localPath: string) {
@@ -330,31 +361,72 @@ function buildComicPanelPreviewUrl(panelImagePath: string | null | undefined) {
   return `/media-beast/comic-panel-preview?path=${encodeURIComponent(panelImagePath)}`;
 }
 
+type ComicMinerPanelRef = Awaited<ReturnType<typeof mineComicStoryVaultFromDirectory>>["opportunities"][number]["panels"][number];
+
+function comicPanelScore(panel: ComicMinerPanelRef | undefined) {
+  if (!panel) return 0;
+  const quality = panel.visualCropEvidence.quality;
+  const visual = quality.visualQualityScore ?? 0;
+  const crop = quality.cropability916Score ?? 0;
+  const textPenalty = Math.round((quality.textHeavyRatio ?? 0) * 20);
+  return Math.max(0, Math.min(100, Math.round(visual * 0.55 + crop * 0.45 - textPenalty)));
+}
+
+function buildPanelAlternative(panel: ComicMinerPanelRef): ComicArcPanelAlternative {
+  const quality = panel.visualCropEvidence.quality;
+  return {
+    panelId: panel.panelId,
+    pageNumber: panel.pageNumber ?? null,
+    panelImagePath: panel.panelImagePath ?? null,
+    previewUrl: buildComicPanelPreviewUrl(panel.panelImagePath),
+    score: comicPanelScore(panel),
+    storyFunction: panel.storyFunction ?? null,
+    reasons: [
+      `score_visual:${Math.round(quality.visualQualityScore ?? 0)}`,
+      `crop_9_16:${Math.round(quality.cropability916Score ?? 0)}`,
+      `texto:${Math.round((quality.textHeavyRatio ?? 0) * 100)}%`
+    ]
+  };
+}
+
 function buildArcPanelPreviews(minerReport: Awaited<ReturnType<typeof mineComicStoryVaultFromDirectory>>) {
-  const panelById = new Map(
-    minerReport.opportunities
-      .flatMap((opportunity) => opportunity.panels)
-      .map((panel) => [panel.panelId, panel])
-  );
+  const allPanels = minerReport.opportunities.flatMap((opportunity) => opportunity.panels);
+  const panelById = new Map(allPanels.map((panel) => [panel.panelId, panel]));
 
   return new Map(
     (minerReport.storyArcMinerV2?.recommendedShorts ?? []).map((arc) => {
+      const arcPanelIds = new Set(arc.panelIds);
       const previews: ComicArcPanelPreview[] = arc.beats.map((beat) => {
         const panel = panelById.get(beat.panelId);
+        const sourcePageNumber = panel?.pageNumber ?? beat.pageNumber;
+        const samePage = allPanels.filter((candidate) => (
+          candidate.panelId !== beat.panelId &&
+          candidate.pageNumber === sourcePageNumber
+        ));
+        const sameArc = allPanels.filter((candidate) => (
+          candidate.panelId !== beat.panelId &&
+          arcPanelIds.has(candidate.panelId)
+        ));
+        const alternatives = [...samePage, ...sameArc]
+          .filter((candidate, index, list) => list.findIndex((item) => item.panelId === candidate.panelId) === index)
+          .sort((left, right) => comicPanelScore(right) - comicPanelScore(left))
+          .slice(0, 4)
+          .map(buildPanelAlternative);
         return {
           panelId: beat.panelId,
           pageNumber: panel?.pageNumber ?? beat.pageNumber ?? null,
           panelImagePath: panel?.panelImagePath ?? null,
           previewUrl: buildComicPanelPreviewUrl(panel?.panelImagePath),
           role: beat.role,
-          reason: beat.reason
+          reason: beat.reason,
+          score: comicPanelScore(panel),
+          alternatives
         };
       });
       return [arc.id, previews] as const;
     })
   );
 }
-
 function enrichArcStudioWithPanelPreviews(minerReport: Awaited<ReturnType<typeof mineComicStoryVaultFromDirectory>>) {
   const arcReport = minerReport.storyArcMinerV2;
   if (!arcReport) return null;
@@ -372,6 +444,96 @@ function enrichArcStudioWithPanelPreviews(minerReport: Awaited<ReturnType<typeof
   };
 }
 
+function applyComicArcPanelReplacements<T extends {
+  arcId: string;
+  panelAssetManifest: Array<Record<string, unknown>>;
+  scenes: Array<Record<string, unknown>>;
+  renderBlueprintHints: Record<string, unknown>;
+  warnings: string[];
+}>(projectPayload: T, replacements: Record<string, string> | undefined, panelById: Map<string, ComicMinerPanelRef>): T {
+  if (!replacements || Object.keys(replacements).length === 0) return projectPayload;
+
+  const clone = structuredClone(projectPayload) as T;
+  const replacementEntries = Object.entries(replacements).filter(([, replacementPanelId]) => panelById.has(replacementPanelId));
+  if (replacementEntries.length === 0) return projectPayload;
+
+  for (const manifest of clone.panelAssetManifest) {
+    const originalPanelId = String(manifest.panelId ?? "");
+    const replacementPanelId = replacements[originalPanelId];
+    const replacementPanel = replacementPanelId ? panelById.get(replacementPanelId) : null;
+    if (!replacementPanel) continue;
+    manifest.panelId = replacementPanel.panelId;
+    manifest.panelImagePath = replacementPanel.panelImagePath;
+    manifest.sourcePageNumber = replacementPanel.pageNumber;
+    manifest.recommendedTags = [
+      ...new Set([
+        ...((Array.isArray(manifest.recommendedTags) ? manifest.recommendedTags : []) as string[]),
+        "comic-panel-replacement",
+        `replacement-for:${originalPanelId}`,
+        `replacement-page:${replacementPanel.pageNumber}`
+      ])
+    ];
+  }
+
+  clone.scenes = clone.scenes.map((scene) => {
+    let visualRecipe: Record<string, unknown> | null = null;
+    if (typeof scene.visualRecipe === "string" && scene.visualRecipe.trim()) {
+      try {
+        visualRecipe = JSON.parse(scene.visualRecipe) as Record<string, unknown>;
+      } catch {
+        visualRecipe = null;
+      }
+    }
+    const originalPanelId = typeof visualRecipe?.panelId === "string" ? visualRecipe.panelId : null;
+    const replacementPanelId = originalPanelId ? replacements[originalPanelId] : undefined;
+    const replacementPanel = replacementPanelId ? panelById.get(replacementPanelId) : null;
+    if (!originalPanelId || !replacementPanel) return scene;
+
+    const visualPrompt = typeof scene.visualPrompt === "string"
+      ? scene.visualPrompt.replace(originalPanelId, replacementPanel.panelId).replace(/Pagina fonte: [^.]+\./, `Pagina fonte: ${replacementPanel.pageNumber}.`)
+      : scene.visualPrompt;
+    return {
+      ...scene,
+      visualPrompt,
+      visualRecipe: JSON.stringify({
+        ...(visualRecipe ?? {}),
+        panelId: replacementPanel.panelId,
+        pageNumber: replacementPanel.pageNumber,
+        originalPanelId,
+        replacementPanelId: replacementPanel.panelId,
+        replacementReason: "manual_visual_review_replacement",
+        replacementApplied: true
+      })
+    };
+  });
+
+  const selectedBeats = Array.isArray(clone.renderBlueprintHints.selectedBeats)
+    ? clone.renderBlueprintHints.selectedBeats.map((beat) => {
+        if (!beat || typeof beat !== "object") return beat;
+        const record = beat as Record<string, unknown>;
+        const originalPanelId = typeof record.panelId === "string" ? record.panelId : null;
+        const replacementPanelId = originalPanelId ? replacements[originalPanelId] : undefined;
+        const replacementPanel = replacementPanelId ? panelById.get(replacementPanelId) : null;
+        if (!originalPanelId || !replacementPanel) return beat;
+        return {
+          ...record,
+          panelId: replacementPanel.panelId,
+          pageNumber: replacementPanel.pageNumber,
+          originalPanelId,
+          replacementApplied: true
+        };
+      })
+    : clone.renderBlueprintHints.selectedBeats;
+
+  clone.renderBlueprintHints = {
+    ...clone.renderBlueprintHints,
+    selectedBeats,
+    panelIds: clone.panelAssetManifest.map((panel) => String(panel.panelId)),
+    panelReplacements: replacements
+  };
+  clone.warnings = [...new Set([...clone.warnings, "comic_panel_replacements_applied"] )];
+  return clone;
+}
 async function sendComicPanelPreview(
   request: IncomingMessage,
   response: ServerResponse
@@ -687,6 +849,7 @@ export async function handleMediaBeastRoute(
       const editingReferencePresetId = readOptionalString(payload.editingReferencePresetId);
       const approvedArcIds = readOptionalStringArray(payload.approvedArcIds, "approvedArcIds");
       const approvedPanelIdsByArcId = readApprovedPanelIdsByArc(payload.approvedPanelIdsByArcId);
+      const selectedPanelReplacementsByArcId = readPanelReplacementsByArc(payload.selectedPanelReplacementsByArcId);
 
       const minerReport = await mineComicStoryVaultFromDirectory({
         assetDirectory,
@@ -702,14 +865,25 @@ export async function handleMediaBeastRoute(
         ...(editingReferencePresetId !== undefined ? { editingReferencePresetId } : {})
       });
 
+      const panelById = new Map(
+        minerReport.opportunities
+          .flatMap((opportunity) => opportunity.panels)
+          .map((panel) => [panel.panelId, panel])
+      );
       const approvedArcSet = approvedArcIds ? new Set(approvedArcIds) : null;
-      const projectPayloads = arcPayload.projects.filter((projectPayload) => {
-        if (approvedArcSet && !approvedArcSet.has(projectPayload.arcId)) return false;
-        const approvedPanelIds = approvedPanelIdsByArcId[projectPayload.arcId];
-        if (!approvedPanelIds) return true;
-        const approvedPanelSet = new Set(approvedPanelIds);
-        return projectPayload.panelAssetManifest.every((panel) => approvedPanelSet.has(panel.panelId));
-      });
+      const projectPayloads = arcPayload.projects
+        .filter((projectPayload) => !approvedArcSet || approvedArcSet.has(projectPayload.arcId))
+        .map((projectPayload) => applyComicArcPanelReplacements(
+          projectPayload,
+          selectedPanelReplacementsByArcId[projectPayload.arcId],
+          panelById
+        ))
+        .filter((projectPayload) => {
+          const approvedPanelIds = approvedPanelIdsByArcId[projectPayload.arcId];
+          if (!approvedPanelIds) return true;
+          const approvedPanelSet = new Set(approvedPanelIds);
+          return projectPayload.panelAssetManifest.every((panel) => approvedPanelSet.has(String(panel.panelId)));
+        });
 
       if (approvedArcIds && projectPayloads.length === 0) {
         throw new ValidationError("No approved comic arc projects passed the visual review gate.");
