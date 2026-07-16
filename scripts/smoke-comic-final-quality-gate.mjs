@@ -111,6 +111,8 @@ async function main() {
   assert(visualPlan.directorId === "comic_arc_visual_director_v1", "expected arc visual director");
   assert(visualPlan.sceneCount === payload.scenes.length, "visual plan must cover every scene");
   assert(visualPlan.averagePanelNarrationAlignmentScore >= 72, "visual alignment must be production safe");
+  assert(visualPlan.scenes.every((scene) => scene.selectedEvidenceRegion), "every scene needs a selected visual evidence region");
+  assert(visualPlan.scenes.every((scene) => scene.visualEvidenceMap?.regions?.length > 0), "every scene needs evidence regions");
   assert(gate.checks.durationSeconds >= 30, "duration must be at least 30s");
   assert(gate.checks.hasHook === true, "hook required");
   assert(gate.checks.hasClimax === true, "climax required");
@@ -147,7 +149,8 @@ async function main() {
       strengths: gate.strengths,
       durationSeconds: gate.checks.durationSeconds,
       averagePanelNarrationAlignmentScore: gate.checks.averagePanelNarrationAlignmentScore,
-      visualPlanScore: visualPlan.averagePanelNarrationAlignmentScore
+      visualPlanScore: visualPlan.averagePanelNarrationAlignmentScore,
+      selectedEvidenceRegions: visualPlan.scenes.map((scene) => scene.selectedEvidenceRegion?.type)
     },
     rejectedGate: {
       status: rejected.status,
@@ -162,5 +165,6 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
 
 

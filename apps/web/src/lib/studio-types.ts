@@ -3623,6 +3623,18 @@ export interface ComicArcVisualPlanSummary {
     beatRole: string;
     primaryTarget: string;
     panelNarrationAlignmentScore: number;
+    selectedEvidenceRegion: {
+      type: string;
+      confidence: number;
+      priority: number;
+      reasons: string[];
+      warnings: string[];
+    } | null;
+    visualEvidenceMap: {
+      detectorId: "comic_panel_evidence_map_v1";
+      regions: Array<{ type: string; confidence: number; priority: number }>;
+      warnings: string[];
+    } | null;
     renderInstruction: string;
     warnings: string[];
   }>;
@@ -4040,6 +4052,7 @@ export interface DashboardSnapshot {
     renders: DataSource;
   };
 }
+
 
 
 

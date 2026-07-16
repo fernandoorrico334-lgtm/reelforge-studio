@@ -1,6 +1,12 @@
 ﻿import type { ComicArcScriptBeat } from "./comic-arc-script-doctor-v2.js";
 import type { ComicStoryArcV2 } from "./comic-story-arc-miner-v2.js";
 import type { ComicStoryMinerPanelRef } from "./comic-story-miner.js";
+import {
+  buildComicPanelEvidenceMap,
+  selectComicPanelEvidenceRegion,
+  type ComicPanelEvidenceMap,
+  type ComicPanelEvidenceRegion
+} from "./comic-panel-evidence-map.js";
 
 export type ComicArcVisualTargetType =
   | "speech_balloon"
@@ -25,6 +31,8 @@ export type ComicArcVisualDirection = {
   beatRole: ComicArcScriptBeat["role"];
   primaryTarget: ComicArcVisualTargetType;
   normalizedCrop: { x: number; y: number; width: number; height: number };
+  visualEvidenceMap: ComicPanelEvidenceMap | null;
+  selectedEvidenceRegion: ComicPanelEvidenceRegion | null;
   anchorPoint: { x: number; y: number };
   cameraMove: ComicArcCameraMove;
   captionSafeZone: "top" | "center" | "lower-third" | "bottom";
@@ -88,7 +96,8 @@ function pickTarget(beat: ComicArcScriptBeat, panel?: ComicStoryMinerPanelRef | 
   return "wide_context";
 }
 
-function cropForTarget(target: ComicArcVisualTargetType, panel?: ComicStoryMinerPanelRef | null) {
+function cropForTarget(target: ComicArcVisualTargetType, panel?: ComicStoryMinerPanelRef | null, evidenceRegion?: ComicPanelEvidenceRegion | null) {
+  if (evidenceRegion) return evidenceRegion.box;
   const textHeavy = (panel?.visualCropEvidence.quality.textHeavyRatio ?? 0) >= 0.34;
   const cropable = (panel?.visualCropEvidence.quality.cropability916Score ?? 0) >= 82;
   if (target === "speech_balloon") return { x: 0.08, y: 0.02, width: 0.84, height: textHeavy ? 0.78 : 0.7 };
@@ -114,7 +123,7 @@ function captionZoneForTarget(target: ComicArcVisualTargetType, beat: ComicArcSc
   return "lower-third" as const;
 }
 
-function alignmentScore(input: { arc: ComicStoryArcV2; beat: ComicArcScriptBeat; panel?: ComicStoryMinerPanelRef | null; target: ComicArcVisualTargetType }) {
+function alignmentScore(input: { arc: ComicStoryArcV2; beat: ComicArcScriptBeat; panel?: ComicStoryMinerPanelRef | null; target: ComicArcVisualTargetType; selectedRegion?: ComicPanelEvidenceRegion | null }) {
   const evidenceMatched: string[] = [];
   const warnings: string[] = [];
   const narration = input.beat.narrationText;
@@ -122,6 +131,7 @@ function alignmentScore(input: { arc: ComicStoryArcV2; beat: ComicArcScriptBeat;
   let score = 48;
 
   if (panel) score += 12;
+  if (input.selectedRegion && input.selectedRegion.confidence >= 70) score += 5;
   if (panel?.visibleCharacters.length && includesAny(narration, [...panel.visibleCharacters, ...input.arc.characters])) {
     score += 16;
     evidenceMatched.push("narration_mentions_visible_character");
@@ -145,6 +155,7 @@ function alignmentScore(input: { arc: ComicStoryArcV2; beat: ComicArcScriptBeat;
   if (evidenceMatched.length === 0) warnings.push("narration_not_visibly_grounded_in_panel");
   if (panel && (panel.visualCropEvidence.quality.cropability916Score ?? 0) < 58) warnings.push("low_9_16_cropability");
   if (input.target === "speech_balloon" && !panelHasSpeech(panel)) warnings.push("speech_target_without_text_evidence");
+  if (input.selectedRegion && input.selectedRegion.confidence < 64) warnings.push("low_confidence_visual_region");
 
   return {
     score: Math.max(0, Math.min(100, Math.round(score - warnings.length * 7))),
@@ -159,16 +170,18 @@ export function directComicArcVisualScene(input: {
   panel?: ComicStoryMinerPanelRef | null;
 }): ComicArcVisualDirection {
   const panel = input.panel ?? null;
+  const visualEvidenceMap = panel ? buildComicPanelEvidenceMap(panel) : null;
   const target = pickTarget(input.beat, panel);
-  const rawCrop = cropForTarget(target, panel);
+  const selectedEvidenceRegion = selectComicPanelEvidenceRegion({ evidenceMap: visualEvidenceMap, target });
+  const rawCrop = cropForTarget(target, panel, selectedEvidenceRegion);
   const crop = {
     x: round(clamp(rawCrop.x, 0, 1 - rawCrop.width)),
     y: round(clamp(rawCrop.y, 0, 1 - rawCrop.height)),
     width: round(clamp(rawCrop.width, 0.5625, 0.88)),
     height: round(clamp(rawCrop.height, 0.58, 1))
   };
-  const alignment = alignmentScore({ arc: input.arc, beat: input.beat, panel, target });
-  const anchorPoint = {
+  const alignment = alignmentScore({ arc: input.arc, beat: input.beat, panel, target, selectedRegion: selectedEvidenceRegion });
+  const fallbackAnchorPoint = {
     x: round(clamp(crop.x + crop.width / 2, 0.08, 0.92)),
     y: round(clamp(crop.y + crop.height * (target === "speech_balloon" ? 0.38 : 0.5), 0.08, 0.92))
   };
@@ -184,7 +197,9 @@ export function directComicArcVisualScene(input: {
     beatRole: input.beat.role,
     primaryTarget: target,
     normalizedCrop: crop,
-    anchorPoint,
+    visualEvidenceMap,
+    selectedEvidenceRegion,
+    anchorPoint: selectedEvidenceRegion?.anchorPoint ?? fallbackAnchorPoint,
     cameraMove,
     captionSafeZone,
     startScale,
@@ -196,9 +211,14 @@ export function directComicArcVisualScene(input: {
       `Usar target visual ${target} no painel ${input.beat.panelId}.`,
       `Crop 9:16 normalizado x=${crop.x}, y=${crop.y}, w=${crop.width}, h=${crop.height}.`,
       `Camera move: ${cameraMove}; escala ${startScale}->${endScale}; legenda em ${captionSafeZone}.`,
+      `Regiao de evidencia: ${selectedEvidenceRegion?.type ?? "fallback"} (${selectedEvidenceRegion?.confidence ?? 0}/100).`,
       "Se houver balao, preservar leitura; se houver impacto, centralizar golpe/monstro/personagem antes de aplicar zoom."
     ].join(" "),
-    warnings: alignment.warnings
+    warnings: [
+      ...alignment.warnings,
+      ...(visualEvidenceMap?.warnings.map((warning) => `evidence_map:${warning}`) ?? []),
+      ...(selectedEvidenceRegion?.warnings.map((warning) => `selected_region:${warning}`) ?? [])
+    ]
   };
 }
 
@@ -223,5 +243,3 @@ export function directComicArcVisualPlan(input: {
     warnings: scenes.flatMap((scene) => scene.warnings.map((warning) => `scene_${scene.beatRole}:${scene.panelId}:${warning}`))
   };
 }
-
-

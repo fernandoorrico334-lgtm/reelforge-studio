@@ -487,6 +487,9 @@ function CreatedArcProjects({ result }: { result: ComicStudioCreateArcProjectsRe
                 Visual match {project.renderBlueprintHints.arcVisualPlan.averagePanelNarrationAlignmentScore}/100
               </span>
             </div>
+            <p className="mt-3 text-xs leading-5 text-cyan-100/65">
+              Evidence map: {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.selectedEvidenceRegion?.type ?? "fallback"} / {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.selectedEvidenceRegion?.confidence ?? 0}% na abertura
+            </p>
             {project.renderBlueprintHints.finalQualityGate.blockers.length > 0 || project.renderBlueprintHints.finalQualityGate.warnings.length > 0 ? (
               <p className="mt-3 text-xs leading-5 text-mist/58">
                 QA: {[...project.renderBlueprintHints.finalQualityGate.blockers, ...project.renderBlueprintHints.finalQualityGate.warnings].slice(0, 3).join(", ")}
@@ -735,6 +738,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
     </div>
   );
 }
+
 
 
 

@@ -1,4 +1,4 @@
-export * from "./beast-engine.js";
+﻿export * from "./beast-engine.js";
 export * from "./discovery/candidate-enrichment.js";
 export * from "./compliance/risk-policy.js";
 export * from "./niches/niche-presets.js";
@@ -61,6 +61,7 @@ export * from "./pipeline/comic-golden-render-qa.js";
 export * from "./pipeline/comic-golden-runtime-qa.js";
 export * from "./pipeline/comic-short-final-quality-gate.js";
 export * from "./pipeline/comic-arc-visual-director.js";
+export * from "./pipeline/comic-panel-evidence-map.js";
 export * from "./pipeline/comic-final-video-dna.js";
 export * from "./pipeline/comic-smart-crop-director.js";
 export * from "./pipeline/local-comic-ingestion.js";
@@ -124,3 +125,4 @@ export * from "./editorial/curated-source-leads.js";
 export * from "./editorial/topic-knowledge.js";
 export * from "./editorial/discovery-ranker.js";
 export * from "./editorial/short-form-editorial-pack.js";
+

@@ -1,0 +1,204 @@
+﻿import type { ComicStoryMinerPanelRef } from "./comic-story-miner.js";
+
+export type ComicPanelEvidenceRegionType =
+  | "speech_balloon"
+  | "speaker_face"
+  | "impact_zone"
+  | "duo_conflict"
+  | "wide_context"
+  | "payoff_detail";
+
+export type NormalizedComicEvidenceBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type ComicPanelEvidenceRegion = {
+  regionId: string;
+  type: ComicPanelEvidenceRegionType;
+  box: NormalizedComicEvidenceBox;
+  anchorPoint: { x: number; y: number };
+  confidence: number;
+  priority: number;
+  reasons: string[];
+  warnings: string[];
+};
+
+export type ComicPanelEvidenceMap = {
+  detectorId: "comic_panel_evidence_map_v1";
+  panelId: string;
+  pageNumber: number;
+  regions: ComicPanelEvidenceRegion[];
+  bestRegionByType: Partial<Record<ComicPanelEvidenceRegionType, ComicPanelEvidenceRegion>>;
+  warnings: string[];
+};
+
+function clamp(value: number, min = 0, max = 1) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function round(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
+function safeBox(box: NormalizedComicEvidenceBox): NormalizedComicEvidenceBox {
+  const width = clamp(box.width, 0.2, 0.9);
+  const height = clamp(box.height, 0.18, 1);
+  return {
+    x: round(clamp(box.x, 0, 1 - width)),
+    y: round(clamp(box.y, 0, 1 - height)),
+    width: round(width),
+    height: round(height)
+  };
+}
+
+function anchorFor(box: NormalizedComicEvidenceBox, yBias = 0.5) {
+  return {
+    x: round(clamp(box.x + box.width / 2, 0.08, 0.92)),
+    y: round(clamp(box.y + box.height * yBias, 0.08, 0.92))
+  };
+}
+
+function addRegion(input: {
+  panel: ComicStoryMinerPanelRef;
+  type: ComicPanelEvidenceRegionType;
+  box: NormalizedComicEvidenceBox;
+  confidence: number;
+  priority: number;
+  reasons: string[];
+  warnings?: string[];
+  yBias?: number;
+}): ComicPanelEvidenceRegion {
+  const box = safeBox(input.box);
+  return {
+    regionId: `${input.panel.panelId}:${input.type}`,
+    type: input.type,
+    box,
+    anchorPoint: anchorFor(box, input.yBias ?? 0.5),
+    confidence: clampScore(input.confidence),
+    priority: input.priority,
+    reasons: input.reasons,
+    warnings: input.warnings ?? []
+  };
+}
+
+export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): ComicPanelEvidenceMap {
+  const evidence = panel.visualCropEvidence;
+  const counts = evidence.evidenceCounts;
+  const confidence = evidence.confidence;
+  const regions: ComicPanelEvidenceRegion[] = [];
+  const warnings: string[] = [];
+  const textLoad = counts.dialogue + counts.narrationBoxes + counts.detectedText;
+  const textHeavy = evidence.quality.textHeavyRatio >= 0.34 || textLoad >= 3;
+  const hasAction = counts.actions > 0 || counts.soundEffects > 0 || confidence.actions >= 0.7;
+  const hasCharacters = counts.characters > 0 || confidence.characters >= 0.58;
+  const hasDuoConflict = evidence.visualFlags.duoVisible || /conflict|threat|rival|enemy|host/i.test(evidence.strongestRelationshipType ?? "");
+  const cropable = evidence.quality.cropability916Score >= 78;
+
+  regions.push(addRegion({
+    panel,
+    type: "wide_context",
+    box: { x: 0.12, y: 0.02, width: 0.76, height: 0.94 },
+    confidence: 58 + confidence.overall * 22 + (cropable ? 5 : 0),
+    priority: 45,
+    reasons: ["fallback_context_region", `story_function:${evidence.storyFunction}`, `cropability:${evidence.quality.cropability916Score}`],
+    warnings: cropable ? [] : ["wide_context_low_cropability"]
+  }));
+
+  if (textLoad > 0) {
+    regions.push(addRegion({
+      panel,
+      type: "speech_balloon",
+      box: { x: 0.07, y: 0.02, width: 0.86, height: textHeavy ? 0.52 : 0.4 },
+      confidence: 62 + Math.min(20, textLoad * 6) + confidence.text * 16,
+      priority: 82,
+      yBias: 0.34,
+      reasons: [`text_load:${textLoad}`, `dialogue:${counts.dialogue}`, `narration_boxes:${counts.narrationBoxes}`, "protect_readable_text"],
+      warnings: textHeavy ? ["speech_region_text_heavy_use_wider_crop"] : []
+    }));
+  }
+
+  if (hasCharacters) {
+    regions.push(addRegion({
+      panel,
+      type: "speaker_face",
+      box: { x: textHeavy ? 0.18 : 0.22, y: 0.08, width: textHeavy ? 0.64 : 0.56, height: 0.68 },
+      confidence: 60 + confidence.characters * 24 + Math.min(8, counts.characters * 3),
+      priority: 72,
+      yBias: 0.45,
+      reasons: [`characters:${counts.characters}`, `character_confidence:${round(confidence.characters)}`, "face_or_character_reaction_anchor"]
+    }));
+  }
+
+  if (hasAction) {
+    regions.push(addRegion({
+      panel,
+      type: "impact_zone",
+      box: { x: cropable ? 0.2 : 0.14, y: 0.08, width: cropable ? 0.6 : 0.72, height: 0.82 },
+      confidence: 64 + confidence.actions * 22 + Math.min(12, counts.soundEffects * 5),
+      priority: 90,
+      yBias: 0.5,
+      reasons: [`actions:${counts.actions}`, `sfx:${counts.soundEffects}`, `action:${evidence.strongestActionLabel ?? "unknown"}`, "impact_retention_anchor"],
+      warnings: cropable ? [] : ["impact_region_needs_wider_crop"]
+    }));
+  }
+
+  if (hasDuoConflict) {
+    regions.push(addRegion({
+      panel,
+      type: "duo_conflict",
+      box: { x: 0.08, y: 0.05, width: 0.84, height: 0.86 },
+      confidence: 64 + confidence.relationships * 20 + (evidence.visualFlags.duoVisible ? 10 : 0),
+      priority: 86,
+      yBias: 0.48,
+      reasons: [`relationship:${evidence.strongestRelationshipType ?? "unknown"}`, `duo_visible:${evidence.visualFlags.duoVisible}`, "keep_both_sides_visible"]
+    }));
+  }
+
+  if (evidence.storyFunction === "reveal" || evidence.storyFunction === "reaction" || panel.localDialogue.length > 0) {
+    regions.push(addRegion({
+      panel,
+      type: "payoff_detail",
+      box: { x: 0.18, y: 0.1, width: 0.64, height: 0.78 },
+      confidence: 58 + confidence.overall * 20 + (panel.localDialogue.length > 0 ? 8 : 0),
+      priority: 68,
+      reasons: [`story_function:${evidence.storyFunction}`, `dialogue:${panel.localDialogue.length}`, "payoff_readability_anchor"]
+    }));
+  }
+
+  if (!textLoad) warnings.push("no_text_region_detected_from_panel_evidence");
+  if (!hasAction) warnings.push("no_action_region_detected_from_panel_evidence");
+  if (!hasCharacters) warnings.push("no_character_region_detected_from_panel_evidence");
+
+  const sorted = regions.sort((left, right) => right.priority + right.confidence * 0.25 - (left.priority + left.confidence * 0.25));
+  const bestRegionByType: ComicPanelEvidenceMap["bestRegionByType"] = {};
+  for (const region of sorted) {
+    bestRegionByType[region.type] ??= region;
+  }
+
+  return {
+    detectorId: "comic_panel_evidence_map_v1",
+    panelId: panel.panelId,
+    pageNumber: panel.pageNumber,
+    regions: sorted,
+    bestRegionByType,
+    warnings
+  };
+}
+
+export function selectComicPanelEvidenceRegion(input: {
+  evidenceMap: ComicPanelEvidenceMap | null;
+  target: ComicPanelEvidenceRegionType;
+}): ComicPanelEvidenceRegion | null {
+  if (!input.evidenceMap) return null;
+  return input.evidenceMap.bestRegionByType[input.target]
+    ?? input.evidenceMap.bestRegionByType.wide_context
+    ?? input.evidenceMap.regions[0]
+    ?? null;
+}
