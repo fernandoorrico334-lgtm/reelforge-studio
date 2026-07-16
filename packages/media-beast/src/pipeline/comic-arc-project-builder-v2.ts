@@ -5,6 +5,10 @@ import { evaluateComicShortFinalQualityGate, type ComicShortFinalQaReport } from
 import { directComicArcVisualPlan, type ComicArcVisualDirection } from "./comic-arc-visual-director.js";
 import { runComicPanelBattleTest, type ComicPanelBattleTestReport } from "./comic-panel-battle-test.js";
 import { buildComicBeatTimingPlan, type ComicBeatTimingPlan } from "./comic-beat-timing-plan.js";
+import { evaluateComicNarrationHumanizerGate, type ComicNarrationHumanizerGate } from "./comic-narration-humanizer-gate.js";
+import { buildComicCaptionImpactPlan, type ComicCaptionImpactPlan } from "./comic-caption-impact-director.js";
+import { checkComicPanelContinuity, type ComicPanelContinuityReport } from "./comic-panel-continuity-checker.js";
+import { evaluateComicPostRenderCropQa, type ComicPostRenderCropQaReport } from "./comic-post-render-crop-qa.js";
 import type { ComicStoryMinerPanelRef } from "./comic-story-miner.js";
 import type {
   ComicProjectBridgeEmotion,
@@ -35,6 +39,10 @@ export type ComicArcProjectBuilderV2Payload = {
     arcVisualPlan: ReturnType<typeof directComicArcVisualPlan>;
     panelBattleTest: ComicPanelBattleTestReport;
     beatTimingPlan: ComicBeatTimingPlan;
+    narrationHumanizerGate: ComicNarrationHumanizerGate;
+    captionImpactPlan: ComicCaptionImpactPlan;
+    panelContinuityReport: ComicPanelContinuityReport;
+    postRenderCropQa: ComicPostRenderCropQaReport;
   };
   qualityChecklist: Array<{
     id: string;
@@ -271,7 +279,7 @@ function buildManifest(beats: ComicArcScriptBeat[], arc: ComicStoryArcV2): Comic
   }));
 }
 
-function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; scenes: ComicProjectBridgeSceneInput[]; targetDurationSeconds: number; finalQualityGate: ComicShortFinalQaReport; panelBattleTest: ComicPanelBattleTestReport }): ComicArcProjectBuilderV2Payload["qualityChecklist"] {
+function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; scenes: ComicProjectBridgeSceneInput[]; targetDurationSeconds: number; finalQualityGate: ComicShortFinalQaReport; panelBattleTest: ComicPanelBattleTestReport; narrationHumanizerGate: ComicNarrationHumanizerGate; captionImpactPlan: ComicCaptionImpactPlan; panelContinuityReport: ComicPanelContinuityReport; postRenderCropQa: ComicPostRenderCropQaReport }): ComicArcProjectBuilderV2Payload["qualityChecklist"] {
   return [
     {
       id: "manual_rights_review",
@@ -308,6 +316,30 @@ function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2
       label: "Paineis testados contra alternativas",
       status: input.panelBattleTest.averageSelectedScore >= 78 ? "ready" : input.panelBattleTest.averageSelectedScore >= 68 ? "needs_review" : "blocked",
       detail: `score=${input.panelBattleTest.averageSelectedScore}; improved=${input.panelBattleTest.improvedBeatCount}; selected=${input.panelBattleTest.selectedPanelIds.join(",")}.`
+    },
+    {
+      id: "narration_humanizer_gate",
+      label: "Narracao humana e especifica",
+      status: input.narrationHumanizerGate.status === "passed" ? "ready" : input.narrationHumanizerGate.status === "rejected" ? "blocked" : "needs_review",
+      detail: `score=${input.narrationHumanizerGate.score}; oral=${input.narrationHumanizerGate.oralFlowScore}; specific=${input.narrationHumanizerGate.specificityScore}; generic=${input.narrationHumanizerGate.genericSignals.length}.`
+    },
+    {
+      id: "caption_impact_director",
+      label: "Legendas com punch e zona segura",
+      status: input.captionImpactPlan.averageImpactScore >= 84 && input.captionImpactPlan.warnings.length === 0 ? "ready" : "needs_review",
+      detail: `score=${input.captionImpactPlan.averageImpactScore}; cues=${input.captionImpactPlan.cueCount}; warnings=${input.captionImpactPlan.warnings.join(",") || "none"}.`
+    },
+    {
+      id: "panel_continuity_checker",
+      label: "Continuidade visual da historia",
+      status: input.panelContinuityReport.status === "passed" ? "ready" : input.panelContinuityReport.status === "rejected" ? "blocked" : "needs_review",
+      detail: `score=${input.panelContinuityReport.score}; sequence=${input.panelContinuityReport.roleSequence.join(">")}; warnings=${input.panelContinuityReport.warnings.join(",") || "none"}.`
+    },
+    {
+      id: "post_render_crop_qa",
+      label: "QA de crop, legenda e foco visual",
+      status: input.postRenderCropQa.status === "passed" ? "ready" : input.postRenderCropQa.status === "rejected" ? "blocked" : "needs_review",
+      detail: `score=${input.postRenderCropQa.score}; overlap=${input.postRenderCropQa.captionOverlapRiskCount}; weakFocus=${input.postRenderCropQa.weakFocusCount}.`
     },    {
       id: "scene_structure",
       label: "Hook, tensao, climax e payoff planejados",
@@ -341,6 +373,10 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
   });
   const durations = durationPlan(optimizedScript.beats, targetDurationSeconds);
   const beatTimingPlan = buildComicBeatTimingPlan({ beats: optimizedScript.beats, durations, visualDirections: arcVisualPlan.scenes });
+  const narrationHumanizerGate = evaluateComicNarrationHumanizerGate({ arc: input.arc, script: optimizedScript });
+  const captionImpactPlan = buildComicCaptionImpactPlan({ beats: optimizedScript.beats, timingPlan: beatTimingPlan, visualDirections: arcVisualPlan.scenes });
+  const panelContinuityReport = checkComicPanelContinuity({ arc: input.arc, beats: optimizedScript.beats, visualDirections: arcVisualPlan.scenes });
+  const postRenderCropQa = evaluateComicPostRenderCropQa({ visualDirections: arcVisualPlan.scenes, captionImpactPlan });
   const scenes = buildScenes({ arc: input.arc, script: optimizedScript, targetDurationSeconds, arcVisualPlan, beatTimingPlan });
   const project = buildProject({ ...input, script: optimizedScript }, scenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0));
   const panelAssetManifest = buildManifest(optimizedScript.beats, input.arc);
@@ -365,7 +401,11 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
     `comic_final_quality_gate:${finalQualityGate.status}`,
     `comic_arc_visual_alignment:${arcVisualPlan.averagePanelNarrationAlignmentScore}`,
     `comic_panel_battle_test:${panelBattleTest.averageSelectedScore}`,
-    `comic_beat_timing:${beatTimingPlan.averagePacingScore}`
+    `comic_beat_timing:${beatTimingPlan.averagePacingScore}`,
+    `comic_narration_humanizer:${narrationHumanizerGate.score}`,
+    `comic_caption_impact:${captionImpactPlan.averageImpactScore}`,
+    `comic_panel_continuity:${panelContinuityReport.score}`,
+    `comic_post_render_crop_qa:${postRenderCropQa.score}`
   ]);
 
   return {
@@ -389,9 +429,13 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
       finalQualityGate,
       arcVisualPlan,
       panelBattleTest,
-      beatTimingPlan
+      beatTimingPlan,
+      narrationHumanizerGate,
+      captionImpactPlan,
+      panelContinuityReport,
+      postRenderCropQa
     },
-    qualityChecklist: checklist({ arc: input.arc, script: optimizedScript, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds, finalQualityGate, panelBattleTest }),
+    qualityChecklist: checklist({ arc: input.arc, script: optimizedScript, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds, finalQualityGate, panelBattleTest, narrationHumanizerGate, captionImpactPlan, panelContinuityReport, postRenderCropQa }),
     warnings,
     candidateFirst: true,
     requiresManualApproval: true

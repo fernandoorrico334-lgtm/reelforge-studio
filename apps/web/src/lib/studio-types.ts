@@ -3721,6 +3721,45 @@ export interface ComicShortFinalQualityGate {
   checks: Record<string, unknown>;
   nextActions: string[];
 }
+export interface ComicNarrationHumanizerGateSummary {
+  gateId: "comic_narration_humanizer_gate_v1";
+  status: "passed" | "needs_review" | "rejected";
+  score: number;
+  oralFlowScore: number;
+  specificityScore: number;
+  hookHumanityScore: number;
+  genericSignals: string[];
+  rewriteHints: string[];
+}
+export interface ComicCaptionImpactPlanSummary {
+  directorId: "comic_caption_impact_director_v1";
+  cueCount: number;
+  averageImpactScore: number;
+  cues: Array<{ sceneOrder: number; panelId: string; beatRole: string; text: string; animation: string; colorMood: string; safeZone: string; impactScore: number; warnings: string[] }>;
+  warnings: string[];
+}
+export interface ComicPanelContinuityReportSummary {
+  checkerId: "comic_panel_continuity_checker_v1";
+  status: "passed" | "needs_review" | "rejected";
+  score: number;
+  roleSequence: string[];
+  panelSequence: string[];
+  visualFocusSequence: string[];
+  missingContextCount: number;
+  repeatedPanelCount: number;
+  warnings: string[];
+}
+export interface ComicPostRenderCropQaSummary {
+  qaId: "comic_post_render_crop_qa_v1";
+  status: "passed" | "needs_review" | "rejected";
+  score: number;
+  checkedSceneCount: number;
+  captionOverlapRiskCount: number;
+  weakFocusCount: number;
+  missingActionFocusCount: number;
+  cropWarnings: string[];
+  recommendations: string[];
+}
 export interface ComicStudioCreateArcProjectsResponse {
   status: "created";
   mode: "arc_project_builder_v2";
@@ -3751,6 +3790,10 @@ export interface ComicStudioCreateArcProjectsResponse {
       arcVisualPlan: ComicArcVisualPlanSummary;
       panelBattleTest: ComicPanelBattleTestSummary;
       beatTimingPlan: ComicBeatTimingPlanSummary;
+      narrationHumanizerGate: ComicNarrationHumanizerGateSummary;
+      captionImpactPlan: ComicCaptionImpactPlanSummary;
+      panelContinuityReport: ComicPanelContinuityReportSummary;
+      postRenderCropQa: ComicPostRenderCropQaSummary;
       candidateFirst: true;
     };
     qualityChecklist: ComicStudioCreateProjectsResponse["createdProjects"][number]["qualityChecklist"];

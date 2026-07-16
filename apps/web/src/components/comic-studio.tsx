@@ -492,11 +492,24 @@ function CreatedArcProjects({ result }: { result: ComicStudioCreateArcProjectsRe
               <span className="rounded-full border border-amber-300/25 px-4 py-2 text-xs text-amber-100">
                 Timing {project.renderBlueprintHints.beatTimingPlan.averagePacingScore}/100
               </span>
+              <span className="rounded-full border border-emerald-300/25 px-4 py-2 text-xs text-emerald-100">
+                Narra??o {project.renderBlueprintHints.narrationHumanizerGate.score}/100
+              </span>
+              <span className="rounded-full border border-orange-300/25 px-4 py-2 text-xs text-orange-100">
+                Legenda {project.renderBlueprintHints.captionImpactPlan.averageImpactScore}/100
+              </span>
+              <span className="rounded-full border border-sky-300/25 px-4 py-2 text-xs text-sky-100">
+                Continuidade {project.renderBlueprintHints.panelContinuityReport.score}/100
+              </span>
+              <span className="rounded-full border border-lime-300/25 px-4 py-2 text-xs text-lime-100">
+                Crop QA {project.renderBlueprintHints.postRenderCropQa.score}/100
+              </span>
             </div>
             <p className="mt-3 text-xs leading-5 text-cyan-100/65">
               Evidence map: {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.selectedEvidenceRegion?.type ?? "fallback"} / {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.selectedEvidenceRegion?.confidence ?? 0}% na abertura / legenda {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.layoutMap.preferredCaptionZone ?? "safe"}
               {" "}| OCR {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.ocrIntelligence?.confidence ?? 0}% / {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.ocrIntelligence?.textDensity ?? "none"} / protegidas {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.layoutMap.ocrProtectedRegionCount ?? 0}
               {" "}| foco {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.visualFocus?.primaryFocus?.type ?? "fallback"} {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.visualFocus?.focusScore ?? 0}/100
+              {" "}| caption {project.renderBlueprintHints.captionImpactPlan.cues[0]?.animation ?? "impact"}/{project.renderBlueprintHints.captionImpactPlan.cues[0]?.safeZone ?? "safe"}
             </p>
             {project.renderBlueprintHints.finalQualityGate.blockers.length > 0 || project.renderBlueprintHints.finalQualityGate.warnings.length > 0 ? (
               <p className="mt-3 text-xs leading-5 text-mist/58">

@@ -117,6 +117,20 @@ async function main() {
   assert(timingPlan.averagePacingScore >= 78, "timing plan must be production safe");
   assert(timingPlan.scenes.every((scene) => scene.events.some((event) => event.type === "caption_in")), "each scene needs caption timing");
   assert(timingPlan.scenes.every((scene) => scene.events.some((event) => event.type === "camera_move")), "each scene needs camera timing");
+  const humanizerGate = payload.renderBlueprintHints.narrationHumanizerGate;
+  const captionImpactPlan = payload.renderBlueprintHints.captionImpactPlan;
+  const continuityReport = payload.renderBlueprintHints.panelContinuityReport;
+  const cropQa = payload.renderBlueprintHints.postRenderCropQa;
+  assert(humanizerGate.gateId === "comic_narration_humanizer_gate_v1", "expected narration humanizer gate");
+  assert(humanizerGate.score >= 80, "narration must be humanized enough for premium short");
+  assert(humanizerGate.genericSignals.length === 0, "narration must not contain generic signals");
+  assert(captionImpactPlan.directorId === "comic_caption_impact_director_v1", "expected caption impact director");
+  assert(captionImpactPlan.averageImpactScore >= 84, "caption impact must be production safe");
+  assert(captionImpactPlan.cueCount === payload.scenes.length, "caption impact must cover every scene");
+  assert(continuityReport.checkerId === "comic_panel_continuity_checker_v1", "expected panel continuity checker");
+  assert(continuityReport.score >= 84, "panel continuity must be production safe");
+  assert(cropQa.qaId === "comic_post_render_crop_qa_v1", "expected post render crop qa");
+  assert(cropQa.score >= 86, "crop QA must be production safe");
   assert(battleTest.averageSelectedScore >= 72, "battle-tested panels must be production safe");
   assert(battleTest.beatResults.every((result) => result.candidates.length > 0), "each beat needs tested panel candidates");
   assert(visualPlan.sceneCount === payload.scenes.length, "visual plan must cover every scene");
@@ -178,7 +192,11 @@ async function main() {
       battleTestScore: battleTest.averageSelectedScore,
       battleTestImprovedBeats: battleTest.improvedBeatCount,
       timingScore: timingPlan.averagePacingScore,
-      timingCutStyles: timingPlan.scenes.map((scene) => scene.cutStyle)
+      timingCutStyles: timingPlan.scenes.map((scene) => scene.cutStyle),
+      humanizerScore: humanizerGate.score,
+      captionImpactScore: captionImpactPlan.averageImpactScore,
+      continuityScore: continuityReport.score,
+      cropQaScore: cropQa.score
     },
     rejectedGate: {
       status: rejected.status,
