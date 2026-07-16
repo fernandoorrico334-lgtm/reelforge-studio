@@ -34,6 +34,7 @@
     "smoke:remix-video": "node scripts/smoke-remix-video.mjs",
     "smoke:reference-comics-match": "node scripts/smoke-reference-comics-match.mjs",
     "smoke:comic-story-miner": "node scripts/smoke-comic-story-miner.mjs",
+    "smoke:comic-arc-script-doctor": "node scripts/smoke-comic-arc-script-doctor.mjs",
     "smoke:comic-shorts-factory": "node scripts/smoke-comic-shorts-factory.mjs",
     "smoke:comic-quality-gate": "node scripts/smoke-comic-quality-gate.mjs",
     "smoke:comic-short-project-bridge": "node scripts/smoke-comic-short-project-bridge.mjs",

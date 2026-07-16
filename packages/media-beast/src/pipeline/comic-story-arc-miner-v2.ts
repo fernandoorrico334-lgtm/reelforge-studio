@@ -1,4 +1,5 @@
 import type { ComicShortOpportunity, ComicStoryMinerReport } from "./comic-story-miner.js";
+import { doctorComicStoryArcScriptsV2, type ComicArcScriptDoctorV2Report } from "./comic-arc-script-doctor-v2.js";
 
 type ComicStoryMinerBaseReport = Omit<ComicStoryMinerReport, "storyArcMinerV2"> | ComicStoryMinerReport;
 
@@ -53,6 +54,7 @@ export type ComicStoryArcMinerV2Report = {
   averageScore: number;
   arcs: ComicStoryArcV2[];
   recommendedShorts: ComicStoryArcV2[];
+  scriptDoctor: ComicArcScriptDoctorV2Report;
   warnings: string[];
   nextImprovements: string[];
 };
@@ -344,6 +346,8 @@ export function buildComicStoryArcMinerV2Report(report: ComicStoryMinerBaseRepor
   if (arcs.length === 0) warnings.push("no_story_arcs_detected");
   if (arcs.filter((arc) => arc.readyForShort).length === 0) warnings.push("no_ready_story_arcs_above_premium_threshold");
   const averageScore = arcs.length ? Math.round(arcs.reduce((sum, arc) => sum + arc.overallScore, 0) / arcs.length) : 0;
+  const recommendedShorts = arcs.filter((arc) => arc.readyForShort).slice(0, 12);
+  const scriptDoctor = doctorComicStoryArcScriptsV2({ arcs: recommendedShorts.length ? recommendedShorts : arcs.slice(0, 12) });
   return {
     minerId: "comic_story_arc_miner_v2",
     generatedAt: new Date().toISOString(),
@@ -351,7 +355,8 @@ export function buildComicStoryArcMinerV2Report(report: ComicStoryMinerBaseRepor
     readyArcCount: arcs.filter((arc) => arc.readyForShort).length,
     averageScore,
     arcs,
-    recommendedShorts: arcs.filter((arc) => arc.readyForShort).slice(0, 12),
+    recommendedShorts,
+    scriptDoctor,
     warnings,
     nextImprovements: [
       "Use OCR/dialogue ordering to make every arc scene-first instead of opportunity-first.",

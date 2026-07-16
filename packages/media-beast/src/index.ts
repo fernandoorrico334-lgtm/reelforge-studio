@@ -46,6 +46,7 @@ export * from "./pipeline/comics-scene-first-narration.js";
 export * from "./pipeline/reference-comics-match-engine.js";
 export * from "./pipeline/comic-story-miner.js";
 export * from "./pipeline/comic-story-arc-miner-v2.js";
+export * from "./pipeline/comic-arc-script-doctor-v2.js";
 export * from "./pipeline/comic-shorts-factory.js";
 export * from "./pipeline/comic-project-bridge.js";
 export * from "./pipeline/comic-panel-moment-selector.js";
