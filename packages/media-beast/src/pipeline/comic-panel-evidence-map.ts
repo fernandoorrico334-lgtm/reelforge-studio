@@ -26,12 +26,25 @@ export type ComicPanelEvidenceRegion = {
   warnings: string[];
 };
 
+export type ComicPanelSafeCaptionZone = "top" | "center" | "lower-third" | "bottom";
+
+export type ComicPanelLayoutMap = {
+  layoutId: "comic_panel_layout_map_v1";
+  preferredCaptionZone: ComicPanelSafeCaptionZone;
+  protectedTextRegions: ComicPanelEvidenceRegion[];
+  motionFocusRegion: ComicPanelEvidenceRegion | null;
+  readingPath: Array<{ regionId: string; type: ComicPanelEvidenceRegionType; order: number; holdWeight: number }>;
+  captionRisk: "low" | "medium" | "high";
+  warnings: string[];
+};
+
 export type ComicPanelEvidenceMap = {
   detectorId: "comic_panel_evidence_map_v1";
   panelId: string;
   pageNumber: number;
   regions: ComicPanelEvidenceRegion[];
   bestRegionByType: Partial<Record<ComicPanelEvidenceRegionType, ComicPanelEvidenceRegion>>;
+  layoutMap: ComicPanelLayoutMap;
   warnings: string[];
 };
 
@@ -88,6 +101,64 @@ function addRegion(input: {
   };
 }
 
+function intersectsVerticalBand(box: NormalizedComicEvidenceBox, band: ComicPanelSafeCaptionZone): boolean {
+  const top = box.y;
+  const bottom = box.y + box.height;
+  if (band === "top") return top < 0.26;
+  if (band === "center") return top < 0.68 && bottom > 0.32;
+  if (band === "lower-third") return bottom > 0.58;
+  return bottom > 0.72;
+}
+
+function buildLayoutMap(input: {
+  regions: ComicPanelEvidenceRegion[];
+  textLoad: number;
+  textHeavy: boolean;
+  hasAction: boolean;
+  warnings: string[];
+}): ComicPanelLayoutMap {
+  const protectedTextRegions = input.regions.filter((region) => region.type === "speech_balloon");
+  const motionFocusRegion = input.regions.find((region) => region.type === "impact_zone")
+    ?? input.regions.find((region) => region.type === "duo_conflict")
+    ?? input.regions.find((region) => region.type === "speaker_face")
+    ?? input.regions.find((region) => region.type === "wide_context")
+    ?? null;
+  const zones: ComicPanelSafeCaptionZone[] = ["lower-third", "bottom", "top", "center"];
+  const preferredCaptionZone = zones
+    .map((zone) => ({
+      zone,
+      penalty: protectedTextRegions.reduce((sum, region) => sum + (intersectsVerticalBand(region.box, zone) ? 20 + region.confidence / 5 : 0), 0)
+        + (zone === "center" && input.hasAction ? 14 : 0)
+        + (zone === "bottom" && input.textHeavy ? 12 : 0)
+    }))
+    .sort((left, right) => left.penalty - right.penalty)[0]?.zone ?? "lower-third";
+  const captionRisk = protectedTextRegions.some((region) => intersectsVerticalBand(region.box, preferredCaptionZone))
+    ? "high"
+    : input.textHeavy
+      ? "medium"
+      : "low";
+  return {
+    layoutId: "comic_panel_layout_map_v1",
+    preferredCaptionZone,
+    protectedTextRegions,
+    motionFocusRegion,
+    readingPath: input.regions
+      .filter((region) => ["speech_balloon", "speaker_face", "impact_zone", "duo_conflict", "payoff_detail"].includes(region.type))
+      .slice(0, 4)
+      .map((region, index) => ({
+        regionId: region.regionId,
+        type: region.type,
+        order: index + 1,
+        holdWeight: Math.max(1, Math.round((region.priority + region.confidence) / 50))
+      })),
+    captionRisk,
+    warnings: [
+      ...input.warnings,
+      ...(captionRisk === "high" ? ["caption_zone_overlaps_protected_text"] : []),
+      ...(motionFocusRegion ? [] : ["missing_motion_focus_region"])
+    ]
+  };
+}
 export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): ComicPanelEvidenceMap {
   const evidence = panel.visualCropEvidence;
   const counts = evidence.evidenceCounts;
@@ -182,12 +253,15 @@ export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): Comi
     bestRegionByType[region.type] ??= region;
   }
 
+  const layoutMap = buildLayoutMap({ regions: sorted, textLoad, textHeavy, hasAction, warnings });
+
   return {
     detectorId: "comic_panel_evidence_map_v1",
     panelId: panel.panelId,
     pageNumber: panel.pageNumber,
     regions: sorted,
     bestRegionByType,
+    layoutMap,
     warnings
   };
 }
@@ -202,3 +276,6 @@ export function selectComicPanelEvidenceRegion(input: {
     ?? input.evidenceMap.regions[0]
     ?? null;
 }
+
+
+

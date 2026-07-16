@@ -185,7 +185,7 @@ export function directComicArcVisualScene(input: {
     x: round(clamp(crop.x + crop.width / 2, 0.08, 0.92)),
     y: round(clamp(crop.y + crop.height * (target === "speech_balloon" ? 0.38 : 0.5), 0.08, 0.92))
   };
-  const captionSafeZone = captionZoneForTarget(target, input.beat);
+  const captionSafeZone = visualEvidenceMap?.layoutMap?.preferredCaptionZone ?? captionZoneForTarget(target, input.beat);
   const cameraMove = cameraMoveForTarget(target);
   const startScale = target === "impact_zone" ? 1.08 : target === "speech_balloon" ? 1.02 : 1.04;
   const endScale = target === "impact_zone" ? 1.24 : target === "payoff_detail" ? 1 : 1.12;
@@ -212,11 +212,14 @@ export function directComicArcVisualScene(input: {
       `Crop 9:16 normalizado x=${crop.x}, y=${crop.y}, w=${crop.width}, h=${crop.height}.`,
       `Camera move: ${cameraMove}; escala ${startScale}->${endScale}; legenda em ${captionSafeZone}.`,
       `Regiao de evidencia: ${selectedEvidenceRegion?.type ?? "fallback"} (${selectedEvidenceRegion?.confidence ?? 0}/100).`,
+      `Legenda segura: ${captionSafeZone}; risco=${visualEvidenceMap?.layoutMap?.captionRisk ?? "unknown"}.`,
+      `Leitura visual: ${(visualEvidenceMap?.layoutMap?.readingPath ?? []).map((entry) => `${entry.order}:${entry.type}`).join(" > ") || "fallback"}.`,
       "Se houver balao, preservar leitura; se houver impacto, centralizar golpe/monstro/personagem antes de aplicar zoom."
     ].join(" "),
     warnings: [
       ...alignment.warnings,
       ...(visualEvidenceMap?.warnings.map((warning) => `evidence_map:${warning}`) ?? []),
+      ...(visualEvidenceMap?.layoutMap?.warnings.map((warning) => `layout_map:${warning}`) ?? []),
       ...(selectedEvidenceRegion?.warnings.map((warning) => `selected_region:${warning}`) ?? [])
     ]
   };
@@ -243,3 +246,5 @@ export function directComicArcVisualPlan(input: {
     warnings: scenes.flatMap((scene) => scene.warnings.map((warning) => `scene_${scene.beatRole}:${scene.panelId}:${warning}`))
   };
 }
+
+

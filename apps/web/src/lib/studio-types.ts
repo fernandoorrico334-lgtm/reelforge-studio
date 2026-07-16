@@ -3633,6 +3633,13 @@ export interface ComicArcVisualPlanSummary {
     visualEvidenceMap: {
       detectorId: "comic_panel_evidence_map_v1";
       regions: Array<{ type: string; confidence: number; priority: number }>;
+      layoutMap: {
+        layoutId: "comic_panel_layout_map_v1";
+        preferredCaptionZone: string;
+        captionRisk: string;
+        readingPath: Array<{ type: string; order: number; holdWeight: number }>;
+        warnings: string[];
+      };
       warnings: string[];
     } | null;
     renderInstruction: string;
@@ -4052,6 +4059,8 @@ export interface DashboardSnapshot {
     renders: DataSource;
   };
 }
+
+
 
 
 
