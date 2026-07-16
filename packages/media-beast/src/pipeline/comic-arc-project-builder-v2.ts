@@ -1,4 +1,4 @@
-﻿import type { ComicStoryMinerReport } from "./comic-story-miner.js";
+import type { ComicStoryMinerReport } from "./comic-story-miner.js";
 import type { ComicStoryArcV2 } from "./comic-story-arc-miner-v2.js";
 import type { ComicArcScriptBeat, ComicArcScriptDoctorV2Result } from "./comic-arc-script-doctor-v2.js";
 import { evaluateComicShortFinalQualityGate, type ComicShortFinalQaReport } from "./comic-short-final-quality-gate.js";
@@ -84,6 +84,36 @@ function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
+function applyHumanizedNarration(input: {
+  script: ComicArcScriptDoctorV2Result;
+  humanizerGate: ComicNarrationHumanizerGate;
+}): ComicArcScriptDoctorV2Result {
+  const rewriteByRole = new Map(input.humanizerGate.beatRewrites.map((rewrite) => [rewrite.beatRole, rewrite]));
+  const beats = input.script.beats.map((beat) => {
+    const rewrite = rewriteByRole.get(beat.role);
+    const suggested = rewrite?.suggested.trim();
+    if (!rewrite || !suggested || rewrite.reason === "line_already_human_enough") return beat;
+    return {
+      ...beat,
+      narrationText: suggested,
+      delivery: {
+        ...beat.delivery,
+        pauseAfterMs: input.humanizerGate.voiceDirection.pauseMap.find((pause) => pause.afterBeatRole === beat.role)?.pauseMs ?? beat.delivery.pauseAfterMs,
+        voiceNote: `${beat.delivery.voiceNote} Humanizer: ${input.humanizerGate.voiceDirection.tone}; ${rewrite.reason}.`
+      }
+    };
+  });
+  return {
+    ...input.script,
+    beats,
+    fullNarration: beats.map((beat) => beat.narrationText).join(" "),
+    warnings: unique([
+      ...input.script.warnings,
+      ...(input.humanizerGate.beatRewrites.some((rewrite) => rewrite.reason !== "line_already_human_enough") ? ["comic_humanized_rewrites_applied"] : [])
+    ])
+  };
+}
+
 function emotionForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2): ComicProjectBridgeEmotion {
   if (beat.role === "hook" || beat.role === "climax") return "EPIC";
   if (beat.role === "tension") return "TENSE";
@@ -149,6 +179,13 @@ function beatTitle(beat: ComicArcScriptBeat, order: number): string {
   return `Cena ${order}: ${role}`;
 }
 
+type CaptionPosition = "center" | "lower-third" | "top" | "bottom";
+
+function safeCaptionPosition(value: string | undefined, fallback: CaptionPosition): CaptionPosition {
+  if (value === "center" || value === "lower-third" || value === "top" || value === "bottom") return value;
+  return fallback;
+}
+
 function visualPromptForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, visualDirection?: ComicArcVisualDirection): string {
   return [
     `Use o painel autorizado ${beat.panelId} como imagem principal da cena.`,
@@ -162,7 +199,7 @@ function visualPromptForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, vis
   ].join(" ");
 }
 
-function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, script: ComicArcScriptDoctorV2Result, visualDirection?: ComicArcVisualDirection, timingScene?: ComicBeatTimingPlan["scenes"][number]): string {
+function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, script: ComicArcScriptDoctorV2Result, visualDirection?: ComicArcVisualDirection, timingScene?: ComicBeatTimingPlan["scenes"][number], premiumDirectives?: { humanizedRewrite?: ComicNarrationHumanizerGate["beatRewrites"][number] | undefined; captionCue?: ComicCaptionImpactPlan["cues"][number] | undefined; continuityCut?: ComicPanelContinuityReport["continuityCuts"][number] | undefined; continuityBridge?: ComicPanelContinuityReport["bridgeNarrationHints"][number] | undefined; cropQaScene?: ComicPostRenderCropQaReport["sceneReports"][number] | undefined }): string {
   return safeJson({
     source: "comic-arc-project-builder-v2",
     arcId: arc.id,
@@ -177,6 +214,10 @@ function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, scr
     evidenceReason: beat.evidenceReason,
     arcVisualDirection: visualDirection ?? null,
     beatTiming: timingScene ?? null,
+    premiumDirectives: premiumDirectives ?? null,
+    captionRenderPlan: premiumDirectives?.captionCue ?? null,
+    continuityInstruction: premiumDirectives?.continuityCut ?? null,
+    cropQaInstruction: premiumDirectives?.cropQaScene ?? null,
     viewerPromise: arc.viewerPromise,
     payoff: arc.payoff,
     requiresManualPanelImport: true,
@@ -184,18 +225,23 @@ function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, scr
   });
 }
 
-function buildScenes(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; targetDurationSeconds: number; arcVisualPlan: ReturnType<typeof directComicArcVisualPlan>; beatTimingPlan: ComicBeatTimingPlan }): ComicProjectBridgeSceneInput[] {
+function buildScenes(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; targetDurationSeconds: number; arcVisualPlan: ReturnType<typeof directComicArcVisualPlan>; beatTimingPlan: ComicBeatTimingPlan; narrationHumanizerGate: ComicNarrationHumanizerGate; captionImpactPlan: ComicCaptionImpactPlan; panelContinuityReport: ComicPanelContinuityReport; postRenderCropQa: ComicPostRenderCropQaReport }): ComicProjectBridgeSceneInput[] {
   const durations = durationPlan(input.script.beats, input.targetDurationSeconds);
   const visualPreset = visualPresetForArc(input.arc);
   const captionStyle = captionStyleForArc(input.arc);
   return input.script.beats.map((beat, index) => {
     const visualDirection = input.arcVisualPlan.scenes.find((scene) => scene.panelId === beat.panelId && scene.beatRole === beat.role);
     const timingScene = input.beatTimingPlan.scenes.find((scene) => scene.panelId === beat.panelId && scene.beatRole === beat.role);
+    const captionCue = input.captionImpactPlan.cues.find((cue) => cue.panelId === beat.panelId && cue.beatRole === beat.role);
+    const continuityCut = input.panelContinuityReport.continuityCuts[index - 1];
+    const continuityBridge = input.panelContinuityReport.bridgeNarrationHints[index - 1];
+    const cropQaScene = input.postRenderCropQa.sceneReports.find((scene) => scene.panelId === beat.panelId && scene.beatRole === beat.role);
+    const humanizedRewrite = input.narrationHumanizerGate.beatRewrites.find((rewrite) => rewrite.beatRole === beat.role);
     return {
       order: index + 1,
       title: beatTitle(beat, index + 1),
       narrationText: beat.narrationText,
-      captionText: beat.captionText,
+      captionText: captionCue?.text ?? beat.captionText,
       duration: durations[index] ?? 6,
       emotion: emotionForBeat(beat, input.arc),
       assetId: null,
@@ -209,14 +255,14 @@ function buildScenes(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctor
       visualSourceMode: "asset_only",
       visualPrompt: visualPromptForBeat(beat, input.arc, visualDirection),
       negativePrompt: "Nao inventar personagens, nao alterar a HQ, nao usar imagem externa sem aprovacao, nao cortar rosto ou balao importante.",
-      visualRecipe: visualRecipeForBeat(beat, input.arc, input.script, visualDirection, timingScene),
+      visualRecipe: visualRecipeForBeat(beat, input.arc, input.script, visualDirection, timingScene, { humanizedRewrite, captionCue, continuityCut, continuityBridge, cropQaScene }),
       generationStatus: null,
       generationProvider: null,
       generationSeed: null,
       transition: transitionForBeat(beat),
       captionStyle,
-      captionPosition: beat.role === "hook" || beat.role === "climax" ? "center" : "lower-third",
-      captionEmphasisWords: beat.delivery.emphasisWords,
+      captionPosition: safeCaptionPosition(captionCue?.safeZone, beat.role === "hook" || beat.role === "climax" ? "center" : "lower-third"),
+      captionEmphasisWords: captionCue?.emphasisWords ?? beat.delivery.emphasisWords,
       energyLevel: beat.role === "hook" || beat.role === "climax" ? 9 : beat.role === "tension" ? 8 : 7,
       narrationStatus: null,
       narrationProvider: null,
@@ -365,7 +411,9 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
   const targetDurationSeconds = Math.max(30, input.script.estimatedDurationSeconds, input.arc.recommendedDurationSeconds);
   const panelsById = input.panelsById ?? new Map();
   const panelBattleTest = runComicPanelBattleTest({ arc: input.arc, script: input.script, panelsById });
-  const optimizedScript: ComicArcScriptDoctorV2Result = { ...input.script, beats: panelBattleTest.optimizedBeats };
+  const preHumanizedScript: ComicArcScriptDoctorV2Result = { ...input.script, beats: panelBattleTest.optimizedBeats };
+  const preHumanizerGate = evaluateComicNarrationHumanizerGate({ arc: input.arc, script: preHumanizedScript });
+  const optimizedScript = applyHumanizedNarration({ script: preHumanizedScript, humanizerGate: preHumanizerGate });
   const arcVisualPlan = directComicArcVisualPlan({
     arc: input.arc,
     scriptBeats: optimizedScript.beats,
@@ -377,7 +425,7 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
   const captionImpactPlan = buildComicCaptionImpactPlan({ beats: optimizedScript.beats, timingPlan: beatTimingPlan, visualDirections: arcVisualPlan.scenes });
   const panelContinuityReport = checkComicPanelContinuity({ arc: input.arc, beats: optimizedScript.beats, visualDirections: arcVisualPlan.scenes });
   const postRenderCropQa = evaluateComicPostRenderCropQa({ visualDirections: arcVisualPlan.scenes, captionImpactPlan });
-  const scenes = buildScenes({ arc: input.arc, script: optimizedScript, targetDurationSeconds, arcVisualPlan, beatTimingPlan });
+  const scenes = buildScenes({ arc: input.arc, script: optimizedScript, targetDurationSeconds, arcVisualPlan, beatTimingPlan, narrationHumanizerGate: preHumanizerGate, captionImpactPlan, panelContinuityReport, postRenderCropQa });
   const project = buildProject({ ...input, script: optimizedScript }, scenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0));
   const panelAssetManifest = buildManifest(optimizedScript.beats, input.arc);
   const finalQualityGate = evaluateComicShortFinalQualityGate({

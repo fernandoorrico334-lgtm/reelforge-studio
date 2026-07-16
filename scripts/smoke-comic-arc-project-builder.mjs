@@ -119,6 +119,14 @@ async function main() {
   assert(payload.warnings.includes("manual_approval_required_before_render"), "manual approval warning required");
   assert(payload.qualityChecklist.some((item) => item.id === "minimum_duration_30s" && item.status === "ready"), "minimum duration checklist should be ready");
 
+  const visualRecipes = payload.scenes.map((scene) => JSON.parse(scene.visualRecipe));
+  assert(visualRecipes.every((recipe) => recipe.premiumDirectives), "every scene should carry premium directives");
+  assert(visualRecipes.every((recipe) => recipe.captionRenderPlan?.wordCues?.length > 0), "every scene should carry caption word cues");
+  assert(visualRecipes.some((recipe) => recipe.premiumDirectives?.humanizedRewrite?.reason !== "line_already_human_enough"), "at least one humanized rewrite should be embedded");
+  assert(visualRecipes.some((recipe) => recipe.continuityInstruction), "continuity cuts should be embedded in visual recipes");
+  assert(visualRecipes.every((recipe) => recipe.cropQaInstruction?.focusScore >= 68), "crop QA scene reports should confirm strong focus for every scene");
+  assert(visualRecipes.every((recipe) => recipe.cropQaInstruction?.captionRisk !== "high"), "crop QA scene reports should avoid high caption overlap risk");
+
   console.log(JSON.stringify({
     status: "completed",
     projectCount: batch.projectCount,
