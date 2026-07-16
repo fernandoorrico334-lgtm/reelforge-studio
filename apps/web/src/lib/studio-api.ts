@@ -1,4 +1,4 @@
-﻿import { getAudioMoodPresets } from "@reelforge/audio-engine";
+import { getAudioMoodPresets } from "@reelforge/audio-engine";
 import { getCaptionStyles } from "@reelforge/caption-engine";
 import {
   buildBeatSyncPlan,
@@ -123,6 +123,7 @@ import type {
   NarrationProviderDescriptor,
   NarrationVoicePack,
   ComicStudioCreateProjectsResponse,
+  ComicStudioCreateArcProjectsResponse,
   ComicStudioFactoryPlanResponse,
   MediaBeastCatalogResponse,
   EditorialShortPackResponse,
@@ -2528,6 +2529,24 @@ export async function runComicStudioCreateProjectsRequest(payload: {
   );
 }
 
+export async function runComicStudioCreateArcProjectsRequest(payload: {
+  assetDirectory: string;
+  channelId: string;
+  targetCount?: number;
+  maxProjects?: number;
+  minScore?: number;
+  titlePrefix?: string;
+  templateId?: string;
+  editingReferencePresetId?: string;
+}) {
+  return requestJson<ComicStudioCreateArcProjectsResponse>(
+    "/media-beast/comic-studio/create-arc-projects",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
 export async function getMediaBeastCatalogRequest() {
   return requestJson<MediaBeastCatalogResponse>("/media-beast/providers");
 }
@@ -3547,4 +3566,3 @@ export function getRenderThumbnailUrl(renderJobId: string) {
     `/media/renders/${encodeURIComponent(renderJobId)}/thumbnail`
   );
 }
-

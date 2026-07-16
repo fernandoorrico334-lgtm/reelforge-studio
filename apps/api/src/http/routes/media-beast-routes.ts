@@ -11,6 +11,7 @@ import {
   mediaBeastProviderIds,
   buildComicIngestionPlan,
   buildComicBatchProjectBridgePayload,
+  buildComicArcProjectsFromMinerV2,
   buildComicShortsBatchFactoryPlan,
   ingestLocalComicSource,
   mineComicStoryVaultFromDirectory,
@@ -513,6 +514,16 @@ export async function handleMediaBeastRoute(
           topOpportunityCount: minerReport.topOpportunities.length,
           warnings: minerReport.warnings
         },
+        arcStudio: minerReport.storyArcMinerV2
+          ? {
+              totalArcs: minerReport.storyArcMinerV2.totalArcs,
+              readyArcCount: minerReport.storyArcMinerV2.readyArcCount,
+              averageScore: minerReport.storyArcMinerV2.averageScore,
+              recommendedShorts: minerReport.storyArcMinerV2.recommendedShorts,
+              recommendedScripts: minerReport.storyArcMinerV2.scriptDoctor.recommendedScripts,
+              warnings: minerReport.storyArcMinerV2.warnings
+            }
+          : null,
         riskPolicyGate: {
           candidateFirst: true,
           requiresManualApproval: true,
@@ -523,6 +534,95 @@ export async function handleMediaBeastRoute(
       return true;
     }
 
+    if (pathname === "/media-beast/comic-studio/create-arc-projects") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const assetDirectory = readString(payload.assetDirectory, "assetDirectory");
+      const channelId = readString(payload.channelId, "channelId");
+      const targetCount = Math.min(readPositiveInteger(payload.targetCount, 6), 20);
+      const minScoreRaw = payload.minScore === undefined || payload.minScore === null ? 65 : Number(payload.minScore);
+      if (!Number.isFinite(minScoreRaw) || minScoreRaw < 0 || minScoreRaw > 100) {
+        throw new ValidationError("minScore must be between 0 and 100.");
+      }
+      const maxProjects = Math.min(readPositiveInteger(payload.maxProjects, 3), targetCount);
+      const titlePrefix = readOptionalString(payload.titlePrefix) ?? "Comic Arc";
+      const templateId = readOptionalString(payload.templateId);
+      const editingReferencePresetId = readOptionalString(payload.editingReferencePresetId);
+
+      const minerReport = await mineComicStoryVaultFromDirectory({
+        assetDirectory,
+        maxOpportunities: Math.max(targetCount * 4, 60),
+        minScore: Math.max(40, minScoreRaw - 15)
+      });
+      const arcPayload = buildComicArcProjectsFromMinerV2({
+        report: minerReport,
+        channelId,
+        maxProjects,
+        titlePrefix,
+        ...(templateId !== undefined ? { templateId } : {}),
+        ...(editingReferencePresetId !== undefined ? { editingReferencePresetId } : {})
+      });
+
+      const createdProjects = [];
+      for (const projectPayload of arcPayload.projects) {
+        const project = await createVideoProject(
+          dependencies.projectRepository,
+          dependencies.channelRepository,
+          dependencies.assetRepository,
+          projectPayload.project
+        );
+
+        const scenes = [];
+        for (const scenePayload of projectPayload.scenes) {
+          const scene = await createProjectScene(
+            dependencies.projectRepository,
+            dependencies.assetRepository,
+            project.id,
+            scenePayload
+          );
+          scenes.push(scene);
+        }
+
+        createdProjects.push({
+          projectId: project.id,
+          title: project.title,
+          arcId: projectPayload.arcId,
+          scriptDoctorId: projectPayload.scriptDoctorId,
+          scenesCreated: scenes.length,
+          panelAssetManifest: projectPayload.panelAssetManifest,
+          renderBlueprintHints: projectPayload.renderBlueprintHints,
+          qualityChecklist: projectPayload.qualityChecklist,
+          warnings: projectPayload.warnings
+        });
+      }
+
+      sendJson(response, 201, {
+        status: "created",
+        mode: "arc_project_builder_v2",
+        createdCount: createdProjects.length,
+        requestedCount: targetCount,
+        arcSummary: {
+          totalArcs: minerReport.storyArcMinerV2?.totalArcs ?? 0,
+          readyArcCount: minerReport.storyArcMinerV2?.readyArcCount ?? 0,
+          averageScore: minerReport.storyArcMinerV2?.averageScore ?? 0,
+          recommendedScriptCount: minerReport.storyArcMinerV2?.scriptDoctor.recommendedScripts.length ?? 0
+        },
+        createdProjects,
+        warnings: arcPayload.warnings,
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoRenderCount: 0,
+          autoImportedAssetCount: 0,
+          note: "Comic Arc Builder V2 created editable projects from mined story arcs only. Panel assets still require manual review/import and render is not started."
+        }
+      });
+      return true;
+    }
     if (pathname === "/media-beast/comic-studio/create-projects") {
       if (request.method !== "POST") {
         sendMethodNotAllowed(response, ["POST"]);

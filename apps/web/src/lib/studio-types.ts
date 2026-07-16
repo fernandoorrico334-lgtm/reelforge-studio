@@ -3435,6 +3435,84 @@ export interface ComicStudioShortPlan {
   warnings: string[];
 }
 
+
+export interface ComicStudioArcBeat {
+  role: "hook" | "setup" | "tension" | "climax" | "payoff";
+  panelId: string;
+  pageNumber: number;
+  reason: string;
+  narrationJob: string;
+}
+
+export interface ComicStudioStoryArcV2 {
+  id: string;
+  title: string;
+  type: string;
+  shortAngle: string;
+  viewerPromise: string;
+  retentionHook: string;
+  payoff: string;
+  minimumDurationSeconds: number;
+  recommendedDurationSeconds: number;
+  sourceOpportunityIds: string[];
+  pages: number[];
+  panelIds: string[];
+  characters: string[];
+  themes: string[];
+  beats: ComicStudioArcBeat[];
+  storyCompletenessScore: number;
+  visualStrengthScore: number;
+  narrationPotentialScore: number;
+  retentionScore: number;
+  overallScore: number;
+  readyForShort: boolean;
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface ComicStudioArcScriptBeat {
+  role: ComicStudioArcBeat["role"];
+  panelId: string;
+  pageNumber: number;
+  narrationText: string;
+  captionText: string;
+  delivery: {
+    energy: "high" | "extreme";
+    pace: "fast" | "controlled";
+    pauseAfterMs: number;
+    emphasisWords: string[];
+    voiceNote: string;
+  };
+  purpose: string;
+  evidenceReason: string;
+}
+
+export interface ComicStudioArcScriptV2 {
+  doctorId: "comic_arc_script_doctor_v2";
+  arcId: string;
+  title: string;
+  hookLine: string;
+  fullNarration: string;
+  beats: ComicStudioArcScriptBeat[];
+  estimatedDurationSeconds: number;
+  humanScore: number;
+  retentionScore: number;
+  storyClarityScore: number;
+  payoffScore: number;
+  overallScore: number;
+  readyForVoiceover: boolean;
+  warnings: string[];
+  nextImprovements: string[];
+}
+
+export interface ComicStudioArcStudioSummary {
+  totalArcs: number;
+  readyArcCount: number;
+  averageScore: number;
+  recommendedShorts: ComicStudioStoryArcV2[];
+  recommendedScripts: ComicStudioArcScriptV2[];
+  warnings: string[];
+}
 export interface ComicStudioFactoryPlanResponse {
   generatedAt: string;
   requestedCount: number;
@@ -3455,6 +3533,7 @@ export interface ComicStudioFactoryPlanResponse {
     topOpportunityCount: number;
     warnings: string[];
   };
+  arcStudio?: ComicStudioArcStudioSummary | null;
   riskPolicyGate: {
     candidateFirst: boolean;
     requiresManualApproval: boolean;
@@ -3511,6 +3590,47 @@ export interface ComicStudioCreateProjectsResponse {
   };
 }
 
+
+export interface ComicStudioCreateArcProjectsResponse {
+  status: "created";
+  mode: "arc_project_builder_v2";
+  createdCount: number;
+  requestedCount: number;
+  arcSummary: {
+    totalArcs: number;
+    readyArcCount: number;
+    averageScore: number;
+    recommendedScriptCount: number;
+  };
+  createdProjects: Array<{
+    projectId: string;
+    title: string;
+    arcId: string;
+    scriptDoctorId: string;
+    scenesCreated: number;
+    panelAssetManifest: ComicStudioCreateProjectsResponse["createdProjects"][number]["panelAssetManifest"];
+    renderBlueprintHints: {
+      source: "comic_arc_project_builder_v2";
+      storyArc: ComicStudioStoryArcV2;
+      script: ComicStudioArcScriptV2;
+      selectedBeats: ComicStudioArcScriptBeat[];
+      targetDurationSeconds: number;
+      sourcePages: number[];
+      panelIds: string[];
+      candidateFirst: true;
+    };
+    qualityChecklist: ComicStudioCreateProjectsResponse["createdProjects"][number]["qualityChecklist"];
+    warnings: string[];
+  }>;
+  warnings: string[];
+  riskPolicyGate: {
+    candidateFirst: boolean;
+    requiresManualApproval: boolean;
+    autoRenderCount: number;
+    autoImportedAssetCount: number;
+    note: string;
+  };
+}
 export interface OneClickProductionResponse {
   runId: string;
   status: ReelProductionRunStatus;
@@ -3870,4 +3990,3 @@ export interface DashboardSnapshot {
     renders: DataSource;
   };
 }
-

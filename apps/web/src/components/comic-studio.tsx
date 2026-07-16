@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import {
   runComicStudioCreateProjectsRequest,
+  runComicStudioCreateArcProjectsRequest,
   runComicStudioPlanRequest
 } from "../lib/studio-api";
 import type {
   ComicStudioCreateProjectsResponse,
+  ComicStudioCreateArcProjectsResponse,
   ComicStudioFactoryPlanResponse,
   ComicStudioShortPlan,
   StudioChannel
@@ -159,6 +161,157 @@ function CreatedProjects({ result }: { result: ComicStudioCreateProjectsResponse
   );
 }
 
+function ArcStudioPanel({
+  plan,
+  onCreateArcProjects,
+  disabled
+}: {
+  plan: ComicStudioFactoryPlanResponse;
+  onCreateArcProjects: () => void;
+  disabled: boolean;
+}) {
+  const arcStudio = plan.arcStudio;
+  if (!arcStudio || arcStudio.recommendedShorts.length === 0) return null;
+  const scriptByArcId = new Map(arcStudio.recommendedScripts.map((script) => [script.arcId, script]));
+
+  return (
+    <section className="space-y-5 rounded-[2rem] border border-signal/20 bg-[radial-gradient(circle_at_top_right,rgba(99,255,225,0.12),transparent_30%),rgba(255,255,255,0.035)] p-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-signal/70">Arcos narrativos premium</p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Historias que o sistema entendeu dentro da HQ</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-mist/65">
+            Este fluxo usa o Story Arc Miner V2 + Script Doctor V2 para criar projetos com hook, contexto, tensao, climax e payoff. E o caminho mais indicado para shorts com historia de verdade.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCreateArcProjects}
+          disabled={disabled}
+          className="rounded-full bg-signal px-5 py-3 text-sm font-semibold text-black shadow-[0_0_35px_rgba(99,255,225,0.18)] disabled:opacity-50"
+        >
+          Criar projetos premium por arco
+        </button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <p className="text-xs uppercase tracking-[0.22em] text-mist/45">Arcos</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{arcStudio.totalArcs}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <p className="text-xs uppercase tracking-[0.22em] text-mist/45">Prontos</p>
+          <p className="mt-3 text-3xl font-semibold text-emerald-200">{arcStudio.readyArcCount}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <p className="text-xs uppercase tracking-[0.22em] text-mist/45">Score medio</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{arcStudio.averageScore}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <p className="text-xs uppercase tracking-[0.22em] text-mist/45">Scripts</p>
+          <p className="mt-3 text-3xl font-semibold text-white">{arcStudio.recommendedScripts.length}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {arcStudio.recommendedShorts.slice(0, 6).map((arc) => {
+          const script = scriptByArcId.get(arc.id);
+          return (
+            <article key={arc.id} className="rounded-[1.5rem] border border-white/10 bg-black/25 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-mist/45">
+                    {arc.type.replace(/_/g, " ")} / score {arc.overallScore}
+                  </p>
+                  <h3 className="mt-3 text-xl font-semibold text-white">{arc.title}</h3>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs ${arc.readyForShort ? "bg-emerald-300 text-black" : "bg-amber-300/15 text-amber-100"}`}>
+                  {arc.readyForShort ? "Pronto" : "Revisar"}
+                </span>
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-mist/70">{arc.viewerPromise}</p>
+              <p className="mt-3 text-sm leading-6 text-signal/80">Hook: {script?.hookLine ?? arc.retentionHook}</p>
+              <p className="mt-3 line-clamp-4 text-sm leading-6 text-mist/68">
+                {script?.fullNarration ?? arc.payoff}
+              </p>
+
+              <div className="mt-4 grid gap-3 text-xs text-mist/65 md:grid-cols-3">
+                <span>{arc.recommendedDurationSeconds}s recomendados</span>
+                <span>{arc.beats.length} beats narrativos</span>
+                <span>pags. {formatPages(arc.pages)}</span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {arc.characters.slice(0, 4).map((character) => (
+                  <span key={character} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/65">
+                    {character}
+                  </span>
+                ))}
+                {arc.themes.slice(0, 4).map((theme) => (
+                  <span key={theme} className="rounded-full border border-signal/15 bg-signal/[0.06] px-3 py-1 text-xs text-signal/70">
+                    {theme.replace(/_/g, " ")}
+                  </span>
+                ))}
+              </div>
+
+              <div className="mt-5 space-y-2">
+                {(script?.beats ?? []).slice(0, 5).map((beat, index) => (
+                  <div key={`${beat.panelId}-${beat.role}`} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+                    <div className="flex items-center justify-between gap-3 text-xs text-mist/50">
+                      <span>{index + 1}. {beat.role}</span>
+                      <span>painel {beat.panelId} / pag. {beat.pageNumber}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-white/82">{beat.captionText}</p>
+                    <p className="mt-1 text-xs leading-5 text-mist/58">{beat.narrationText}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function CreatedArcProjects({ result }: { result: ComicStudioCreateArcProjectsResponse | null }) {
+  if (!result) return null;
+
+  return (
+    <section className="rounded-[2rem] border border-signal/25 bg-signal/[0.055] p-6">
+      <p className="text-xs uppercase tracking-[0.3em] text-signal/80">Projetos por arco criados</p>
+      <h2 className="mt-3 text-2xl font-semibold text-white">
+        {result.createdCount} projetos premium criados com historia completa
+      </h2>
+      <p className="mt-2 text-sm text-mist/65">
+        {result.arcSummary.readyArcCount} arcos prontos / {result.arcSummary.recommendedScriptCount} scripts recomendados. Render e importacao continuam bloqueados ate revisao manual.
+      </p>
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        {result.createdProjects.map((project) => (
+          <div key={project.projectId} className="rounded-2xl border border-white/10 bg-black/25 p-4">
+            <p className="text-sm font-semibold text-white">{project.title}</p>
+            <p className="mt-2 text-xs text-mist/55">
+              {project.scenesCreated} cenas / {project.panelAssetManifest.length} paineis / {project.renderBlueprintHints.targetDurationSeconds}s
+            </p>
+            <p className="mt-3 line-clamp-3 text-sm leading-6 text-mist/68">
+              {project.renderBlueprintHints.script.fullNarration}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href={`/projects/${project.projectId}`} className="rounded-full bg-signal px-4 py-2 text-xs font-semibold text-black">
+                Abrir projeto
+              </Link>
+              <span className="rounded-full border border-white/10 px-4 py-2 text-xs text-mist/65">
+                score {project.renderBlueprintHints.script.overallScore}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 text-sm text-mist/65">{result.riskPolicyGate.note}</p>
+    </section>
+  );
+}
 export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
   const [assetDirectory, setAssetDirectory] = useState("storage/assets/comics/justice-league-vs-godzilla-vs-kong/issue-01");
   const [channelId, setChannelId] = useState(channels[0]?.id ?? "");
@@ -168,6 +321,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
   const [selectedShortIds, setSelectedShortIds] = useState<string[]>([]);
   const [plan, setPlan] = useState<ComicStudioFactoryPlanResponse | null>(null);
   const [created, setCreated] = useState<ComicStudioCreateProjectsResponse | null>(null);
+  const [createdArcProjects, setCreatedArcProjects] = useState<ComicStudioCreateArcProjectsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -188,6 +342,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
   function runPlan() {
     setError(null);
     setCreated(null);
+    setCreatedArcProjects(null);
     startTransition(async () => {
       try {
         const next = await runComicStudioPlanRequest({
@@ -203,6 +358,30 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
     });
   }
 
+  function createArcProjects() {
+    if (!channelId) {
+      setError("Crie ou selecione um canal antes de criar projetos por arco.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const response = await runComicStudioCreateArcProjectsRequest({
+          assetDirectory,
+          channelId,
+          targetCount,
+          maxProjects,
+          minScore,
+          titlePrefix: "Comic Arc",
+          editingReferencePresetId: "builtin-comic-viral-reference-antman",
+          templateId: "comic_story_premium"
+        });
+        setCreatedArcProjects(response);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
   function createProjects() {
     if (!channelId) {
       setError("Crie ou selecione um canal antes de criar projetos.");
@@ -303,6 +482,14 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
       {plan ? <PlanSummary plan={plan} /> : null}
 
       {plan ? (
+        <ArcStudioPanel
+          plan={plan}
+          onCreateArcProjects={createArcProjects}
+          disabled={isPending || !channelId}
+        />
+      ) : null}
+
+      {plan ? (
         <section className="space-y-4">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -319,6 +506,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
         </section>
       ) : null}
 
+      <CreatedArcProjects result={createdArcProjects} />
       <CreatedProjects result={created} />
     </div>
   );
