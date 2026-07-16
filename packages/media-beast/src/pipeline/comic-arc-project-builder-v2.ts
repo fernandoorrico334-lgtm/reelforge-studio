@@ -1,6 +1,7 @@
 import type { ComicStoryMinerReport } from "./comic-story-miner.js";
 import type { ComicStoryArcV2 } from "./comic-story-arc-miner-v2.js";
 import type { ComicArcScriptBeat, ComicArcScriptDoctorV2Result } from "./comic-arc-script-doctor-v2.js";
+import { evaluateComicShortFinalQualityGate, type ComicShortFinalQaReport } from "./comic-short-final-quality-gate.js";
 import type {
   ComicProjectBridgeEmotion,
   ComicProjectBridgeProjectInput,
@@ -26,6 +27,7 @@ export type ComicArcProjectBuilderV2Payload = {
     sourcePages: number[];
     panelIds: string[];
     candidateFirst: true;
+    finalQualityGate: ComicShortFinalQaReport;
   };
   qualityChecklist: Array<{
     id: string;
@@ -256,7 +258,7 @@ function buildManifest(beats: ComicArcScriptBeat[], arc: ComicStoryArcV2): Comic
   }));
 }
 
-function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; scenes: ComicProjectBridgeSceneInput[]; targetDurationSeconds: number }): ComicArcProjectBuilderV2Payload["qualityChecklist"] {
+function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; scenes: ComicProjectBridgeSceneInput[]; targetDurationSeconds: number; finalQualityGate: ComicShortFinalQaReport }): ComicArcProjectBuilderV2Payload["qualityChecklist"] {
   return [
     {
       id: "manual_rights_review",
@@ -281,6 +283,12 @@ function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2
       label: "Duracao minima de 30 segundos",
       status: input.targetDurationSeconds >= 30 ? "ready" : "blocked",
       detail: `target=${input.targetDurationSeconds}s; scenes=${input.scenes.length}.`
+    },
+    {
+      id: "comic_final_quality_gate",
+      label: "Final QA de historia, paineis e narracao",
+      status: input.finalQualityGate.status === "passed" ? "ready" : input.finalQualityGate.status === "rejected" ? "blocked" : "needs_review",
+      detail: `score=${input.finalQualityGate.score}/${input.finalQualityGate.minimumScore}; blockers=${input.finalQualityGate.blockers.join(",") || "none"}; warnings=${input.finalQualityGate.warnings.join(",") || "none"}.`
     },
     {
       id: "scene_structure",
@@ -308,6 +316,13 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
   const scenes = buildScenes({ arc: input.arc, script: input.script, targetDurationSeconds });
   const project = buildProject(input, scenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0));
   const panelAssetManifest = buildManifest(input.script.beats, input.arc);
+  const finalQualityGate = evaluateComicShortFinalQualityGate({
+    arc: input.arc,
+    script: input.script,
+    scenes,
+    panelAssetManifest,
+    targetDurationSeconds: project.durationTarget ?? targetDurationSeconds
+  });
   const warnings = unique([
     ...input.arc.warnings,
     ...input.script.warnings,
@@ -316,7 +331,8 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
     "manual_panel_asset_import_required",
     "manual_approval_required_before_render",
     "no_assets_imported_automatically",
-    "no_render_started_automatically"
+    "no_render_started_automatically",
+    `comic_final_quality_gate:${finalQualityGate.status}`
   ]);
 
   return {
@@ -336,9 +352,10 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
       targetDurationSeconds: project.durationTarget ?? targetDurationSeconds,
       sourcePages: input.arc.pages,
       panelIds: input.arc.panelIds,
-      candidateFirst: true
+      candidateFirst: true,
+      finalQualityGate
     },
-    qualityChecklist: checklist({ arc: input.arc, script: input.script, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds }),
+    qualityChecklist: checklist({ arc: input.arc, script: input.script, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds, finalQualityGate }),
     warnings,
     candidateFirst: true,
     requiresManualApproval: true
@@ -400,4 +417,3 @@ export function buildComicArcProjectsFromMinerV2(input: {
     requiresManualApproval: true
   };
 }
-

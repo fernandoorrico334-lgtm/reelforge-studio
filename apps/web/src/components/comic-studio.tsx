@@ -480,7 +480,15 @@ function CreatedArcProjects({ result }: { result: ComicStudioCreateArcProjectsRe
               <span className="rounded-full border border-white/10 px-4 py-2 text-xs text-mist/65">
                 score {project.renderBlueprintHints.script.overallScore}
               </span>
+              <span className={`rounded-full border px-4 py-2 text-xs ${project.renderBlueprintHints.finalQualityGate.status === "passed" ? "border-emerald-300/30 text-emerald-200" : project.renderBlueprintHints.finalQualityGate.status === "rejected" ? "border-rose-300/30 text-rose-100" : "border-amber-300/30 text-amber-100"}`}>
+                Final QA {project.renderBlueprintHints.finalQualityGate.score}/{project.renderBlueprintHints.finalQualityGate.minimumScore}
+              </span>
             </div>
+            {project.renderBlueprintHints.finalQualityGate.blockers.length > 0 || project.renderBlueprintHints.finalQualityGate.warnings.length > 0 ? (
+              <p className="mt-3 text-xs leading-5 text-mist/58">
+                QA: {[...project.renderBlueprintHints.finalQualityGate.blockers, ...project.renderBlueprintHints.finalQualityGate.warnings].slice(0, 3).join(", ")}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>

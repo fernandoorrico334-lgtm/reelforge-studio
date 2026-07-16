@@ -3613,6 +3613,17 @@ export interface ComicStudioCreateProjectsResponse {
 }
 
 
+export interface ComicShortFinalQualityGate {
+  qaId: "comic_short_final_quality_gate_v1";
+  status: "passed" | "needs_review" | "rejected";
+  score: number;
+  minimumScore: number;
+  blockers: string[];
+  warnings: string[];
+  strengths: string[];
+  checks: Record<string, unknown>;
+  nextActions: string[];
+}
 export interface ComicStudioCreateArcProjectsResponse {
   status: "created";
   mode: "arc_project_builder_v2";
@@ -3639,6 +3650,7 @@ export interface ComicStudioCreateArcProjectsResponse {
       targetDurationSeconds: number;
       sourcePages: number[];
       panelIds: string[];
+      finalQualityGate: ComicShortFinalQualityGate;
       candidateFirst: true;
     };
     qualityChecklist: ComicStudioCreateProjectsResponse["createdProjects"][number]["qualityChecklist"];
