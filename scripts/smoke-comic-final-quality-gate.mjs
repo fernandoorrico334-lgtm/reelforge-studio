@@ -108,9 +108,15 @@ async function main() {
   const gate = payload.renderBlueprintHints.finalQualityGate;
   const visualPlan = payload.renderBlueprintHints.arcVisualPlan;
   const battleTest = payload.renderBlueprintHints.panelBattleTest;
+  const timingPlan = payload.renderBlueprintHints.beatTimingPlan;
   assert(gate.qaId === "comic_short_final_quality_gate_v1", "expected final qa id");
   assert(visualPlan.directorId === "comic_arc_visual_director_v1", "expected arc visual director");
   assert(battleTest.testerId === "comic_panel_battle_test_v1", "expected panel battle test");
+  assert(timingPlan.plannerId === "comic_beat_timing_plan_v1", "expected beat timing plan");
+  assert(timingPlan.sceneCount === payload.scenes.length, "timing plan must cover every scene");
+  assert(timingPlan.averagePacingScore >= 78, "timing plan must be production safe");
+  assert(timingPlan.scenes.every((scene) => scene.events.some((event) => event.type === "caption_in")), "each scene needs caption timing");
+  assert(timingPlan.scenes.every((scene) => scene.events.some((event) => event.type === "camera_move")), "each scene needs camera timing");
   assert(battleTest.averageSelectedScore >= 72, "battle-tested panels must be production safe");
   assert(battleTest.beatResults.every((result) => result.candidates.length > 0), "each beat needs tested panel candidates");
   assert(visualPlan.sceneCount === payload.scenes.length, "visual plan must cover every scene");
@@ -160,7 +166,9 @@ async function main() {
       safeCaptionZones: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.layoutMap?.preferredCaptionZone),
       captionRisks: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.layoutMap?.captionRisk),
       battleTestScore: battleTest.averageSelectedScore,
-      battleTestImprovedBeats: battleTest.improvedBeatCount
+      battleTestImprovedBeats: battleTest.improvedBeatCount,
+      timingScore: timingPlan.averagePacingScore,
+      timingCutStyles: timingPlan.scenes.map((scene) => scene.cutStyle)
     },
     rejectedGate: {
       status: rejected.status,
@@ -175,6 +183,7 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
 
 
 

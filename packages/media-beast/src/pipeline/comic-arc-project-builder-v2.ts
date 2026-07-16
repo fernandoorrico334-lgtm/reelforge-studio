@@ -4,6 +4,7 @@ import type { ComicArcScriptBeat, ComicArcScriptDoctorV2Result } from "./comic-a
 import { evaluateComicShortFinalQualityGate, type ComicShortFinalQaReport } from "./comic-short-final-quality-gate.js";
 import { directComicArcVisualPlan, type ComicArcVisualDirection } from "./comic-arc-visual-director.js";
 import { runComicPanelBattleTest, type ComicPanelBattleTestReport } from "./comic-panel-battle-test.js";
+import { buildComicBeatTimingPlan, type ComicBeatTimingPlan } from "./comic-beat-timing-plan.js";
 import type { ComicStoryMinerPanelRef } from "./comic-story-miner.js";
 import type {
   ComicProjectBridgeEmotion,
@@ -33,6 +34,7 @@ export type ComicArcProjectBuilderV2Payload = {
     finalQualityGate: ComicShortFinalQaReport;
     arcVisualPlan: ReturnType<typeof directComicArcVisualPlan>;
     panelBattleTest: ComicPanelBattleTestReport;
+    beatTimingPlan: ComicBeatTimingPlan;
   };
   qualityChecklist: Array<{
     id: string;
@@ -152,7 +154,7 @@ function visualPromptForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, vis
   ].join(" ");
 }
 
-function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, script: ComicArcScriptDoctorV2Result, visualDirection?: ComicArcVisualDirection): string {
+function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, script: ComicArcScriptDoctorV2Result, visualDirection?: ComicArcVisualDirection, timingScene?: ComicBeatTimingPlan["scenes"][number]): string {
   return safeJson({
     source: "comic-arc-project-builder-v2",
     arcId: arc.id,
@@ -166,6 +168,7 @@ function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, scr
     delivery: beat.delivery,
     evidenceReason: beat.evidenceReason,
     arcVisualDirection: visualDirection ?? null,
+    beatTiming: timingScene ?? null,
     viewerPromise: arc.viewerPromise,
     payoff: arc.payoff,
     requiresManualPanelImport: true,
@@ -173,12 +176,13 @@ function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, scr
   });
 }
 
-function buildScenes(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; targetDurationSeconds: number; arcVisualPlan: ReturnType<typeof directComicArcVisualPlan> }): ComicProjectBridgeSceneInput[] {
+function buildScenes(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; targetDurationSeconds: number; arcVisualPlan: ReturnType<typeof directComicArcVisualPlan>; beatTimingPlan: ComicBeatTimingPlan }): ComicProjectBridgeSceneInput[] {
   const durations = durationPlan(input.script.beats, input.targetDurationSeconds);
   const visualPreset = visualPresetForArc(input.arc);
   const captionStyle = captionStyleForArc(input.arc);
   return input.script.beats.map((beat, index) => {
     const visualDirection = input.arcVisualPlan.scenes.find((scene) => scene.panelId === beat.panelId && scene.beatRole === beat.role);
+    const timingScene = input.beatTimingPlan.scenes.find((scene) => scene.panelId === beat.panelId && scene.beatRole === beat.role);
     return {
       order: index + 1,
       title: beatTitle(beat, index + 1),
@@ -197,7 +201,7 @@ function buildScenes(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctor
       visualSourceMode: "asset_only",
       visualPrompt: visualPromptForBeat(beat, input.arc, visualDirection),
       negativePrompt: "Nao inventar personagens, nao alterar a HQ, nao usar imagem externa sem aprovacao, nao cortar rosto ou balao importante.",
-      visualRecipe: visualRecipeForBeat(beat, input.arc, input.script, visualDirection),
+      visualRecipe: visualRecipeForBeat(beat, input.arc, input.script, visualDirection, timingScene),
       generationStatus: null,
       generationProvider: null,
       generationSeed: null,
@@ -335,7 +339,9 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
     scriptBeats: optimizedScript.beats,
     panelsById
   });
-  const scenes = buildScenes({ arc: input.arc, script: optimizedScript, targetDurationSeconds, arcVisualPlan });
+  const durations = durationPlan(optimizedScript.beats, targetDurationSeconds);
+  const beatTimingPlan = buildComicBeatTimingPlan({ beats: optimizedScript.beats, durations, visualDirections: arcVisualPlan.scenes });
+  const scenes = buildScenes({ arc: input.arc, script: optimizedScript, targetDurationSeconds, arcVisualPlan, beatTimingPlan });
   const project = buildProject({ ...input, script: optimizedScript }, scenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0));
   const panelAssetManifest = buildManifest(optimizedScript.beats, input.arc);
   const finalQualityGate = evaluateComicShortFinalQualityGate({
@@ -358,7 +364,8 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
     "no_render_started_automatically",
     `comic_final_quality_gate:${finalQualityGate.status}`,
     `comic_arc_visual_alignment:${arcVisualPlan.averagePanelNarrationAlignmentScore}`,
-    `comic_panel_battle_test:${panelBattleTest.averageSelectedScore}`
+    `comic_panel_battle_test:${panelBattleTest.averageSelectedScore}`,
+    `comic_beat_timing:${beatTimingPlan.averagePacingScore}`
   ]);
 
   return {
@@ -381,7 +388,8 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
       candidateFirst: true,
       finalQualityGate,
       arcVisualPlan,
-      panelBattleTest
+      panelBattleTest,
+      beatTimingPlan
     },
     qualityChecklist: checklist({ arc: input.arc, script: optimizedScript, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds, finalQualityGate, panelBattleTest }),
     warnings,
@@ -447,6 +455,7 @@ export function buildComicArcProjectsFromMinerV2(input: {
     requiresManualApproval: true
   };
 }
+
 
 
 

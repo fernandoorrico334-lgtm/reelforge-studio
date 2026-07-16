@@ -489,6 +489,9 @@ function CreatedArcProjects({ result }: { result: ComicStudioCreateArcProjectsRe
               <span className="rounded-full border border-fuchsia-300/25 px-4 py-2 text-xs text-fuchsia-100">
                 Battle-Test {project.renderBlueprintHints.panelBattleTest.averageSelectedScore}/100
               </span>
+              <span className="rounded-full border border-amber-300/25 px-4 py-2 text-xs text-amber-100">
+                Timing {project.renderBlueprintHints.beatTimingPlan.averagePacingScore}/100
+              </span>
             </div>
             <p className="mt-3 text-xs leading-5 text-cyan-100/65">
               Evidence map: {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.selectedEvidenceRegion?.type ?? "fallback"} / {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.selectedEvidenceRegion?.confidence ?? 0}% na abertura / legenda {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.layoutMap.preferredCaptionZone ?? "safe"}
@@ -741,6 +744,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
     </div>
   );
 }
+
 
 
 
