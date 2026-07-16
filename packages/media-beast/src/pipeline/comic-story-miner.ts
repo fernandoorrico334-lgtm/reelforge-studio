@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import { buildComicStoryArcMinerV2Report, type ComicStoryArcMinerV2Report } from "./comic-story-arc-miner-v2.js";
 import {
   extractLocalPanelEntityIds,
   extractLocalPanelThemeIds,
@@ -144,6 +145,7 @@ export type ComicStoryMinerReport = {
   opportunityCounts: Record<ComicShortOpportunityCategory, number>;
   pageSummaries: ComicPageStorySummary[];
   issueStoryDigest: ComicIssueStoryDigest;
+  storyArcMinerV2: ComicStoryArcMinerV2Report;
   opportunities: ComicShortOpportunity[];
   topOpportunities: ComicShortOpportunity[];
   warnings: string[];
@@ -839,7 +841,7 @@ export function mineComicStoryVault(input: {
     allPanels.map((panel) => panel.parentContext.issueTitle).filter((value): value is string => Boolean(value))
   );
 
-  return {
+  const baseReport = {
     generatedAt: new Date().toISOString(),
     source: {
       assetDirectory: input.index.assetDirectory || null,
@@ -859,6 +861,11 @@ export function mineComicStoryVault(input: {
     warnings,
     candidateFirst: true,
     requiresManualApproval: true
+  } satisfies Omit<ComicStoryMinerReport, "storyArcMinerV2">;
+
+  return {
+    ...baseReport,
+    storyArcMinerV2: buildComicStoryArcMinerV2Report(baseReport)
   };
 }
 
@@ -899,6 +906,20 @@ export async function mineComicStoryVaultFromDirectory(input: {
         recommendedProductionOrder: [],
         warnings: ["local_comic_panel_index_missing_or_outdated"]
       },
+      storyArcMinerV2: buildComicStoryArcMinerV2Report({
+        generatedAt: new Date().toISOString(),
+        source: { assetDirectory: input.assetDirectory, comicTitles: [basename(input.assetDirectory)], issueTitles: [], pageCount: 0, panelCount: 0, validPanelCount: 0 },
+        characterMap: [],
+        themeMap: [],
+        opportunityCounts: Object.fromEntries((Object.keys(CATEGORY_LABELS) as ComicShortOpportunityCategory[]).map((category) => [category, 0])) as Record<ComicShortOpportunityCategory, number>,
+        pageSummaries: [],
+        issueStoryDigest: { pageCount: 0, narrativePageCount: 0, bestPages: [], strongestCharacters: [], strongestThemes: [], actionPages: [], dialoguePages: [], climaxPages: [], revealPages: [], estimatedShortsAvailable: 0, recommendedProductionOrder: [], warnings: ["local_comic_panel_index_missing_or_outdated"] },
+        opportunities: [],
+        topOpportunities: [],
+        warnings: ["local_comic_panel_index_missing_or_outdated"],
+        candidateFirst: true,
+        requiresManualApproval: true
+      }),
       opportunities: [],
       topOpportunities: [],
       warnings: ["local_comic_panel_index_missing_or_outdated"],

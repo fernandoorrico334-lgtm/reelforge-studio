@@ -1,4 +1,4 @@
-﻿import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -143,6 +143,11 @@ async function main() {
   assert(report.pageSummaries.length === pages.length, "expected page-by-page summaries");
   assert(report.issueStoryDigest.estimatedShortsAvailable > 0, "expected issue digest to estimate available shorts");
   assert(report.issueStoryDigest.recommendedProductionOrder.length > 0, "expected production order");
+  assert(report.storyArcMinerV2.minerId === "comic_story_arc_miner_v2", "expected story arc miner v2 report");
+  assert(report.storyArcMinerV2.totalArcs > 0, "expected story arcs v2");
+  assert(report.storyArcMinerV2.recommendedShorts.length > 0, "expected ready recommended shorts from story arcs v2");
+  assert(report.storyArcMinerV2.recommendedShorts[0].recommendedDurationSeconds >= 30, "expected recommended short duration >= 30s");
+  assert(report.storyArcMinerV2.recommendedShorts[0].beats.length >= 4, "expected complete-ish story beats");
 
   console.log(JSON.stringify({
     status: "completed",
@@ -154,6 +159,17 @@ async function main() {
     estimatedShortsAvailable: report.issueStoryDigest.estimatedShortsAvailable,
     bestPages: report.issueStoryDigest.bestPages.slice(0, 5),
     recommendedProductionOrder: report.issueStoryDigest.recommendedProductionOrder.slice(0, 5),
+    storyArcMinerV2: {
+      totalArcs: report.storyArcMinerV2.totalArcs,
+      readyArcCount: report.storyArcMinerV2.readyArcCount,
+      topArc: report.storyArcMinerV2.recommendedShorts[0] ? {
+        title: report.storyArcMinerV2.recommendedShorts[0].title,
+        type: report.storyArcMinerV2.recommendedShorts[0].type,
+        score: report.storyArcMinerV2.recommendedShorts[0].overallScore,
+        duration: report.storyArcMinerV2.recommendedShorts[0].recommendedDurationSeconds,
+        beats: report.storyArcMinerV2.recommendedShorts[0].beats.map((beat) => `${beat.role}:${beat.panelId}`)
+      } : null
+    },
     firstPageSummary: report.pageSummaries[0],
     candidateFirst: report.candidateFirst
   }, null, 2));
