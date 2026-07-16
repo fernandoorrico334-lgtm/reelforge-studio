@@ -1,4 +1,5 @@
-import type { ComicShortProductionPlan, ComicShortScenePlan } from "./comic-shorts-factory.js";
+﻿import type { ComicShortProductionPlan, ComicShortScenePlan } from "./comic-shorts-factory.js";
+import { detectComicPanelVisualTargets, type ComicPanelVisualTarget } from "./comic-panel-visual-targets.js";
 
 export type ComicPanelMomentType =
   | "speech_balloon"
@@ -19,6 +20,8 @@ export type ComicPanelMoment = {
   visualStrengthScore: number;
   retentionValueScore: number;
   normalizedCrop: { x: number; y: number; width: number; height: number };
+  primaryVisualTarget: ComicPanelVisualTarget | null;
+  visualTargets: ComicPanelVisualTarget[];
   zoomInstruction: string;
   cutIntent: "hook_shock" | "proof" | "action_punch" | "reaction" | "payoff";
   recommendedHoldSeconds: number;
@@ -90,7 +93,7 @@ function narrationMatch(scene: ComicShortScenePlan, type: ComicPanelMomentType):
   const text = `${scene.narration} ${scene.caption}`.toLowerCase();
   let score = 35;
   if (type === "speech_balloon" && /(fala|texto|pista|diz|dialogo|balao|explica)/i.test(text)) score += 34;
-  if (type === "action_impact" && /(impacto|golpe|luta|explode|acao|pancada|ameaça|ameaca|virada)/i.test(text)) score += 34;
+  if (type === "action_impact" && /(impacto|golpe|luta|explode|acao|pancada|ameaca|virada)/i.test(text)) score += 34;
   if (type === "character_reaction" && /(olha|repara|assusta|percebe|rosto|expressao|personagem)/i.test(text)) score += 28;
   if (type === "conflict_pair" && /(contra|conflito|versus|perigo|domina|pressiona)/i.test(text)) score += 30;
   if (type === "wide_context" && /(antes|contexto|prepara|pagina|cidade|cena)/i.test(text)) score += 24;
@@ -102,7 +105,7 @@ function narrationMatch(scene: ComicShortScenePlan, type: ComicPanelMomentType):
   return clamp(score);
 }
 
-function cropForType(type: ComicPanelMomentType, scene: ComicShortScenePlan) {
+function fallbackCropForType(type: ComicPanelMomentType, scene: ComicShortScenePlan) {
   const textHeavy = textLoad(scene) >= 2 || scene.caption.length > 54;
   if (type === "speech_balloon") return { x: 0.12, y: 0.04, width: 0.76, height: 0.72 };
   if (type === "action_impact") return { x: 0.2, y: 0.08, width: 0.6, height: 0.84 };
@@ -197,6 +200,8 @@ function buildMoment(short: ComicShortProductionPlan, scene: ComicShortScenePlan
           ? 6
           : 0;
   const score = clamp(narrativeMatchScore * 0.38 + visualStrengthScore * 0.36 + retentionValueScore * 0.26 + roleBonus);
+  const visualTargets = detectComicPanelVisualTargets({ scene, preferredMomentType: type });
+  const primaryVisualTarget = visualTargets[0] ?? null;
   const warnings: string[] = [];
   if (!scene.panelImagePath) warnings.push("missing_panel_image_path");
   if (!scene.panelVisualEvidence) warnings.push("missing_panel_visual_evidence");
@@ -213,11 +218,18 @@ function buildMoment(short: ComicShortProductionPlan, scene: ComicShortScenePlan
     narrativeMatchScore,
     visualStrengthScore,
     retentionValueScore,
-    normalizedCrop: cropForType(type, scene),
-    zoomInstruction: zoomInstructionFor(type, scene),
+    normalizedCrop: primaryVisualTarget?.box ?? fallbackCropForType(type, scene),
+    primaryVisualTarget,
+    visualTargets,
+    zoomInstruction: primaryVisualTarget
+      ? `${zoomInstructionFor(type, scene)} Target: ${primaryVisualTarget.type}; anchor ${JSON.stringify(primaryVisualTarget.anchorPoint)}; ${primaryVisualTarget.renderInstruction}`
+      : zoomInstructionFor(type, scene),
     cutIntent: cutIntentFor(type, scene),
     recommendedHoldSeconds: holdSecondsFor(scene, type),
-    reasons: reasonsFor(scene, type),
+    reasons: [
+      ...reasonsFor(scene, type),
+      ...(primaryVisualTarget ? [`target:${primaryVisualTarget.type}`, `target_confidence:${primaryVisualTarget.confidence}`] : [])
+    ],
     warnings
   };
 }
@@ -240,6 +252,9 @@ export function selectComicPanelMoments(input: {
     if (selected?.type !== "speech_balloon" && textLoad(scene) >= 3 && scene.role !== "climax") {
       warnings.push(`scene_${scene.order}:dialogue_available_but_not_selected`);
     }
+    if (!selected?.primaryVisualTarget || selected.primaryVisualTarget.confidence < 74) {
+      warnings.push(`scene_${scene.order}:visual_target_needs_manual_review`);
+    }
   }
 
   const averageMomentScore = selectedMoments.length
@@ -254,9 +269,9 @@ export function selectComicPanelMoments(input: {
     rejectedMoments,
     warnings,
     nextImprovements: [
-      "Adicionar bounding boxes reais de rosto, balao e golpe para refinar crops pixel-perfect.",
-      "Comparar cada momento selecionado com o frame equivalente do video referencia.",
-      "Fazer render de contact sheet por cena antes de aprovar lote de shorts."
+      "Add real CV/OCR bounding boxes for faces, balloons and action impacts to replace heuristic target boxes.",
+      "Render a contact sheet for every selected target before approving a batch of shorts.",
+      "Compare selected targets against the reference-video DNA to tune hold time, zoom speed and cut rhythm."
     ]
   };
 }

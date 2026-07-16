@@ -1,4 +1,4 @@
-﻿import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -113,6 +113,9 @@ async function main() {
   assert(report.averageMomentScore >= 72, `expected premium-ish moment score, got ${report.averageMomentScore}`);
   assert(report.selectedMoments.some((moment) => moment.type === "action_impact"), "expected action moment");
   assert(report.selectedMoments.some((moment) => moment.type === "speech_balloon"), "expected speech balloon moment");
+  assert(report.selectedMoments.every((moment) => moment.primaryVisualTarget), "expected every selected moment to expose a primary visual target");
+  assert(report.selectedMoments.some((moment) => moment.primaryVisualTarget?.type === "speech_balloon"), "expected a speech balloon visual target");
+  assert(report.selectedMoments.some((moment) => moment.primaryVisualTarget?.type === "impact_zone"), "expected an impact visual target");
 
   const bridge = buildComicShortProjectBridgePayload({ short, channelId: "channel-moment-selector-test" });
   assert(bridge.renderBlueprintHints.panelMomentSelector.selectorId === "comic_panel_moment_selector_v1", "bridge should expose panel moment selector");
@@ -132,6 +135,12 @@ async function main() {
       score: moment.score,
       cutIntent: moment.cutIntent,
       crop: moment.normalizedCrop,
+      primaryVisualTarget: moment.primaryVisualTarget ? {
+        type: moment.primaryVisualTarget.type,
+        confidence: moment.primaryVisualTarget.confidence,
+        box: moment.primaryVisualTarget.box,
+        cameraMove: moment.primaryVisualTarget.recommendedCameraMove
+      } : null,
       hold: moment.recommendedHoldSeconds,
       reasons: moment.reasons.slice(0, 4)
     })),
