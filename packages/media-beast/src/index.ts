@@ -54,6 +54,7 @@ export * from "./pipeline/comic-sfx-beat-director.js";
 export * from "./pipeline/comic-render-quality-scorer.js";
 export * from "./pipeline/comic-golden-render-qa.js";
 export * from "./pipeline/comic-golden-runtime-qa.js";
+export * from "./pipeline/comic-final-video-dna.js";
 export * from "./pipeline/comic-smart-crop-director.js";
 export * from "./pipeline/local-comic-ingestion.js";
 export * from "./pipeline/comics-scene-evidence-audit.js";

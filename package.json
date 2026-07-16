@@ -42,6 +42,7 @@
     "smoke:comic-render-quality-scorer": "node scripts/smoke-comic-render-quality-scorer.mjs",
     "smoke:comic-golden-render-qa": "node scripts/smoke-comic-golden-render-qa.mjs",
     "smoke:comic-golden-runtime-qa": "node scripts/smoke-comic-golden-runtime-qa.mjs",
+    "smoke:comic-final-video-dna": "node scripts/smoke-comic-final-video-dna.mjs",
     "smoke:comic-render-contract": "node scripts/smoke-comic-render-contract.mjs",
     "smoke:comic-studio-create-projects": "node scripts/smoke-comic-studio-create-projects.mjs",
     "smoke:local-comic-ingestion": "node scripts/smoke-local-comic-ingestion.mjs",
