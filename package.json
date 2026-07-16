@@ -106,7 +106,8 @@
     "demo:golden-path": "node scripts/demo-golden-path.mjs",
     "smoke:local-comic-pdf-rasterizer": "node scripts/smoke-local-comic-pdf-rasterizer.mjs",
     "smoke:comic-ocr-local": "node scripts/smoke-comic-ocr-local.mjs",
-    "smoke:comic-caption-word-cues": "node scripts/smoke-comic-caption-word-cues.mjs"
+    "smoke:comic-caption-word-cues": "node scripts/smoke-comic-caption-word-cues.mjs",
+    "smoke:comic-caption-preview-render": "node scripts/smoke-comic-caption-preview-render.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"
