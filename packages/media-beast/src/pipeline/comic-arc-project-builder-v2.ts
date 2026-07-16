@@ -3,6 +3,7 @@ import type { ComicStoryArcV2 } from "./comic-story-arc-miner-v2.js";
 import type { ComicArcScriptBeat, ComicArcScriptDoctorV2Result } from "./comic-arc-script-doctor-v2.js";
 import { evaluateComicShortFinalQualityGate, type ComicShortFinalQaReport } from "./comic-short-final-quality-gate.js";
 import { directComicArcVisualPlan, type ComicArcVisualDirection } from "./comic-arc-visual-director.js";
+import { runComicPanelBattleTest, type ComicPanelBattleTestReport } from "./comic-panel-battle-test.js";
 import type { ComicStoryMinerPanelRef } from "./comic-story-miner.js";
 import type {
   ComicProjectBridgeEmotion,
@@ -31,6 +32,7 @@ export type ComicArcProjectBuilderV2Payload = {
     candidateFirst: true;
     finalQualityGate: ComicShortFinalQaReport;
     arcVisualPlan: ReturnType<typeof directComicArcVisualPlan>;
+    panelBattleTest: ComicPanelBattleTestReport;
   };
   qualityChecklist: Array<{
     id: string;
@@ -265,7 +267,7 @@ function buildManifest(beats: ComicArcScriptBeat[], arc: ComicStoryArcV2): Comic
   }));
 }
 
-function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; scenes: ComicProjectBridgeSceneInput[]; targetDurationSeconds: number; finalQualityGate: ComicShortFinalQaReport }): ComicArcProjectBuilderV2Payload["qualityChecklist"] {
+function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; scenes: ComicProjectBridgeSceneInput[]; targetDurationSeconds: number; finalQualityGate: ComicShortFinalQaReport; panelBattleTest: ComicPanelBattleTestReport }): ComicArcProjectBuilderV2Payload["qualityChecklist"] {
   return [
     {
       id: "manual_rights_review",
@@ -298,6 +300,11 @@ function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2
       detail: `score=${input.finalQualityGate.score}/${input.finalQualityGate.minimumScore}; blockers=${input.finalQualityGate.blockers.join(",") || "none"}; warnings=${input.finalQualityGate.warnings.join(",") || "none"}.`
     },
     {
+      id: "panel_battle_test",
+      label: "Paineis testados contra alternativas",
+      status: input.panelBattleTest.averageSelectedScore >= 78 ? "ready" : input.panelBattleTest.averageSelectedScore >= 68 ? "needs_review" : "blocked",
+      detail: `score=${input.panelBattleTest.averageSelectedScore}; improved=${input.panelBattleTest.improvedBeatCount}; selected=${input.panelBattleTest.selectedPanelIds.join(",")}.`
+    },    {
       id: "scene_structure",
       label: "Hook, tensao, climax e payoff planejados",
       status: input.scenes.length >= 4 && input.script.beats.some((beat) => beat.role === "hook") && input.script.beats.some((beat) => beat.role === "climax") ? "ready" : "needs_review",
@@ -320,17 +327,20 @@ function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2
 
 export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayloadV2Input): ComicArcProjectBuilderV2Payload {
   const targetDurationSeconds = Math.max(30, input.script.estimatedDurationSeconds, input.arc.recommendedDurationSeconds);
+  const panelsById = input.panelsById ?? new Map();
+  const panelBattleTest = runComicPanelBattleTest({ arc: input.arc, script: input.script, panelsById });
+  const optimizedScript: ComicArcScriptDoctorV2Result = { ...input.script, beats: panelBattleTest.optimizedBeats };
   const arcVisualPlan = directComicArcVisualPlan({
     arc: input.arc,
-    scriptBeats: input.script.beats,
-    panelsById: input.panelsById ?? new Map()
+    scriptBeats: optimizedScript.beats,
+    panelsById
   });
-  const scenes = buildScenes({ arc: input.arc, script: input.script, targetDurationSeconds, arcVisualPlan });
-  const project = buildProject(input, scenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0));
-  const panelAssetManifest = buildManifest(input.script.beats, input.arc);
+  const scenes = buildScenes({ arc: input.arc, script: optimizedScript, targetDurationSeconds, arcVisualPlan });
+  const project = buildProject({ ...input, script: optimizedScript }, scenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0));
+  const panelAssetManifest = buildManifest(optimizedScript.beats, input.arc);
   const finalQualityGate = evaluateComicShortFinalQualityGate({
     arc: input.arc,
-    script: input.script,
+    script: optimizedScript,
     scenes,
     panelAssetManifest,
     targetDurationSeconds: project.durationTarget ?? targetDurationSeconds,
@@ -338,7 +348,8 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
   });
   const warnings = unique([
     ...input.arc.warnings,
-    ...input.script.warnings,
+    ...optimizedScript.warnings,
+    ...panelBattleTest.warnings,
     "comic_arc_project_builder_v2_applied",
     "candidate_first_payload_only",
     "manual_panel_asset_import_required",
@@ -346,7 +357,8 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
     "no_assets_imported_automatically",
     "no_render_started_automatically",
     `comic_final_quality_gate:${finalQualityGate.status}`,
-    `comic_arc_visual_alignment:${arcVisualPlan.averagePanelNarrationAlignmentScore}`
+    `comic_arc_visual_alignment:${arcVisualPlan.averagePanelNarrationAlignmentScore}`,
+    `comic_panel_battle_test:${panelBattleTest.averageSelectedScore}`
   ]);
 
   return {
@@ -361,16 +373,17 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
     renderBlueprintHints: {
       source: "comic_arc_project_builder_v2",
       storyArc: input.arc,
-      script: input.script,
-      selectedBeats: input.script.beats,
+      script: optimizedScript,
+      selectedBeats: optimizedScript.beats,
       targetDurationSeconds: project.durationTarget ?? targetDurationSeconds,
       sourcePages: input.arc.pages,
       panelIds: input.arc.panelIds,
       candidateFirst: true,
       finalQualityGate,
-      arcVisualPlan
+      arcVisualPlan,
+      panelBattleTest
     },
-    qualityChecklist: checklist({ arc: input.arc, script: input.script, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds, finalQualityGate }),
+    qualityChecklist: checklist({ arc: input.arc, script: optimizedScript, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds, finalQualityGate, panelBattleTest }),
     warnings,
     candidateFirst: true,
     requiresManualApproval: true
@@ -434,6 +447,10 @@ export function buildComicArcProjectsFromMinerV2(input: {
     requiresManualApproval: true
   };
 }
+
+
+
+
 
 
 

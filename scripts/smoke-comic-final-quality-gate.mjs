@@ -107,8 +107,12 @@ async function main() {
   const payload = batch.projects[0];
   const gate = payload.renderBlueprintHints.finalQualityGate;
   const visualPlan = payload.renderBlueprintHints.arcVisualPlan;
+  const battleTest = payload.renderBlueprintHints.panelBattleTest;
   assert(gate.qaId === "comic_short_final_quality_gate_v1", "expected final qa id");
   assert(visualPlan.directorId === "comic_arc_visual_director_v1", "expected arc visual director");
+  assert(battleTest.testerId === "comic_panel_battle_test_v1", "expected panel battle test");
+  assert(battleTest.averageSelectedScore >= 72, "battle-tested panels must be production safe");
+  assert(battleTest.beatResults.every((result) => result.candidates.length > 0), "each beat needs tested panel candidates");
   assert(visualPlan.sceneCount === payload.scenes.length, "visual plan must cover every scene");
   assert(visualPlan.averagePanelNarrationAlignmentScore >= 72, "visual alignment must be production safe");
   assert(visualPlan.scenes.every((scene) => scene.selectedEvidenceRegion), "every scene needs a selected visual evidence region");
@@ -154,7 +158,9 @@ async function main() {
       visualPlanScore: visualPlan.averagePanelNarrationAlignmentScore,
       selectedEvidenceRegions: visualPlan.scenes.map((scene) => scene.selectedEvidenceRegion?.type),
       safeCaptionZones: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.layoutMap?.preferredCaptionZone),
-      captionRisks: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.layoutMap?.captionRisk)
+      captionRisks: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.layoutMap?.captionRisk),
+      battleTestScore: battleTest.averageSelectedScore,
+      battleTestImprovedBeats: battleTest.improvedBeatCount
     },
     rejectedGate: {
       status: rejected.status,
@@ -169,6 +175,7 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
 
 
 

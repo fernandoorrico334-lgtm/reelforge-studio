@@ -3613,6 +3613,24 @@ export interface ComicStudioCreateProjectsResponse {
 }
 
 
+export interface ComicPanelBattleTestSummary {
+  testerId: "comic_panel_battle_test_v1";
+  beatCount: number;
+  improvedBeatCount: number;
+  averageSelectedScore: number;
+  selectedPanelIds: string[];
+  beatResults: Array<{
+    beatRole: string;
+    originalPanelId: string;
+    selectedPanelId: string;
+    improved: boolean;
+    selectedScore: number;
+    originalScore: number;
+    candidates: Array<{ panelId: string; score: number; selectedTarget: string; selected: boolean }>;
+    warnings: string[];
+  }>;
+  warnings: string[];
+}
 export interface ComicArcVisualPlanSummary {
   directorId: "comic_arc_visual_director_v1";
   sceneCount: number;
@@ -3686,6 +3704,7 @@ export interface ComicStudioCreateArcProjectsResponse {
       panelIds: string[];
       finalQualityGate: ComicShortFinalQualityGate;
       arcVisualPlan: ComicArcVisualPlanSummary;
+      panelBattleTest: ComicPanelBattleTestSummary;
       candidateFirst: true;
     };
     qualityChecklist: ComicStudioCreateProjectsResponse["createdProjects"][number]["qualityChecklist"];
@@ -4059,6 +4078,7 @@ export interface DashboardSnapshot {
     renders: DataSource;
   };
 }
+
 
 
 
