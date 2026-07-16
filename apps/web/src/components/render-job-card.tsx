@@ -137,6 +137,34 @@ function formatFileSize(bytes: number | null) {
   return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+
+function formatDnaVerdictLabel(value: string) {
+  switch (value) {
+    case "reference_ready":
+      return "referencia pronta";
+    case "strong":
+      return "forte";
+    case "needs_pacing_fix":
+      return "ajustar ritmo";
+    case "blocked":
+      return "bloqueado";
+    default:
+      return value.replaceAll("_", " ");
+  }
+}
+
+function getDnaVerdictTone(value: string) {
+  switch (value) {
+    case "reference_ready":
+      return "border-emerald-400/25 bg-emerald-400/10 text-emerald-100";
+    case "strong":
+      return "border-[#7be0ff]/25 bg-[#7be0ff]/10 text-[#dff8ff]";
+    case "blocked":
+      return "border-[#ff8b8b]/25 bg-[#ff8b8b]/10 text-[#ffd4d4]";
+    default:
+      return "border-amber-400/25 bg-amber-400/10 text-amber-100";
+  }
+}
 function formatBooleanLabel(value: boolean) {
   return value ? "on" : "off";
 }
@@ -156,6 +184,7 @@ export function RenderJobCard({
     renderJob.status === "completed" &&
     Boolean(renderJob.thumbnailUrl ?? renderJob.thumbnailPath);
   const audioQualityReport = renderJob.metadata?.audioQualityReport ?? null;
+  const finalVideoDna = renderJob.metadata?.finalVideoDna ?? null;
   const mediaUrl = renderJob.mediaUrl ?? getRenderMediaUrl(renderJob.id);
   const logUrl = renderJob.logUrl ?? getRenderLogUrl(renderJob.id);
   const thumbnailUrl =
@@ -392,6 +421,80 @@ export function RenderJobCard({
           </div>
         </div>
 
+        {finalVideoDna ? (
+          <div className="mt-4 rounded-[1.25rem] border border-[#7be0ff]/15 bg-[#7be0ff]/[0.05] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Final Video DNA QA
+                </p>
+                <p className="mt-2 text-sm text-white">
+                  Score {finalVideoDna.overallScore}/100 - {formatDnaVerdictLabel(finalVideoDna.verdict)}
+                </p>
+              </div>
+              <span className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.16em] ${getDnaVerdictTone(finalVideoDna.verdict)}`}>
+                {formatDnaVerdictLabel(finalVideoDna.verdict)}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Cortes/min
+                </p>
+                <p className="mt-2 text-white">
+                  {finalVideoDna.measured.cutsPerMinute.toFixed(1)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Plano medio
+                </p>
+                <p className="mt-2 text-white">
+                  {formatDuration(finalVideoDna.measured.averageShotDurationSeconds)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Captions/min
+                </p>
+                <p className="mt-2 text-white">
+                  {finalVideoDna.measured.captionCuesPerMinute.toFixed(1)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Audio peaks
+                </p>
+                <p className="mt-2 text-white">
+                  {finalVideoDna.measured.audioPeakCount}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Vertical
+                </p>
+                <p className="mt-2 text-white">
+                  {formatBooleanLabel(finalVideoDna.measured.verticalConfirmed)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-mist/68">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-mist/45">
+                  Extracao
+                </p>
+                <p className="mt-2 text-white">
+                  {finalVideoDna.measured.extractionStatus}
+                </p>
+              </div>
+            </div>
+
+            {finalVideoDna.warnings.length > 0 || finalVideoDna.blockers.length > 0 ? (
+              <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                {[...finalVideoDna.blockers, ...finalVideoDna.warnings].join(" ")}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {audioQualityReport ? (
           <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">

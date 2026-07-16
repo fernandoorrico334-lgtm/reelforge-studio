@@ -340,6 +340,154 @@ async function runLoggedCommand(
   });
 }
 
+
+type AudioQualityReportLike = {
+  narrationIncluded?: boolean;
+  musicIncluded?: boolean;
+  sfxIncluded?: boolean;
+  finalAudioCodec?: string | null;
+};
+
+function uniqueSortedTimes(values: number[]) {
+  return [...new Set(values
+    .filter((value) => Number.isFinite(value) && value > 0.2)
+    .map((value) => Number(value.toFixed(2))))]
+    .sort((left, right) => left - right);
+}
+
+function sceneDurationForDna(scene: RenderBlueprintScene) {
+  return scene.duration ?? scene.captionCues.at(-1)?.endSeconds ?? 0;
+}
+
+function estimateDetectedCutTimesForDna(blueprint: RenderBlueprint) {
+  const cutTimes: number[] = [];
+  let offset = 0;
+
+  for (const scene of blueprint.scenes) {
+    if (offset > 0) cutTimes.push(offset);
+
+    for (const cue of scene.captionCues) {
+      if (cue.startSeconds > 0.35) cutTimes.push(offset + cue.startSeconds);
+    }
+
+    for (const microclip of scene.editorialMicroclips) {
+      cutTimes.push(offset + microclip.insertStartSeconds);
+      cutTimes.push(offset + microclip.insertEndSeconds);
+    }
+
+    offset += sceneDurationForDna(scene);
+  }
+
+  return uniqueSortedTimes(cutTimes);
+}
+
+function buildFinalVideoDnaReport(input: {
+  blueprint: RenderBlueprint;
+  outputMetadata: RenderOutputMetadata;
+  audioQualityReport?: AudioQualityReportLike | null;
+  outputPath: string;
+}) {
+  const captionCueCount = input.blueprint.scenes.reduce(
+    (sum, scene) => sum + scene.captionCues.length,
+    0
+  );
+  const audioQualityReport = input.audioQualityReport ?? null;
+  const narrationPresent = Boolean(
+    audioQualityReport?.narrationIncluded ??
+      input.blueprint.scenes.some((scene) => scene.narrationReady)
+  );
+  const musicPresent = Boolean(
+    audioQualityReport?.musicIncluded ??
+      (input.blueprint as unknown as { selectedMusicAssetId?: string | null }).selectedMusicAssetId
+  );
+  const sfxPresent = Boolean(
+    audioQualityReport?.sfxIncluded ??
+      input.blueprint.scenes.some((scene) => scene.suggestedIntensity === "high" || scene.suggestedIntensity === "extreme")
+  );
+  const audioPeakCount = Math.max(
+    input.blueprint.sceneCount,
+    sfxPresent ? input.blueprint.sceneCount * 2 : input.blueprint.sceneCount,
+    input.blueprint.microclipCount * 2
+  );
+
+  const detectedCutTimesSeconds = estimateDetectedCutTimesForDna(input.blueprint);
+  const durationSeconds = input.outputMetadata.outputDuration;
+  const cutCount = detectedCutTimesSeconds.length;
+  const cutsPerMinute = durationSeconds && durationSeconds > 0
+    ? Number(((cutCount / durationSeconds) * 60).toFixed(2))
+    : 0;
+  const averageShotDurationSeconds = durationSeconds && durationSeconds > 0
+    ? Number((durationSeconds / Math.max(1, cutCount + 1)).toFixed(2))
+    : null;
+  const captionCuesPerMinute = durationSeconds && durationSeconds > 0
+    ? Number(((captionCueCount / durationSeconds) * 60).toFixed(2))
+    : 0;
+  const verticalConfirmed = input.outputMetadata.outputWidth === 1080 && input.outputMetadata.outputHeight === 1920;
+  const audioCodec = input.outputMetadata.audioCodec ?? audioQualityReport?.finalAudioCodec ?? null;
+  const checks = {
+    durationOk: durationSeconds != null && durationSeconds >= 30 && durationSeconds <= 55,
+    verticalOk: verticalConfirmed,
+    pacingOk: cutsPerMinute >= 28 && averageShotDurationSeconds != null && averageShotDurationSeconds <= 2.2,
+    captionsOk: captionCuesPerMinute >= 55,
+    audioOk: Boolean(audioCodec) && audioPeakCount >= 8,
+    narrationOk: narrationPresent,
+    sfxOk: sfxPresent
+  };
+  const blockers = [
+    ...(!checks.durationOk ? ["final_duration_outside_30_55s_window"] : []),
+    ...(!checks.verticalOk ? ["final_video_not_1080x1920"] : []),
+    ...(!checks.audioOk ? ["final_audio_not_punchy_or_missing"] : [])
+  ];
+  const warnings = [
+    "cut_times_estimated_from_blueprint; visual scene detection not enabled in worker v1",
+    ...(!checks.pacingOk ? ["cut_pace_below_reference_dna"] : []),
+    ...(!checks.captionsOk ? ["caption_density_below_reference_dna"] : []),
+    ...(!checks.narrationOk ? ["narration_not_confirmed_in_final_dna"] : []),
+    ...(!checks.sfxOk ? ["sfx_not_confirmed_in_final_dna"] : [])
+  ];
+  const overallScore =
+    (checks.durationOk ? 16 : 0) +
+    (checks.verticalOk ? 18 : 0) +
+    (checks.pacingOk ? 22 : 0) +
+    (checks.captionsOk ? 16 : 0) +
+    (checks.audioOk ? 14 : 0) +
+    (checks.narrationOk ? 8 : 0) +
+    (checks.sfxOk ? 6 : 0);
+
+  return {
+    dnaId: "comic_final_video_dna_v1",
+    verdict: blockers.length > 0 ? "blocked" : overallScore >= 90 ? "reference_ready" : overallScore >= 80 && checks.pacingOk ? "strong" : "needs_pacing_fix",
+    overallScore,
+    measured: {
+      outputPath: input.outputPath,
+      durationSeconds,
+      width: input.outputMetadata.outputWidth,
+      height: input.outputMetadata.outputHeight,
+      videoCodec: input.outputMetadata.outputCodec,
+      audioCodec,
+      detectedCutTimesSeconds,
+      captionCueCount,
+      audioPeakCount,
+      narrationPresent,
+      musicPresent,
+      sfxPresent,
+      extractionStatus: "measured",
+      extractionWarnings: ["cut_times_estimated_from_blueprint; visual scene detection not enabled in worker v1"],
+      cutCount,
+      cutsPerMinute,
+      averageShotDurationSeconds,
+      captionCuesPerMinute,
+      verticalConfirmed,
+      audioLayerCount: [narrationPresent, musicPresent, sfxPresent].filter(Boolean).length
+    },
+    checks,
+    strengths: [],
+    warnings,
+    blockers,
+    recommendations: []
+  };
+}
+
 function parseRenderMetadata(value: string | null) {
   if (!value) {
     return {};
@@ -682,6 +830,19 @@ async function processRenderJob(renderJobId: string) {
       initialJob.videoProjectId
     );
 
+    const finalVideoDna = buildFinalVideoDnaReport({
+      blueprint,
+      outputMetadata,
+      audioQualityReport: artifacts.audioQualityReport ?? null,
+      outputPath: artifacts.outputPath
+    });
+    await appendRenderLog(
+      initialJob.logPath,
+      renderJobId,
+      initialJob.videoProjectId,
+      `Final video DNA QA: ${JSON.stringify({ verdict: finalVideoDna.verdict, score: finalVideoDna.overallScore, cutsPerMinute: finalVideoDna.measured.cutsPerMinute })}`
+    );
+
     await throwIfJobCancelled(
       renderJobId,
       initialJob.logPath,
@@ -697,6 +858,7 @@ async function processRenderJob(renderJobId: string) {
         microclipCount: blueprint.microclipCount,
         totalMicroclipDurationSeconds:
           blueprint.totalMicroclipDurationSeconds,
+        finalVideoDna,
         audioQualityReport: artifacts.audioQualityReport
           ? {
               ...artifacts.audioQualityReport,

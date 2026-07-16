@@ -92,3 +92,7 @@ recovery/backups/*
 
 storage/editorial/*
 !storage/editorial/.gitkeep
+
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.d.ts.map

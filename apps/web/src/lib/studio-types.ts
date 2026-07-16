@@ -1,4 +1,4 @@
-﻿export type DataSource = "api" | "mock";
+export type DataSource = "api" | "mock";
 
 export const assetTypes = [
   "IMAGE",
@@ -3165,6 +3165,45 @@ export interface RenderJobProjectSummary {
   format: string;
 }
 
+
+export interface FinalVideoDnaReport {
+  dnaId: "comic_final_video_dna_v1";
+  verdict: "reference_ready" | "strong" | "needs_pacing_fix" | "blocked";
+  overallScore: number;
+  measured: {
+    durationSeconds: number | null;
+    width: number | null;
+    height: number | null;
+    videoCodec: string | null;
+    audioCodec: string | null;
+    cutCount: number;
+    cutsPerMinute: number;
+    averageShotDurationSeconds: number | null;
+    captionCueCount: number;
+    captionCuesPerMinute: number;
+    audioPeakCount: number;
+    narrationPresent: boolean;
+    musicPresent: boolean;
+    sfxPresent: boolean;
+    verticalConfirmed: boolean;
+    audioLayerCount: number;
+    extractionStatus: "measured" | "synthetic" | "skipped";
+    extractionWarnings: string[];
+  };
+  checks: {
+    durationOk: boolean;
+    verticalOk: boolean;
+    pacingOk: boolean;
+    captionsOk: boolean;
+    audioOk: boolean;
+    narrationOk: boolean;
+    sfxOk: boolean;
+  };
+  strengths: string[];
+  warnings: string[];
+  blockers: string[];
+  recommendations: string[];
+}
 export interface StudioRenderJob {
   id: string;
   videoProjectId: string;
@@ -3193,6 +3232,7 @@ export interface StudioRenderJob {
   metadata: {
     audioMasteringPresetId: AudioMasteringPresetId;
     audioQualityReport?: AudioQualityReport | null;
+    finalVideoDna?: FinalVideoDnaReport | null;
     hasEditorialMicroclips?: boolean;
     microclipCount?: number;
     totalMicroclipDurationSeconds?: number;
