@@ -104,8 +104,10 @@ export interface CaptionExportSceneInput {
   captionText: string | null;
   duration: number | null;
   captionStyle?: string | null;
+  highlightedWords?: string[];
+  animation?: string | null;
+  readingImpactScore?: number | null;
 }
-
 export interface CaptionExportProjectInput {
   title?: string;
   scenes: CaptionExportSceneInput[];
@@ -511,6 +513,55 @@ function escapeAssText(value: string) {
   return value.replaceAll("\\", "\\\\").replaceAll("{", "\\{").replaceAll("}", "\\}");
 }
 
+function assColor(hex: string) {
+  const normalized = hex.replace("#", "").trim();
+  if (!/^[0-9a-fA-F]{6}$/u.test(normalized)) return "&H0000FFFF";
+  const rr = normalized.slice(0, 2);
+  const gg = normalized.slice(2, 4);
+  const bb = normalized.slice(4, 6);
+  return `&H00${bb}${gg}${rr}`;
+}
+
+function buildAssCueOverride(scene: CaptionExportSceneInput, style: CaptionStyle) {
+  const animation = scene.animation ?? style.animation.emphasis;
+  const impact = typeof scene.readingImpactScore === "number" ? scene.readingImpactScore : 70;
+  const tags: string[] = [];
+
+  if (impact >= 90 || animation.includes("slam") || animation.includes("shake")) {
+    tags.push("\\fscx118\\fscy118");
+    tags.push("\\t(0,120,\\fscx100\\fscy100)");
+    tags.push(`\\1c${assColor("#fde047")}`);
+    tags.push(`\\3c${assColor("#111827")}`);
+  } else if (animation.includes("pop") || style.animation.speed === "aggressive") {
+    tags.push("\\fscx108\\fscy108");
+    tags.push("\\t(0,150,\\fscx100\\fscy100)");
+    tags.push(`\\1c${assColor("#ffffff")}`);
+  }
+
+  if (animation.includes("flash")) {
+    tags.push(`\\bord${Math.max(style.outline.width + 2, 4)}`);
+    tags.push("\\blur0.4");
+  }
+
+  return tags.length > 0 ? `{${tags.join("")}}` : "";
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function applyAssWordHighlights(text: string, highlightedWords: string[] | undefined) {
+  const escapedText = escapeAssText(text);
+  const words = [...new Set((highlightedWords ?? []).map((word) => word.trim()).filter(Boolean))].slice(0, 4);
+  if (words.length === 0) return escapedText;
+  let output = escapedText;
+  for (const word of words) {
+    const escapedWord = escapeAssText(word);
+    const pattern = new RegExp(`\\b${escapeRegExp(escapedWord)}\\b`, "giu");
+    output = output.replace(pattern, (match) => `{\\1c${assColor("#facc15")}\\bord7}${match}{\\rDefault}`);
+  }
+  return output;
+}
 function mapReadingSpeedStatus(charactersPerSecond: number): CaptionReadingSpeedStatus {
   if (charactersPerSecond <= 6) {
     return "slow";
@@ -840,8 +891,9 @@ export function generateAssSubtitle(
       return;
     }
 
+    const override = buildAssCueOverride(scene, style);
     const lines = splitCaptionIntoLines(captionText, style)
-      .map((line) => escapeAssText(line))
+      .map((line) => `${override}${applyAssWordHighlights(line, scene.highlightedWords)}`)
       .join("\\N");
 
     dialogueRows.push(

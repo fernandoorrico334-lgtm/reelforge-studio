@@ -152,7 +152,7 @@ export interface BlueprintSceneInput {
   sfxVolume: number;
   visualPreset: string | null;
   transition: string | null;
-  captionStyle: string | null;
+  captionStyle: string | null; highlightedWords?: string[]; animation?: string | null; readingImpactScore?: number | null;
   captionPosition: string | null;
   captionEmphasisWords: string[];
   energyLevel: number | null;
@@ -1278,8 +1278,19 @@ function buildCaptionExportScenesFromBlueprintScenes(scenes: RenderBlueprintScen
   captionText: string | null;
   duration: number | null;
   captionStyle: string | null;
+  highlightedWords?: string[];
+  animation?: string | null;
+  readingImpactScore?: number | null;
 }> {
-  const exportScenes: Array<{ order: number; captionText: string | null; duration: number | null; captionStyle: string | null }> = [];
+  const exportScenes: Array<{
+    order: number;
+    captionText: string | null;
+    duration: number | null;
+    captionStyle: string | null;
+    highlightedWords?: string[];
+    animation?: string | null;
+    readingImpactScore?: number | null;
+  }> = [];
   for (const scene of [...scenes].sort((left, right) => left.order - right.order)) {
     if (scene.captionCues.length === 0) {
       exportScenes.push({
@@ -1299,7 +1310,10 @@ function buildCaptionExportScenesFromBlueprintScenes(scenes: RenderBlueprintScen
         order: scene.order + cue.cueIndex / 100,
         captionText: cue.text,
         duration: scaledDuration,
-        captionStyle: scene.captionStyle.style.id
+        captionStyle: scene.captionStyle.style.id,
+        highlightedWords: cue.highlightedWords,
+        animation: cue.animation,
+        readingImpactScore: cue.readingImpactScore
       });
     }
   }

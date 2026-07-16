@@ -137,6 +137,9 @@ async function main() {
   assert(scene.captionCues.every((cue) => cue.layout === "lower-third"), "word cues should inherit safe caption zone");
   assert(blueprint.subtitleExports.srt.includes("SUPERMAN"), "SRT export should include word cue text");
   assert(blueprint.subtitleExports.ass.includes("IMPACTO"), "ASS export should include word cue text");
+  assert(blueprint.subtitleExports.ass.includes("\\fscx118") || blueprint.subtitleExports.ass.includes("\\fscx108"), "ASS export should include kinetic scale override");
+  assert(blueprint.subtitleExports.ass.includes("\\1c&H00"), "ASS export should include color override for impact words");
+  assert(blueprint.subtitleExports.ass.includes("\\rDefault"), "ASS export should reset highlighted words to default style");
 
   console.log(JSON.stringify({
     status: "completed",
@@ -151,7 +154,9 @@ async function main() {
       sfxSuggestion: cue.sfxSuggestion,
       highlightedWords: cue.highlightedWords
     })),
-    subtitleExportReady: blueprint.subtitleExports.srt.includes("SUPERMAN") && blueprint.subtitleExports.ass.includes("IMPACTO")
+    subtitleExportReady: blueprint.subtitleExports.srt.includes("SUPERMAN") && blueprint.subtitleExports.ass.includes("IMPACTO"),
+    assHasKineticStyle: blueprint.subtitleExports.ass.includes("\\fscx118") || blueprint.subtitleExports.ass.includes("\\fscx108"),
+    assHasWordHighlight: blueprint.subtitleExports.ass.includes("\\rDefault")
   }, null, 2));
 }
 

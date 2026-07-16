@@ -496,7 +496,7 @@ function buildMicroclipTextOverlayFilter(
 
 
 function buildSubtitleScenes(blueprint: RenderBlueprint) {
-  const subtitleScenes: Array<{ order: number; captionText: string | null; duration: number; captionStyle: string }> = [];
+  const subtitleScenes: Array<{ order: number; captionText: string | null; duration: number; captionStyle: string; highlightedWords?: string[]; animation?: string | null; readingImpactScore?: number | null }> = [];
   for (const scene of [...blueprint.scenes].sort((left, right) => left.order - right.order)) {
     if (scene.captionCues.length === 0) {
       subtitleScenes.push({
@@ -515,7 +515,10 @@ function buildSubtitleScenes(blueprint: RenderBlueprint) {
         order: scene.order + cue.cueIndex / 100,
         captionText: cue.text,
         duration: Math.max(0.35, (cueDuration / cueTotal) * sceneDuration),
-        captionStyle: scene.captionStyle.style.id
+        captionStyle: scene.captionStyle.style.id,
+        highlightedWords: cue.highlightedWords,
+        animation: cue.animation,
+        readingImpactScore: cue.readingImpactScore
       });
     }
   }
