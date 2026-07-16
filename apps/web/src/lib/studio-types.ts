@@ -3693,6 +3693,16 @@ export interface ComicArcVisualPlanSummary {
         protectedRegions: Array<{ type: string; text: string; confidence: number; readingOrder: number }>;
         warnings: string[];
       };
+      visualFocus?: {
+        detectorId: "comic_visual_focus_detector_v1";
+        focusScore: number;
+        hasCharacterFocus: boolean;
+        hasActionFocus: boolean;
+        hasDuoFocus: boolean;
+        primaryFocus: { type: string; confidence: number; priority: number; recommendedCameraMove: string };
+        candidates: Array<{ type: string; confidence: number; priority: number; recommendedCameraMove: string }>;
+        warnings: string[];
+      };
       warnings: string[];
     } | null;
     renderInstruction: string;

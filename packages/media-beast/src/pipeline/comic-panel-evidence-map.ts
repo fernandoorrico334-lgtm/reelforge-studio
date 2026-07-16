@@ -3,6 +3,10 @@ import {
   buildComicOcrRegionIntelligence,
   type ComicOcrRegionIntelligence
 } from "./comic-ocr-region-intelligence.js";
+import {
+  detectComicVisualFocus,
+  type ComicVisualFocusReport
+} from "./comic-visual-focus-detector.js";
 
 export type ComicPanelEvidenceRegionType =
   | "speech_balloon"
@@ -52,6 +56,7 @@ export type ComicPanelEvidenceMap = {
   bestRegionByType: Partial<Record<ComicPanelEvidenceRegionType, ComicPanelEvidenceRegion>>;
   layoutMap: ComicPanelLayoutMap;
   ocrIntelligence: ComicOcrRegionIntelligence;
+  visualFocus: ComicVisualFocusReport;
   warnings: string[];
 };
 
@@ -120,6 +125,7 @@ function intersectsVerticalBand(box: NormalizedComicEvidenceBox, band: ComicPane
 function buildLayoutMap(input: {
   regions: ComicPanelEvidenceRegion[];
   ocrIntelligence: ComicOcrRegionIntelligence;
+  visualFocus: ComicVisualFocusReport;
   textLoad: number;
   textHeavy: boolean;
   hasAction: boolean;
@@ -127,7 +133,9 @@ function buildLayoutMap(input: {
 }): ComicPanelLayoutMap {
   const protectedTextRegions = input.regions.filter((region) => region.type === "speech_balloon");
   const ocrProtectedRegions = input.ocrIntelligence.protectedRegions;
-  const motionFocusRegion = input.regions.find((region) => region.type === "impact_zone")
+  const visualPrimaryFocus = input.visualFocus.primaryFocus;
+  const motionFocusRegion = input.regions.find((region) => region.type === "impact_zone" && region.regionId.includes(visualPrimaryFocus.type))
+    ?? input.regions.find((region) => region.type === "impact_zone")
     ?? input.regions.find((region) => region.type === "duo_conflict")
     ?? input.regions.find((region) => region.type === "speaker_face")
     ?? input.regions.find((region) => region.type === "wide_context")
@@ -180,6 +188,7 @@ function buildLayoutMap(input: {
 export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): ComicPanelEvidenceMap {
   const evidence = panel.visualCropEvidence;
   const ocrIntelligence = buildComicOcrRegionIntelligence(panel);
+  const visualFocus = detectComicVisualFocus(panel);
   const counts = evidence.evidenceCounts;
   const confidence = evidence.confidence;
   const regions: ComicPanelEvidenceRegion[] = [];
@@ -216,40 +225,46 @@ export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): Comi
   }
 
   if (hasCharacters) {
+    const characterFocus = visualFocus.candidates.find((candidate) => candidate.type === "character_face" || candidate.type === "reaction_detail");
     regions.push(addRegion({
       panel,
       type: "speaker_face",
-      box: { x: textHeavy ? 0.18 : 0.22, y: 0.08, width: textHeavy ? 0.64 : 0.56, height: 0.68 },
-      confidence: 60 + confidence.characters * 24 + Math.min(8, counts.characters * 3),
+      box: characterFocus?.box ?? { x: textHeavy ? 0.18 : 0.22, y: 0.08, width: textHeavy ? 0.64 : 0.56, height: 0.68 },
+      confidence: Math.max(60 + confidence.characters * 24 + Math.min(8, counts.characters * 3), characterFocus?.confidence ?? 0),
       priority: 72,
       yBias: 0.45,
-      reasons: [`characters:${counts.characters}`, `character_confidence:${round(confidence.characters)}`, "face_or_character_reaction_anchor"]
+      reasons: [`characters:${counts.characters}`, `character_confidence:${round(confidence.characters)}`, `visual_focus:${characterFocus?.type ?? "fallback"}`, "face_or_character_reaction_anchor"],
+      warnings: characterFocus?.warnings ?? []
     }));
   }
 
   if (hasAction) {
     const ocrImpact = ocrIntelligence.impactTextRegion;
+    const actionFocus = visualFocus.candidates.find((candidate) => candidate.type === "action_impact");
+    const useOcrImpact = Boolean(ocrImpact && (!actionFocus || ocrImpact.confidence >= actionFocus.confidence + 6));
     regions.push(addRegion({
       panel,
       type: "impact_zone",
-      box: ocrImpact?.box ?? { x: cropable ? 0.2 : 0.14, y: 0.08, width: cropable ? 0.6 : 0.72, height: 0.82 },
-      confidence: Math.max(64 + confidence.actions * 22 + Math.min(12, counts.soundEffects * 5), ocrImpact?.confidence ?? 0),
+      box: useOcrImpact ? ocrImpact?.box ?? actionFocus?.box ?? { x: cropable ? 0.2 : 0.14, y: 0.08, width: cropable ? 0.6 : 0.72, height: 0.82 } : actionFocus?.box ?? { x: cropable ? 0.2 : 0.14, y: 0.08, width: cropable ? 0.6 : 0.72, height: 0.82 },
+      confidence: Math.max(64 + confidence.actions * 22 + Math.min(12, counts.soundEffects * 5), ocrImpact?.confidence ?? 0, actionFocus?.confidence ?? 0),
       priority: 90,
       yBias: 0.5,
-      reasons: [`actions:${counts.actions}`, `sfx:${counts.soundEffects}`, `ocr_impact:${ocrImpact?.text ?? "none"}`, `action:${evidence.strongestActionLabel ?? "unknown"}`, "impact_retention_anchor"],
-      warnings: cropable ? [] : ["impact_region_needs_wider_crop"]
+      reasons: [`actions:${counts.actions}`, `sfx:${counts.soundEffects}`, `ocr_impact:${ocrImpact?.text ?? "none"}`, `visual_focus:${actionFocus?.type ?? "fallback"}`, `action:${evidence.strongestActionLabel ?? "unknown"}`, "impact_retention_anchor"],
+      warnings: [...(cropable ? [] : ["impact_region_needs_wider_crop"]), ...(actionFocus?.warnings ?? [])]
     }));
   }
 
   if (hasDuoConflict) {
+    const duoFocus = visualFocus.candidates.find((candidate) => candidate.type === "duo_standoff");
     regions.push(addRegion({
       panel,
       type: "duo_conflict",
-      box: { x: 0.08, y: 0.05, width: 0.84, height: 0.86 },
-      confidence: 64 + confidence.relationships * 20 + (evidence.visualFlags.duoVisible ? 10 : 0),
+      box: duoFocus?.box ?? { x: 0.08, y: 0.05, width: 0.84, height: 0.86 },
+      confidence: Math.max(64 + confidence.relationships * 20 + (evidence.visualFlags.duoVisible ? 10 : 0), duoFocus?.confidence ?? 0),
       priority: 86,
       yBias: 0.48,
-      reasons: [`relationship:${evidence.strongestRelationshipType ?? "unknown"}`, `duo_visible:${evidence.visualFlags.duoVisible}`, "keep_both_sides_visible"]
+      reasons: [`relationship:${evidence.strongestRelationshipType ?? "unknown"}`, `duo_visible:${evidence.visualFlags.duoVisible}`, `visual_focus:${duoFocus?.type ?? "fallback"}`, "keep_both_sides_visible"],
+      warnings: duoFocus?.warnings ?? []
     }));
   }
 
@@ -274,7 +289,7 @@ export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): Comi
     bestRegionByType[region.type] ??= region;
   }
 
-  const layoutMap = buildLayoutMap({ regions: sorted, ocrIntelligence, textLoad, textHeavy, hasAction, warnings });
+  const layoutMap = buildLayoutMap({ regions: sorted, ocrIntelligence, visualFocus, textLoad, textHeavy, hasAction, warnings });
 
   return {
     detectorId: "comic_panel_evidence_map_v1",
@@ -284,6 +299,7 @@ export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): Comi
     bestRegionByType,
     layoutMap,
     ocrIntelligence,
+    visualFocus,
     warnings
   };
 }
