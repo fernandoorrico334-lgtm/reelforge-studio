@@ -9,12 +9,28 @@ export type ComicPostRenderCropQaReport = {
   captionOverlapRiskCount: number;
   weakFocusCount: number;
   missingActionFocusCount: number;
+  sceneReports: Array<{
+    panelId: string;
+    beatRole: string;
+    captionRisk: string;
+    focusScore: number;
+    safeZone: string;
+    previewCheck: string;
+    fixInstruction: string;
+  }>;
   cropWarnings: string[];
   recommendations: string[];
 };
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function fixInstruction(input: { captionRisk: string; focusScore: number; beatRole: string; hasActionFocus: boolean }) {
+  if (input.captionRisk === "high") return "Mover legenda para zona sem balao ou reduzir caption para uma linha.";
+  if (input.focusScore < 68) return "Recalcular crop usando primaryFocus do visual detector.";
+  if ((input.beatRole === "hook" || input.beatRole === "climax") && !input.hasActionFocus) return "Trocar painel por alternativa com impacto visual claro.";
+  return "Manter crop; validar preview de 8 segundos antes do render final.";
 }
 
 export function evaluateComicPostRenderCropQa(input: {
@@ -25,6 +41,7 @@ export function evaluateComicPostRenderCropQa(input: {
   let captionOverlapRiskCount = 0;
   let weakFocusCount = 0;
   let missingActionFocusCount = 0;
+  const sceneReports: ComicPostRenderCropQaReport["sceneReports"] = [];
   for (const direction of input.visualDirections) {
     const map = direction.visualEvidenceMap;
     const focus = map?.visualFocus;
@@ -40,6 +57,17 @@ export function evaluateComicPostRenderCropQa(input: {
       missingActionFocusCount += 1;
       cropWarnings.push(`missing_action_focus:${direction.panelId}:${direction.beatRole}`);
     }
+    const captionRisk = map?.layoutMap.captionRisk ?? "unknown";
+    const focusScore = focus?.focusScore ?? 0;
+    sceneReports.push({
+      panelId: direction.panelId,
+      beatRole: direction.beatRole,
+      captionRisk,
+      focusScore,
+      safeZone: direction.captionSafeZone,
+      previewCheck: `frame_check:${direction.panelId}:${direction.captionSafeZone}:${focus?.primaryFocus.type ?? direction.primaryTarget}`,
+      fixInstruction: fixInstruction({ captionRisk, focusScore, beatRole: direction.beatRole, hasActionFocus: focus?.hasActionFocus === true })
+    });
   }
   const captionWarnings = input.captionImpactPlan.warnings.map((warning) => `caption:${warning}`);
   const score = clampScore(
@@ -63,6 +91,7 @@ export function evaluateComicPostRenderCropQa(input: {
     captionOverlapRiskCount,
     weakFocusCount,
     missingActionFocusCount,
+    sceneReports,
     cropWarnings: [...cropWarnings, ...captionWarnings],
     recommendations
   };

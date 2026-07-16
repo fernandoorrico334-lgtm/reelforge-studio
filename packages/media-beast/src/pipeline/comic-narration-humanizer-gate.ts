@@ -13,6 +13,18 @@ export type ComicNarrationHumanizerGate = {
   genericSignals: string[];
   strongLines: string[];
   weakLines: string[];
+  beatRewrites: Array<{
+    beatRole: string;
+    original: string;
+    suggested: string;
+    reason: string;
+  }>;
+  voiceDirection: {
+    pace: "fast" | "controlled";
+    tone: "curious_friend" | "epic_witness" | "suspense_builder";
+    pauseMap: Array<{ afterBeatRole: string; pauseMs: number; reason: string }>;
+  };
+  approvalChecklist: string[];
   rewriteHints: string[];
 };
 
@@ -65,6 +77,35 @@ function scoreSpecificity(input: { arc: ComicStoryArcV2; lines: string[] }) {
   return clampScore(58 + hits * 8 + visualWords * 5);
 }
 
+function subjectPair(arc: ComicStoryArcV2) {
+  const main = arc.characters[0]?.replace(/_/g, " ") ?? arc.themes[0]?.replace(/_/g, " ") ?? "essa HQ";
+  const second = arc.characters[1]?.replace(/_/g, " ") ?? "a ameaca";
+  return { main, second };
+}
+
+function humanizeLine(input: { arc: ComicStoryArcV2; role: string; line: string }) {
+  const { main, second } = subjectPair(input.arc);
+  const line = input.line.trim();
+  if (input.role === "hook") return `${main} contra ${second} nao devia funcionar... mas esse quadro vende a ideia em segundos.`;
+  if (input.role === "setup") {
+    return line.length > 95
+      ? `Antes da pancada, a pagina faz uma coisa importante: ela mostra que ${main} nao esta diante de um inimigo comum.`
+      : line;
+  }
+  if (input.role === "tension") {
+    return /consequencia|maior|tensao/i.test(line)
+      ? line
+      : `E aqui a tensao muda de tamanho: cada quadro empurra ${main} para perto do impossivel.`;
+  }
+  if (input.role === "climax") return `Esse e o momento que segura o short: ${main} e ${second} viram uma imagem de impacto puro.`;
+  if (input.role === "payoff") {
+    return line.includes("?")
+      ? line
+      : `E e por isso essa luta rende short: ela deixa uma pergunta simples... quem realmente aguenta esse impacto?`;
+  }
+  return line;
+}
+
 export function evaluateComicNarrationHumanizerGate(input: {
   arc: ComicStoryArcV2;
   script: ComicArcScriptDoctorV2Result;
@@ -95,6 +136,34 @@ export function evaluateComicNarrationHumanizerGate(input: {
     .filter((line) => line.split(/\s+/).length < 5 || genericPatterns.some((pattern) => pattern.test(line)))
     .slice(0, 5);
   const strongLines = lines.filter((line) => /absurdo|impacto|virada|ameaca|escala|pista|contra/i.test(line)).slice(0, 5);
+  const beatRewrites = input.script.beats.map((beat) => {
+    const suggested = humanizeLine({ arc: input.arc, role: beat.role, line: beat.narrationText });
+    return {
+      beatRole: beat.role,
+      original: beat.narrationText,
+      suggested,
+      reason: suggested === beat.narrationText ? "line_already_human_enough" : "more_oral_specific_and_retention_driven"
+    };
+  });
+  const voiceDirection = {
+    pace: input.script.beats.length >= 5 ? "fast" as const : "controlled" as const,
+    tone: input.arc.type === "hero_vs_kaiju_showdown" || input.arc.type === "battle_escalation"
+      ? "epic_witness" as const
+      : input.arc.type === "hidden_reveal" || input.arc.type === "visual_curiosity"
+        ? "suspense_builder" as const
+        : "curious_friend" as const,
+    pauseMap: input.script.beats.map((beat) => ({
+      afterBeatRole: beat.role,
+      pauseMs: beat.role === "climax" ? 180 : beat.role === "hook" ? 110 : beat.role === "payoff" ? 220 : 70,
+      reason: beat.role === "climax" ? "let_visual_impact_land" : beat.role === "payoff" ? "leave_retention_question" : "keep_short_moving"
+    }))
+  };
+  const approvalChecklist = [
+    "A fala cita algo concreto da pagina.",
+    "O hook parece uma descoberta, nao um resumo.",
+    "A frase do climax deixa espaco para o impacto visual.",
+    "Nao ha promessa que a HQ nao mostra."
+  ];
   const rewriteHints: string[] = [];
   if (genericSignals.length) rewriteHints.push("Trocar frases genericas por uma observacao concreta do quadro.");
   if (oralFlowScore < 82) rewriteHints.push("Quebrar frases longas em fala curta, com pausa antes do impacto.");
@@ -113,6 +182,9 @@ export function evaluateComicNarrationHumanizerGate(input: {
     genericSignals,
     strongLines,
     weakLines,
+    beatRewrites,
+    voiceDirection,
+    approvalChecklist,
     rewriteHints
   };
 }

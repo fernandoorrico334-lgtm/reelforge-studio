@@ -131,6 +131,11 @@ async function main() {
   assert(continuityReport.score >= 84, "panel continuity must be production safe");
   assert(cropQa.qaId === "comic_post_render_crop_qa_v1", "expected post render crop qa");
   assert(cropQa.score >= 86, "crop QA must be production safe");
+  assert(humanizerGate.beatRewrites?.length === payload.scenes.length, "humanizer must provide rewrite guidance for every scene");
+  assert(humanizerGate.voiceDirection?.pauseMap?.length === payload.scenes.length, "humanizer must provide voice pause map");
+  assert(captionImpactPlan.cues.every((cue) => cue.wordCues?.length > 0), "caption impact must provide word cues");
+  assert(continuityReport.continuityCuts?.length === Math.max(0, payload.scenes.length - 1), "continuity checker must provide cut transitions");
+  assert(cropQa.sceneReports?.length === payload.scenes.length, "crop QA must provide per-scene reports");
   assert(battleTest.averageSelectedScore >= 72, "battle-tested panels must be production safe");
   assert(battleTest.beatResults.every((result) => result.candidates.length > 0), "each beat needs tested panel candidates");
   assert(visualPlan.sceneCount === payload.scenes.length, "visual plan must cover every scene");
@@ -196,7 +201,11 @@ async function main() {
       humanizerScore: humanizerGate.score,
       captionImpactScore: captionImpactPlan.averageImpactScore,
       continuityScore: continuityReport.score,
-      cropQaScore: cropQa.score
+      cropQaScore: cropQa.score,
+      rewriteSuggestionCount: humanizerGate.beatRewrites?.length ?? 0,
+      captionWordCueCount: captionImpactPlan.cues.reduce((sum, cue) => sum + (cue.wordCues?.length ?? 0), 0),
+      continuityCutCount: continuityReport.continuityCuts?.length ?? 0,
+      cropSceneReportCount: cropQa.sceneReports?.length ?? 0
     },
     rejectedGate: {
       status: rejected.status,

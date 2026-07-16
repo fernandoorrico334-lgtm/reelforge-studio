@@ -10,6 +10,8 @@ export type ComicPanelContinuityReport = {
   roleSequence: string[];
   panelSequence: string[];
   visualFocusSequence: string[];
+  bridgeNarrationHints: Array<{ fromRole: string; toRole: string; hint: string }>;
+  continuityCuts: Array<{ fromPanelId: string; toPanelId: string; transition: "cut" | "whoosh" | "flash" | "hold"; reason: string }>;
   missingContextCount: number;
   repeatedPanelCount: number;
   warnings: string[];
@@ -17,6 +19,20 @@ export type ComicPanelContinuityReport = {
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function transitionForJump(input: { fromRole: string; toRole: string; jump: number }) {
+  if (input.toRole === "climax") return "flash" as const;
+  if (input.jump > 2) return "whoosh" as const;
+  if (input.fromRole === "climax" || input.toRole === "payoff") return "hold" as const;
+  return "cut" as const;
+}
+
+function bridgeHint(input: { fromRole: string; toRole: string; jump: number }) {
+  if (input.jump > 3) return `Inserir ponte curta entre ${input.fromRole} e ${input.toRole}: "mas a HQ pula direto para o impacto".`;
+  if (input.toRole === "climax") return "Fazer micro-pausa antes do climax para o quadro respirar.";
+  if (input.toRole === "payoff") return "Fechar explicando por que o quadro anterior importa.";
+  return "Manter corte seco; a sequencia visual ja sustenta a passagem.";
 }
 
 export function checkComicPanelContinuity(input: {
@@ -50,6 +66,25 @@ export function checkComicPanelContinuity(input: {
   const focusSequence = input.visualDirections.map((direction) =>
     direction.visualEvidenceMap?.visualFocus?.primaryFocus.type ?? direction.primaryTarget
   );
+  const continuityCuts = input.beats.slice(1).map((beat, index) => {
+    const previous = input.beats[index];
+    const jump = previous ? Math.abs(beat.pageNumber - previous.pageNumber) : 0;
+    return {
+      fromPanelId: previous?.panelId ?? beat.panelId,
+      toPanelId: beat.panelId,
+      transition: transitionForJump({ fromRole: previous?.role ?? "hook", toRole: beat.role, jump }),
+      reason: jump > 3 ? `large_page_jump:${jump}` : `role_flow:${previous?.role ?? "start"}->${beat.role}`
+    };
+  });
+  const bridgeNarrationHints = input.beats.slice(1).map((beat, index) => {
+    const previous = input.beats[index];
+    const jump = previous ? Math.abs(beat.pageNumber - previous.pageNumber) : 0;
+    return {
+      fromRole: previous?.role ?? "start",
+      toRole: beat.role,
+      hint: bridgeHint({ fromRole: previous?.role ?? "start", toRole: beat.role, jump })
+    };
+  });
   if (repeatedPanelCount > 1) warnings.push(`continuity_repeated_panels:${repeatedPanelCount}`);
   if (missingContextCount > 0) warnings.push(`continuity_missing_story_steps:${missingContextCount}`);
   warnings.push(...pageJumpWarnings);
@@ -69,6 +104,8 @@ export function checkComicPanelContinuity(input: {
     roleSequence: roles,
     panelSequence: panels,
     visualFocusSequence: focusSequence,
+    bridgeNarrationHints,
+    continuityCuts,
     missingContextCount,
     repeatedPanelCount,
     warnings

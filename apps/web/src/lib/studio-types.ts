@@ -3729,13 +3729,16 @@ export interface ComicNarrationHumanizerGateSummary {
   specificityScore: number;
   hookHumanityScore: number;
   genericSignals: string[];
+  beatRewrites?: Array<{ beatRole: string; original: string; suggested: string; reason: string }>;
+  voiceDirection?: { pace: string; tone: string; pauseMap: Array<{ afterBeatRole: string; pauseMs: number; reason: string }> };
+  approvalChecklist?: string[];
   rewriteHints: string[];
 }
 export interface ComicCaptionImpactPlanSummary {
   directorId: "comic_caption_impact_director_v1";
   cueCount: number;
   averageImpactScore: number;
-  cues: Array<{ sceneOrder: number; panelId: string; beatRole: string; text: string; animation: string; colorMood: string; safeZone: string; impactScore: number; warnings: string[] }>;
+  cues: Array<{ sceneOrder: number; panelId: string; beatRole: string; text: string; animation: string; colorMood: string; safeZone: string; impactScore: number; wordCues?: Array<{ word: string; startSeconds: number; endSeconds: number; emphasis: string; animation: string }>; renderStyle?: { fontWeight: string; stroke: boolean; shadow: boolean; maxLines: number }; warnings: string[] }>;
   warnings: string[];
 }
 export interface ComicPanelContinuityReportSummary {
@@ -3745,6 +3748,8 @@ export interface ComicPanelContinuityReportSummary {
   roleSequence: string[];
   panelSequence: string[];
   visualFocusSequence: string[];
+  bridgeNarrationHints?: Array<{ fromRole: string; toRole: string; hint: string }>;
+  continuityCuts?: Array<{ fromPanelId: string; toPanelId: string; transition: string; reason: string }>;
   missingContextCount: number;
   repeatedPanelCount: number;
   warnings: string[];
@@ -3757,6 +3762,7 @@ export interface ComicPostRenderCropQaSummary {
   captionOverlapRiskCount: number;
   weakFocusCount: number;
   missingActionFocusCount: number;
+  sceneReports?: Array<{ panelId: string; beatRole: string; captionRisk: string; focusScore: number; safeZone: string; previewCheck: string; fixInstruction: string }>;
   cropWarnings: string[];
   recommendations: string[];
 }
