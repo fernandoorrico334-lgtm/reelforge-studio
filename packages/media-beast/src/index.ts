@@ -62,6 +62,7 @@ export * from "./pipeline/comic-golden-runtime-qa.js";
 export * from "./pipeline/comic-short-final-quality-gate.js";
 export * from "./pipeline/comic-arc-visual-director.js";
 export * from "./pipeline/comic-panel-evidence-map.js";
+export * from "./pipeline/comic-ocr-region-intelligence.js";
 export * from "./pipeline/comic-panel-battle-test.js";
 export * from "./pipeline/comic-beat-timing-plan.js";
 export * from "./pipeline/comic-final-video-dna.js";

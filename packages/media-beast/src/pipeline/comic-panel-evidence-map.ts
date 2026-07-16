@@ -1,4 +1,8 @@
 ﻿import type { ComicStoryMinerPanelRef } from "./comic-story-miner.js";
+import {
+  buildComicOcrRegionIntelligence,
+  type ComicOcrRegionIntelligence
+} from "./comic-ocr-region-intelligence.js";
 
 export type ComicPanelEvidenceRegionType =
   | "speech_balloon"
@@ -35,6 +39,8 @@ export type ComicPanelLayoutMap = {
   motionFocusRegion: ComicPanelEvidenceRegion | null;
   readingPath: Array<{ regionId: string; type: ComicPanelEvidenceRegionType; order: number; holdWeight: number }>;
   captionRisk: "low" | "medium" | "high";
+  ocrProtectedRegionCount: number;
+  ocrReadingOrder: string[];
   warnings: string[];
 };
 
@@ -45,6 +51,7 @@ export type ComicPanelEvidenceMap = {
   regions: ComicPanelEvidenceRegion[];
   bestRegionByType: Partial<Record<ComicPanelEvidenceRegionType, ComicPanelEvidenceRegion>>;
   layoutMap: ComicPanelLayoutMap;
+  ocrIntelligence: ComicOcrRegionIntelligence;
   warnings: string[];
 };
 
@@ -112,12 +119,14 @@ function intersectsVerticalBand(box: NormalizedComicEvidenceBox, band: ComicPane
 
 function buildLayoutMap(input: {
   regions: ComicPanelEvidenceRegion[];
+  ocrIntelligence: ComicOcrRegionIntelligence;
   textLoad: number;
   textHeavy: boolean;
   hasAction: boolean;
   warnings: string[];
 }): ComicPanelLayoutMap {
   const protectedTextRegions = input.regions.filter((region) => region.type === "speech_balloon");
+  const ocrProtectedRegions = input.ocrIntelligence.protectedRegions;
   const motionFocusRegion = input.regions.find((region) => region.type === "impact_zone")
     ?? input.regions.find((region) => region.type === "duo_conflict")
     ?? input.regions.find((region) => region.type === "speaker_face")
@@ -128,15 +137,20 @@ function buildLayoutMap(input: {
     .map((zone) => ({
       zone,
       penalty: protectedTextRegions.reduce((sum, region) => sum + (intersectsVerticalBand(region.box, zone) ? 20 + region.confidence / 5 : 0), 0)
+        + ocrProtectedRegions.reduce((sum, region) => sum + (intersectsVerticalBand(region.box, zone) ? 18 + region.confidence / 6 : 0), 0)
         + (zone === "center" && input.hasAction ? 14 : 0)
         + (zone === "bottom" && input.textHeavy ? 12 : 0)
     }))
     .sort((left, right) => left.penalty - right.penalty)[0]?.zone ?? "lower-third";
   const captionRisk = protectedTextRegions.some((region) => intersectsVerticalBand(region.box, preferredCaptionZone))
+    || ocrProtectedRegions.some((region) => intersectsVerticalBand(region.box, preferredCaptionZone))
     ? "high"
-    : input.textHeavy
+    : input.textHeavy || input.ocrIntelligence.textDensity === "heavy"
       ? "medium"
       : "low";
+  const ocrReadingOrder = input.ocrIntelligence.regions
+    .slice(0, 5)
+    .map((region) => `${region.readingOrder}:${region.type}:${region.text.slice(0, 28)}`);
   return {
     layoutId: "comic_panel_layout_map_v1",
     preferredCaptionZone,
@@ -152,15 +166,20 @@ function buildLayoutMap(input: {
         holdWeight: Math.max(1, Math.round((region.priority + region.confidence) / 50))
       })),
     captionRisk,
+    ocrProtectedRegionCount: ocrProtectedRegions.length,
+    ocrReadingOrder,
     warnings: [
       ...input.warnings,
+      ...input.ocrIntelligence.warnings,
       ...(captionRisk === "high" ? ["caption_zone_overlaps_protected_text"] : []),
+      ...(ocrProtectedRegions.length > 0 ? ["ocr_text_protection_active"] : []),
       ...(motionFocusRegion ? [] : ["missing_motion_focus_region"])
     ]
   };
 }
 export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): ComicPanelEvidenceMap {
   const evidence = panel.visualCropEvidence;
+  const ocrIntelligence = buildComicOcrRegionIntelligence(panel);
   const counts = evidence.evidenceCounts;
   const confidence = evidence.confidence;
   const regions: ComicPanelEvidenceRegion[] = [];
@@ -183,14 +202,15 @@ export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): Comi
   }));
 
   if (textLoad > 0) {
+    const ocrPrimary = ocrIntelligence.primaryReadingRegion;
     regions.push(addRegion({
       panel,
       type: "speech_balloon",
-      box: { x: 0.07, y: 0.02, width: 0.86, height: textHeavy ? 0.52 : 0.4 },
-      confidence: 62 + Math.min(20, textLoad * 6) + confidence.text * 16,
+      box: ocrPrimary?.box ?? { x: 0.07, y: 0.02, width: 0.86, height: textHeavy ? 0.52 : 0.4 },
+      confidence: Math.max(62 + Math.min(20, textLoad * 6) + confidence.text * 16, ocrPrimary?.confidence ?? 0),
       priority: 82,
       yBias: 0.34,
-      reasons: [`text_load:${textLoad}`, `dialogue:${counts.dialogue}`, `narration_boxes:${counts.narrationBoxes}`, "protect_readable_text"],
+      reasons: [`text_load:${textLoad}`, `dialogue:${counts.dialogue}`, `narration_boxes:${counts.narrationBoxes}`, `ocr_density:${ocrIntelligence.textDensity}`, "protect_readable_text"],
       warnings: textHeavy ? ["speech_region_text_heavy_use_wider_crop"] : []
     }));
   }
@@ -208,14 +228,15 @@ export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): Comi
   }
 
   if (hasAction) {
+    const ocrImpact = ocrIntelligence.impactTextRegion;
     regions.push(addRegion({
       panel,
       type: "impact_zone",
-      box: { x: cropable ? 0.2 : 0.14, y: 0.08, width: cropable ? 0.6 : 0.72, height: 0.82 },
-      confidence: 64 + confidence.actions * 22 + Math.min(12, counts.soundEffects * 5),
+      box: ocrImpact?.box ?? { x: cropable ? 0.2 : 0.14, y: 0.08, width: cropable ? 0.6 : 0.72, height: 0.82 },
+      confidence: Math.max(64 + confidence.actions * 22 + Math.min(12, counts.soundEffects * 5), ocrImpact?.confidence ?? 0),
       priority: 90,
       yBias: 0.5,
-      reasons: [`actions:${counts.actions}`, `sfx:${counts.soundEffects}`, `action:${evidence.strongestActionLabel ?? "unknown"}`, "impact_retention_anchor"],
+      reasons: [`actions:${counts.actions}`, `sfx:${counts.soundEffects}`, `ocr_impact:${ocrImpact?.text ?? "none"}`, `action:${evidence.strongestActionLabel ?? "unknown"}`, "impact_retention_anchor"],
       warnings: cropable ? [] : ["impact_region_needs_wider_crop"]
     }));
   }
@@ -253,7 +274,7 @@ export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): Comi
     bestRegionByType[region.type] ??= region;
   }
 
-  const layoutMap = buildLayoutMap({ regions: sorted, textLoad, textHeavy, hasAction, warnings });
+  const layoutMap = buildLayoutMap({ regions: sorted, ocrIntelligence, textLoad, textHeavy, hasAction, warnings });
 
   return {
     detectorId: "comic_panel_evidence_map_v1",
@@ -262,6 +283,7 @@ export function buildComicPanelEvidenceMap(panel: ComicStoryMinerPanelRef): Comi
     regions: sorted,
     bestRegionByType,
     layoutMap,
+    ocrIntelligence,
     warnings
   };
 }

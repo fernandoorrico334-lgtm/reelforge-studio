@@ -495,6 +495,7 @@ function CreatedArcProjects({ result }: { result: ComicStudioCreateArcProjectsRe
             </div>
             <p className="mt-3 text-xs leading-5 text-cyan-100/65">
               Evidence map: {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.selectedEvidenceRegion?.type ?? "fallback"} / {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.selectedEvidenceRegion?.confidence ?? 0}% na abertura / legenda {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.layoutMap.preferredCaptionZone ?? "safe"}
+              {" "}| OCR {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.ocrIntelligence?.confidence ?? 0}% / {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.ocrIntelligence?.textDensity ?? "none"} / protegidas {project.renderBlueprintHints.arcVisualPlan.scenes[0]?.visualEvidenceMap?.layoutMap.ocrProtectedRegionCount ?? 0}
             </p>
             {project.renderBlueprintHints.finalQualityGate.blockers.length > 0 || project.renderBlueprintHints.finalQualityGate.warnings.length > 0 ? (
               <p className="mt-3 text-xs leading-5 text-mist/58">

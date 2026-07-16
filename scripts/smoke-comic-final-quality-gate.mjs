@@ -125,6 +125,9 @@ async function main() {
   assert(visualPlan.scenes.every((scene) => scene.visualEvidenceMap?.regions?.length > 0), "every scene needs evidence regions");
   assert(visualPlan.scenes.every((scene) => scene.visualEvidenceMap?.layoutMap?.preferredCaptionZone), "every scene needs a safe caption zone");
   assert(visualPlan.scenes.every((scene) => scene.visualEvidenceMap?.layoutMap?.readingPath?.length > 0), "every scene needs a visual reading path");
+  assert(visualPlan.scenes.every((scene) => scene.visualEvidenceMap?.ocrIntelligence?.detectorId === "comic_ocr_region_intelligence_v1"), "every scene needs OCR region intelligence");
+  assert(visualPlan.scenes.some((scene) => (scene.visualEvidenceMap?.ocrIntelligence?.protectedRegions?.length ?? 0) > 0), "at least one scene needs OCR-protected text regions");
+  assert(visualPlan.scenes.every((scene) => typeof scene.visualEvidenceMap?.layoutMap?.ocrProtectedRegionCount === "number"), "layout map must expose OCR protected region count");
   assert(gate.checks.durationSeconds >= 30, "duration must be at least 30s");
   assert(gate.checks.hasHook === true, "hook required");
   assert(gate.checks.hasClimax === true, "climax required");
@@ -165,6 +168,8 @@ async function main() {
       selectedEvidenceRegions: visualPlan.scenes.map((scene) => scene.selectedEvidenceRegion?.type),
       safeCaptionZones: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.layoutMap?.preferredCaptionZone),
       captionRisks: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.layoutMap?.captionRisk),
+      ocrConfidence: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.ocrIntelligence?.confidence),
+      ocrProtectedRegions: visualPlan.scenes.map((scene) => scene.visualEvidenceMap?.layoutMap?.ocrProtectedRegionCount),
       battleTestScore: battleTest.averageSelectedScore,
       battleTestImprovedBeats: battleTest.improvedBeatCount,
       timingScore: timingPlan.averagePacingScore,

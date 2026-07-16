@@ -3676,7 +3676,21 @@ export interface ComicArcVisualPlanSummary {
         layoutId: "comic_panel_layout_map_v1";
         preferredCaptionZone: string;
         captionRisk: string;
+        ocrProtectedRegionCount?: number;
+        ocrReadingOrder?: string[];
         readingPath: Array<{ type: string; order: number; holdWeight: number }>;
+        warnings: string[];
+      };
+      ocrIntelligence?: {
+        detectorId: "comic_ocr_region_intelligence_v1";
+        textLineCount: number;
+        dialogueLineCount: number;
+        narrationBoxCount: number;
+        soundEffectCount: number;
+        textDensity: string;
+        confidence: number;
+        regions: Array<{ type: string; text: string; confidence: number; readingOrder: number; recommendedAction: string }>;
+        protectedRegions: Array<{ type: string; text: string; confidence: number; readingOrder: number }>;
         warnings: string[];
       };
       warnings: string[];
