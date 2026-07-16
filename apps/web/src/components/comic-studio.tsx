@@ -5,7 +5,8 @@ import { useMemo, useState, useTransition } from "react";
 import {
   runComicStudioCreateProjectsRequest,
   runComicStudioCreateArcProjectsRequest,
-  runComicStudioPlanRequest
+  runComicStudioPlanRequest,
+  getComicPanelPreviewUrl
 } from "../lib/studio-api";
 import type {
   ComicStudioCreateProjectsResponse,
@@ -242,6 +243,38 @@ function ArcStudioPanel({
                 <span>pags. {formatPages(arc.pages)}</span>
               </div>
 
+              {arc.panelPreviews?.length ? (
+                <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs uppercase tracking-[0.22em] text-mist/45">Contact sheet do arco</p>
+                    <span className="text-xs text-mist/45">{arc.panelPreviews.length} paineis</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    {arc.panelPreviews.map((panel, index) => (
+                      <div key={`${arc.id}-${panel.panelId}-${index}`} className="overflow-hidden rounded-2xl border border-white/10 bg-black/35">
+                        <div className="aspect-[9/13] bg-gradient-to-br from-white/10 to-black/40">
+                          {panel.previewUrl ? (
+                            <img
+                              src={getComicPanelPreviewUrl(panel.previewUrl)}
+                              alt={`Painel ${panel.panelId}`}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center px-3 text-center text-[11px] text-mist/45">
+                              Preview indisponivel
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-1 p-2">
+                          <p className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">{panel.role ?? "beat"}</p>
+                          <p className="text-[11px] text-mist/50">pag. {panel.pageNumber ?? "?"} / {panel.panelId}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 {arc.characters.slice(0, 4).map((character) => (
                   <span key={character} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-mist/65">

@@ -27,7 +27,10 @@ import {
   type MediaBeastProviderId,
   type RemixAssetSearchCandidate
 } from "@reelforge/media-beast";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { extname, resolve, sep } from "node:path";
 import type { AssetRepository } from "../../modules/assets/application/asset-repository.js";
 import type { ChannelRepository } from "../../modules/channels/application/channel-repository.js";
 import type { ProjectRepository } from "../../modules/projects/application/project-repository.js";
@@ -275,6 +278,118 @@ function buildRiskPolicyGate(result: {
   };
 }
 
+type ComicArcPanelPreview = {
+  panelId: string;
+  pageNumber: number | null;
+  panelImagePath: string | null;
+  previewUrl: string | null;
+  role: string | null;
+  reason: string | null;
+};
+
+function normalizeWorkspacePath(localPath: string) {
+  const root = resolve(process.cwd());
+  const absolutePath = resolve(root, localPath);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+  if (absolutePath !== root && !absolutePath.startsWith(rootWithSep)) {
+    throw new ValidationError("Comic panel preview path must stay inside the project workspace.");
+  }
+  return { root, absolutePath };
+}
+
+function mediaTypeForImagePath(localPath: string) {
+  const extension = extname(localPath).toLowerCase();
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".png") return "image/png";
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".gif") return "image/gif";
+  return null;
+}
+
+function buildComicPanelPreviewUrl(panelImagePath: string | null | undefined) {
+  if (!panelImagePath) return null;
+  const mediaType = mediaTypeForImagePath(panelImagePath);
+  if (!mediaType) return null;
+  return `/media-beast/comic-panel-preview?path=${encodeURIComponent(panelImagePath)}`;
+}
+
+function buildArcPanelPreviews(minerReport: Awaited<ReturnType<typeof mineComicStoryVaultFromDirectory>>) {
+  const panelById = new Map(
+    minerReport.opportunities
+      .flatMap((opportunity) => opportunity.panels)
+      .map((panel) => [panel.panelId, panel])
+  );
+
+  return new Map(
+    (minerReport.storyArcMinerV2?.recommendedShorts ?? []).map((arc) => {
+      const previews: ComicArcPanelPreview[] = arc.beats.map((beat) => {
+        const panel = panelById.get(beat.panelId);
+        return {
+          panelId: beat.panelId,
+          pageNumber: panel?.pageNumber ?? beat.pageNumber ?? null,
+          panelImagePath: panel?.panelImagePath ?? null,
+          previewUrl: buildComicPanelPreviewUrl(panel?.panelImagePath),
+          role: beat.role,
+          reason: beat.reason
+        };
+      });
+      return [arc.id, previews] as const;
+    })
+  );
+}
+
+function enrichArcStudioWithPanelPreviews(minerReport: Awaited<ReturnType<typeof mineComicStoryVaultFromDirectory>>) {
+  const arcReport = minerReport.storyArcMinerV2;
+  if (!arcReport) return null;
+  const previewsByArcId = buildArcPanelPreviews(minerReport);
+  return {
+    totalArcs: arcReport.totalArcs,
+    readyArcCount: arcReport.readyArcCount,
+    averageScore: arcReport.averageScore,
+    recommendedShorts: arcReport.recommendedShorts.map((arc) => ({
+      ...arc,
+      panelPreviews: previewsByArcId.get(arc.id) ?? []
+    })),
+    recommendedScripts: arcReport.scriptDoctor.recommendedScripts,
+    warnings: arcReport.warnings
+  };
+}
+
+async function sendComicPanelPreview(
+  request: IncomingMessage,
+  response: ServerResponse
+) {
+  const url = new URL(request.url ?? "/", "http://localhost");
+  const localPath = url.searchParams.get("path");
+  if (!localPath) {
+    throw new ValidationError("path query parameter is required.");
+  }
+
+  const mediaType = mediaTypeForImagePath(localPath);
+  if (!mediaType) {
+    throw new ValidationError("Only local comic image previews are supported.");
+  }
+
+  const { absolutePath } = normalizeWorkspacePath(localPath);
+  const fileInfo = await stat(absolutePath);
+  if (!fileInfo.isFile()) {
+    throw new ValidationError("Comic panel preview path must point to a file.");
+  }
+
+  response.writeHead(200, {
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "no-store",
+    "Content-Length": fileInfo.size,
+    "Content-Type": mediaType
+  });
+
+  if (request.method === "HEAD") {
+    response.end();
+    return;
+  }
+
+  createReadStream(absolutePath).pipe(response);
+}
 interface MediaBeastRouteDependencies {
   assetRepository: AssetRepository;
   channelRepository: ChannelRepository;
@@ -361,6 +476,16 @@ export async function handleMediaBeastRoute(
   dependencies: MediaBeastRouteDependencies
 ): Promise<boolean> {
   try {
+    if (pathname === "/media-beast/comic-panel-preview") {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        sendMethodNotAllowed(response, ["GET", "HEAD"]);
+        return true;
+      }
+      await sendComicPanelPreview(request, response);
+      return true;
+    }
+
+
     if (pathname === "/media-beast/providers") {
       if (request.method !== "GET") {
         sendMethodNotAllowed(response, ["GET"]);
@@ -514,16 +639,7 @@ export async function handleMediaBeastRoute(
           topOpportunityCount: minerReport.topOpportunities.length,
           warnings: minerReport.warnings
         },
-        arcStudio: minerReport.storyArcMinerV2
-          ? {
-              totalArcs: minerReport.storyArcMinerV2.totalArcs,
-              readyArcCount: minerReport.storyArcMinerV2.readyArcCount,
-              averageScore: minerReport.storyArcMinerV2.averageScore,
-              recommendedShorts: minerReport.storyArcMinerV2.recommendedShorts,
-              recommendedScripts: minerReport.storyArcMinerV2.scriptDoctor.recommendedScripts,
-              warnings: minerReport.storyArcMinerV2.warnings
-            }
-          : null,
+        arcStudio: enrichArcStudioWithPanelPreviews(minerReport),
         riskPolicyGate: {
           candidateFirst: true,
           requiresManualApproval: true,

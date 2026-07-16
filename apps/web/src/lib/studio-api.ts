@@ -3553,6 +3553,10 @@ export function getCandidateMediaUrl(candidateId: string) {
   return buildApiUrl(`/media/candidates/${encodeURIComponent(candidateId)}/preview`);
 }
 
+export function getComicPanelPreviewUrl(previewPath: string) {
+  return buildApiUrl(previewPath);
+}
+
 export function getRenderMediaUrl(renderJobId: string) {
   return buildApiUrl(`/media/renders/${encodeURIComponent(renderJobId)}`);
 }

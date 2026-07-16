@@ -3444,6 +3444,15 @@ export interface ComicStudioArcBeat {
   narrationJob: string;
 }
 
+export interface ComicStudioArcPanelPreview {
+  panelId: string;
+  pageNumber: number | null;
+  panelImagePath: string | null;
+  previewUrl: string | null;
+  role: string | null;
+  reason: string | null;
+}
+
 export interface ComicStudioStoryArcV2 {
   id: string;
   title: string;
@@ -3468,6 +3477,7 @@ export interface ComicStudioStoryArcV2 {
   readyForShort: boolean;
   reasons: string[];
   warnings: string[];
+  panelPreviews?: ComicStudioArcPanelPreview[];
 }
 
 export interface ComicStudioArcScriptBeat {
