@@ -455,6 +455,7 @@ export interface AudioQualityReport {
 export const narrationProviders = [
   "mock-tts",
   "windows-sapi-local",
+  "f5-tts-local",
   "manual",
   "other"
 ] as const;
@@ -1455,7 +1456,7 @@ export interface VisualGenerationJob {
 }
 
 export interface NarrationProviderDescriptor {
-  id: "mock-tts" | "windows-sapi-local";
+  id: "mock-tts" | "windows-sapi-local" | "f5-tts-local";
   name: string;
   description: string;
   available: boolean;
@@ -1464,6 +1465,7 @@ export interface NarrationProviderDescriptor {
   offline: boolean;
   status: "ready" | "disabled" | "unavailable";
   reason: string | null;
+  baseUrl?: string | null;
 }
 
 export interface NarrationVoicePack {

@@ -6,7 +6,8 @@ const execFileAsync = promisify(execFile);
 
 export const narrationProviderIds = [
   "mock-tts",
-  "windows-sapi-local"
+  "windows-sapi-local",
+  "f5-tts-local"
 ] as const;
 
 export type NarrationProviderId = (typeof narrationProviderIds)[number];
@@ -21,6 +22,7 @@ export interface NarrationProviderDescriptor {
   offline: boolean;
   status: "ready" | "disabled" | "unavailable";
   reason: string | null;
+  baseUrl?: string | null;
 }
 
 export interface VoicePack {
@@ -80,6 +82,12 @@ export interface GeneratedNarrationAudio {
 
 export interface WindowsSapiGenerationInput extends NarrationPlanInput {
   outputAbsolutePath: string;
+  timeoutMs?: number | null;
+}
+
+export interface F5TtsGenerationInput extends NarrationPlanInput {
+  outputAbsolutePath?: string | null;
+  baseUrl?: string | null;
   timeoutMs?: number | null;
 }
 
@@ -268,11 +276,15 @@ function toWordTone(word: string, voicePack: VoicePack, seed: number) {
 
 export function getNarrationProviders(options: {
   windowsSapiEnabled?: boolean;
+  f5TtsEnabled?: boolean;
+  f5TtsBaseUrl?: string | null;
   platform?: NodeJS.Platform;
 } = {}) {
   const platform = options.platform ?? process.platform;
   const windowsReady = platform === "win32";
   const sapiEnabled = options.windowsSapiEnabled ?? false;
+  const f5Enabled = options.f5TtsEnabled ?? false;
+  const f5BaseUrl = normalizeF5TtsBaseUrl(options.f5TtsBaseUrl);
 
   return [
     {
@@ -306,6 +318,21 @@ export function getNarrationProviders(options: {
           ? null
           : "Ative NARRATION_WINDOWS_SAPI_ENABLED=true para expor o provider."
         : "Provider disponivel apenas em Windows."
+    },
+    {
+      id: "f5-tts-local",
+      name: "F5-TTS Local",
+      description:
+        "Provider premium opcional via servidor/bridge F5-TTS local. Nao usa API externa nem clona vozes reais.",
+      available: f5Enabled,
+      enabled: f5Enabled,
+      requiresWindows: false,
+      offline: true,
+      status: f5Enabled ? ("ready" as const) : ("disabled" as const),
+      reason: f5Enabled
+        ? null
+        : "Ative F5_TTS_ENABLED=true e configure F5_TTS_BASE_URL para usar o provider.",
+      baseUrl: f5BaseUrl
     }
   ] satisfies NarrationProviderDescriptor[];
 }
@@ -492,6 +519,135 @@ export async function generateWindowsSapiNarrationWav(
     channels: info.channels,
     seed: plan.seed
   };
+}
+
+function normalizeF5TtsBaseUrl(value: string | null | undefined) {
+  const baseUrl = (value ?? process.env.F5_TTS_BASE_URL ?? "http://127.0.0.1:7860")
+    .trim()
+    .replace(/\/+$/, "");
+
+  return baseUrl || "http://127.0.0.1:7860";
+}
+
+async function readF5TtsResponseAudio(response: Response, baseUrl: string) {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(
+      `F5-TTS local request failed (${response.status}): ${
+        message.trim() || response.statusText
+      }`
+    );
+  }
+
+  if (contentType.includes("audio/") || contentType.includes("application/octet-stream")) {
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        wavBase64?: string;
+        audioBase64?: string;
+        outputPath?: string;
+        audioUrl?: string;
+      }
+    | null;
+
+  if (!payload) {
+    throw new Error("F5-TTS local response did not contain audio.");
+  }
+
+  const base64 = payload.wavBase64 ?? payload.audioBase64;
+
+  if (base64) {
+    return Buffer.from(base64, "base64");
+  }
+
+  if (payload.outputPath) {
+    return readFile(payload.outputPath);
+  }
+
+  if (payload.audioUrl) {
+    const audioUrl = payload.audioUrl.startsWith("http")
+      ? payload.audioUrl
+      : `${baseUrl}/${payload.audioUrl.replace(/^\/+/, "")}`;
+    const audioResponse = await fetch(audioUrl);
+    return readF5TtsResponseAudio(audioResponse, baseUrl);
+  }
+
+  throw new Error("F5-TTS local response is missing wavBase64, audioBase64, outputPath or audioUrl.");
+}
+
+export async function generateF5TtsNarrationWav(
+  input: F5TtsGenerationInput
+): Promise<GeneratedNarrationAudio> {
+  const planInput: NarrationPlanInput = {
+    provider: "f5-tts-local",
+    text: input.text
+  };
+
+  if (input.voicePackId !== undefined) {
+    planInput.voicePackId = input.voicePackId;
+  }
+
+  if (input.language !== undefined) {
+    planInput.language = input.language;
+  }
+
+  if (input.sampleRate !== undefined) {
+    planInput.sampleRate = input.sampleRate;
+  }
+
+  if (input.seed !== undefined) {
+    planInput.seed = input.seed;
+  }
+
+  const plan = buildNarrationPlan(planInput);
+  const baseUrl = normalizeF5TtsBaseUrl(input.baseUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    input.timeoutMs ?? Number(process.env.F5_TTS_TIMEOUT_MS ?? 300_000)
+  );
+
+  try {
+    const response = await fetch(`${baseUrl}/synthesize`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        text: plan.normalizedText,
+        language: plan.language,
+        voicePackId: plan.voicePack.id,
+        voicePackTone: plan.voicePack.tone,
+        rate: plan.voicePack.rate,
+        pitch: plan.voicePack.pitch,
+        volume: plan.voicePack.volume,
+        sampleRate: plan.sampleRate,
+        seed: plan.seed,
+        safety: {
+          allowVoiceCloning: false,
+          allowRealPersonImitation: false,
+          voicePolicy: "generic-local-voice-only"
+        }
+      }),
+      signal: controller.signal
+    });
+    const wavBuffer = await readF5TtsResponseAudio(response, baseUrl);
+    const info = parseWavInfo(wavBuffer);
+
+    return {
+      wavBuffer,
+      durationSeconds: info.durationSeconds,
+      sampleRate: info.sampleRate,
+      channels: info.channels,
+      seed: plan.seed
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function summarizeNarrationJob(job: NarrationJobSummaryInput) {

@@ -12,6 +12,8 @@ import {
   buildComicIngestionPlan,
   buildComicBatchProjectBridgePayload,
   buildComicArcProjectsFromMinerV2,
+  buildComicSagaNarrativeMap,
+  mineComicSagaEventOpportunities,
   buildComicShortsBatchFactoryPlan,
   ingestLocalComicSource,
   mineComicStoryVaultFromDirectory,
@@ -19,6 +21,7 @@ import {
   rebuildRemixNarrationWithResearch,
   remixVideoFromSource,
   runDeepRemixResearch,
+  resolveComicPremiumFlowPolicy,
   type BeastModeDiscoveryInput,
   type VideoRemixAnalysis,
   type ChannelDNA,
@@ -30,7 +33,7 @@ import {
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { extname, resolve, sep } from "node:path";
+import { basename, extname, resolve, sep } from "node:path";
 import type { AssetRepository } from "../../modules/assets/application/asset-repository.js";
 import type { ChannelRepository } from "../../modules/channels/application/channel-repository.js";
 import type { ProjectRepository } from "../../modules/projects/application/project-repository.js";
@@ -829,6 +832,84 @@ export async function handleMediaBeastRoute(
       return true;
     }
 
+    if (pathname === "/media-beast/comic-studio/saga-narrative-map") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const title = readOptionalString(payload.title) ?? "Saga de HQ importada";
+      const rawIssues = Array.isArray(payload.issues) ? payload.issues : [];
+      if (rawIssues.length === 0) {
+        throw new ValidationError("issues must include at least one local comic issue.");
+      }
+      const maxOpportunities = Math.min(readPositiveInteger(payload.maxOpportunities, 48), 120);
+      const minScoreRaw = payload.minScore === undefined || payload.minScore === null ? 0 : Number(payload.minScore);
+      if (!Number.isFinite(minScoreRaw) || minScoreRaw < 0 || minScoreRaw > 100) {
+        throw new ValidationError("minScore must be between 0 and 100.");
+      }
+      const forceRebuildIndex = readBoolean(payload.forceRebuildIndex, false);
+      const ocrEnabled = readBoolean(payload.ocrEnabled, false);
+
+      const issues = [];
+      for (const [index, rawIssue] of rawIssues.entries()) {
+        if (!rawIssue || typeof rawIssue !== "object") {
+          throw new ValidationError("Each issue must be an object.");
+        }
+        const issuePayload = rawIssue as Record<string, unknown>;
+        const assetDirectory = readString(issuePayload.assetDirectory, `issues[${index}].assetDirectory`);
+        const sourcePath = readOptionalString(issuePayload.sourcePath);
+        const issueTitle = readOptionalString(issuePayload.title) ?? (sourcePath ? basename(sourcePath, extname(sourcePath)) : `Issue ${index + 1}`);
+        const issueNumberRaw = issuePayload.issueNumber === undefined || issuePayload.issueNumber === null ? index + 1 : Number(issuePayload.issueNumber);
+        if (!Number.isInteger(issueNumberRaw) || issueNumberRaw <= 0) {
+          throw new ValidationError(`issues[${index}].issueNumber must be a positive integer.`);
+        }
+
+        const report = sourcePath
+          ? mineComicStoryVaultFromDirectory({
+              assetDirectory: (await ingestLocalComicSource({
+                sourcePath,
+                assetDirectory,
+                buildIndex: true,
+                forceRebuildIndex,
+                ocrEnabled
+              })).assetDirectory,
+              maxOpportunities,
+              minScore: minScoreRaw
+            })
+          : mineComicStoryVaultFromDirectory({
+              assetDirectory,
+              maxOpportunities,
+              minScore: minScoreRaw
+            });
+
+        issues.push({
+          issueId: readOptionalString(issuePayload.issueId) ?? `issue-${String(issueNumberRaw).padStart(2, "0")}`,
+          issueNumber: issueNumberRaw,
+          title: issueTitle,
+          ...(sourcePath !== undefined ? { sourcePath } : {}),
+          report: await report
+        });
+      }
+
+      const sagaMap = buildComicSagaNarrativeMap({ title, issues });
+      const eventOpportunities = mineComicSagaEventOpportunities({ sagaMap });
+      sendJson(response, 200, {
+        status: "completed",
+        mode: "comic_saga_narrative_map_v1",
+        sagaMap,
+        eventOpportunities,
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoRenderCount: 0,
+          autoImportedAssetCount: 0,
+          note: "Saga narrative map only reads local/user-provided comics and returns candidates for review. It does not render or import final assets."
+        }
+      });
+      return true;
+    }
     if (pathname === "/media-beast/comic-studio/create-arc-projects") {
       if (request.method !== "POST") {
         sendMethodNotAllowed(response, ["POST"]);
@@ -845,8 +926,10 @@ export async function handleMediaBeastRoute(
       }
       const maxProjects = Math.min(readPositiveInteger(payload.maxProjects, 3), targetCount);
       const titlePrefix = readOptionalString(payload.titlePrefix) ?? "Comic Arc";
-      const templateId = readOptionalString(payload.templateId);
-      const editingReferencePresetId = readOptionalString(payload.editingReferencePresetId);
+      const premiumPolicy = resolveComicPremiumFlowPolicy({
+        templateId: readOptionalString(payload.templateId),
+        editingReferencePresetId: readOptionalString(payload.editingReferencePresetId)
+      });
       const approvedArcIds = readOptionalStringArray(payload.approvedArcIds, "approvedArcIds");
       const approvedPanelIdsByArcId = readApprovedPanelIdsByArc(payload.approvedPanelIdsByArcId);
       const selectedPanelReplacementsByArcId = readPanelReplacementsByArc(payload.selectedPanelReplacementsByArcId);
@@ -861,8 +944,8 @@ export async function handleMediaBeastRoute(
         channelId,
         maxProjects,
         titlePrefix,
-        ...(templateId !== undefined ? { templateId } : {}),
-        ...(editingReferencePresetId !== undefined ? { editingReferencePresetId } : {})
+        templateId: premiumPolicy.templateId,
+        editingReferencePresetId: premiumPolicy.editingReferencePresetId
       });
 
       const panelById = new Map(
@@ -909,6 +992,17 @@ export async function handleMediaBeastRoute(
           scenes.push(scene);
         }
 
+        const storyGate = projectPayload.renderBlueprintHints.storyStrengthGate;
+        const renderBlockedReasons = [
+          ...(storyGate.status === "blocked" ? storyGate.blockers.map((blocker) => `story_strength:${blocker}`) : []),
+          ...(projectPayload.renderBlueprintHints.narrativeContinuityHardGate.status !== "passed"
+            ? projectPayload.renderBlueprintHints.narrativeContinuityHardGate.blockers.map((blocker) => `narrative_continuity:${blocker}`)
+            : []),
+          ...(projectPayload.renderBlueprintHints.finalQualityGate.status === "rejected"
+            ? projectPayload.renderBlueprintHints.finalQualityGate.blockers.map((blocker) => `final_quality:${blocker}`)
+            : [])
+        ];
+
         createdProjects.push({
           projectId: project.id,
           title: project.title,
@@ -918,6 +1012,9 @@ export async function handleMediaBeastRoute(
           panelAssetManifest: projectPayload.panelAssetManifest,
           renderBlueprintHints: projectPayload.renderBlueprintHints,
           qualityChecklist: projectPayload.qualityChecklist,
+          storyGate,
+          renderBlocked: renderBlockedReasons.length > 0,
+          renderBlockedReasons,
           warnings: projectPayload.warnings
         });
       }
@@ -934,6 +1031,7 @@ export async function handleMediaBeastRoute(
           recommendedScriptCount: minerReport.storyArcMinerV2?.scriptDoctor.recommendedScripts.length ?? 0
         },
         createdProjects,
+        premiumFlowPolicy: premiumPolicy,
         warnings: [`visual_review_gate_applied`, ...arcPayload.warnings],
         riskPolicyGate: {
           candidateFirst: true,
@@ -961,8 +1059,10 @@ export async function handleMediaBeastRoute(
       }
       const maxProjects = Math.min(readPositiveInteger(payload.maxProjects, targetCount), targetCount);
       const titlePrefix = readOptionalString(payload.titlePrefix) ?? "HQ Short";
-      const templateId = readOptionalString(payload.templateId);
-      const editingReferencePresetId = readOptionalString(payload.editingReferencePresetId);
+      const premiumPolicy = resolveComicPremiumFlowPolicy({
+        templateId: readOptionalString(payload.templateId),
+        editingReferencePresetId: readOptionalString(payload.editingReferencePresetId)
+      });
       const approvedArcIds = readOptionalStringArray(payload.approvedArcIds, "approvedArcIds");
       const approvedPanelIdsByArcId = readApprovedPanelIdsByArc(payload.approvedPanelIdsByArcId);
 
@@ -981,8 +1081,8 @@ export async function handleMediaBeastRoute(
         channelId,
         maxProjects,
         titlePrefix,
-        ...(templateId !== undefined ? { templateId } : {}),
-        ...(editingReferencePresetId !== undefined ? { editingReferencePresetId } : {})
+        templateId: premiumPolicy.templateId,
+        editingReferencePresetId: premiumPolicy.editingReferencePresetId
       });
 
       const createdProjects = [];
@@ -1023,6 +1123,7 @@ export async function handleMediaBeastRoute(
         createdCount: createdProjects.length,
         requestedCount: targetCount,
         batchOverview: bridgePayload.batchOverview,
+        premiumFlowPolicy: premiumPolicy,
         createdProjects,
         rejectedOpportunities: factoryPlan.rejectedOpportunities,
         riskPolicyGate: {

@@ -1,7 +1,8 @@
-import type { ComicStoryMinerReport } from "./comic-story-miner.js";
+﻿import type { ComicStoryMinerReport } from "./comic-story-miner.js";
 import type { ComicStoryArcV2 } from "./comic-story-arc-miner-v2.js";
 import type { ComicArcScriptBeat, ComicArcScriptDoctorV2Result } from "./comic-arc-script-doctor-v2.js";
 import { evaluateComicShortFinalQualityGate, type ComicShortFinalQaReport } from "./comic-short-final-quality-gate.js";
+import { buildComicIssueNarrativeMap, type ComicIssueNarrativeMap } from "./comic-issue-narrative-map.js";
 import { directComicArcVisualPlan, type ComicArcVisualDirection } from "./comic-arc-visual-director.js";
 import { runComicPanelBattleTest, type ComicPanelBattleTestReport } from "./comic-panel-battle-test.js";
 import { buildComicBeatTimingPlan, type ComicBeatTimingPlan } from "./comic-beat-timing-plan.js";
@@ -9,6 +10,8 @@ import { evaluateComicNarrationHumanizerGate, type ComicNarrationHumanizerGate }
 import { buildComicCaptionImpactPlan, type ComicCaptionImpactPlan } from "./comic-caption-impact-director.js";
 import { checkComicPanelContinuity, type ComicPanelContinuityReport } from "./comic-panel-continuity-checker.js";
 import { evaluateComicPostRenderCropQa, type ComicPostRenderCropQaReport } from "./comic-post-render-crop-qa.js";
+import { evaluateComicNarrativeContinuityHardGate, type ComicNarrativeContinuityHardGate } from "./comic-narrative-continuity-hard-gate.js";
+import { selectComicNarrativeSequence, type ComicSequenceSelectorReport } from "./comic-sequence-selector.js";
 import type { ComicStoryMinerPanelRef } from "./comic-story-miner.js";
 import type {
   ComicProjectBridgeEmotion,
@@ -43,6 +46,21 @@ export type ComicArcProjectBuilderV2Payload = {
     captionImpactPlan: ComicCaptionImpactPlan;
     panelContinuityReport: ComicPanelContinuityReport;
     postRenderCropQa: ComicPostRenderCropQaReport;
+    narrativeContinuityHardGate: ComicNarrativeContinuityHardGate;
+    sequenceSelector: ComicSequenceSelectorReport;
+    storyStrengthGate: ReturnType<typeof storyStrengthGate>;
+    readerSafePanelAssets?: Array<{
+      sceneOrder: number;
+      panelId: string;
+      assetId: string;
+      readerSafeImagePath: string;
+      outputWidth: 1080;
+      outputHeight: 1920;
+      intent: string;
+    }>;
+    readerSafeMaterializationReport?: unknown;
+    issueNarrativeMap?: ComicIssueNarrativeMap;
+    selectedStoryCandidateId?: string | null;
   };
   qualityChecklist: Array<{
     id: string;
@@ -84,6 +102,299 @@ function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
+const META_NARRATION_PATTERN = /\b(shorts?|video|conteudo|viral|render|frame)\b|rende short|segura o short|vende a ideia|prova visual/i;
+
+function displayName(value: string | undefined | null, fallback = "a historia"): string {
+  if (!value) return fallback;
+  const normalized = value.replace(/_/g, " ").toLowerCase().trim();
+  if (normalized === "justice league" || normalized === "liga da justica" || normalized === "liga da justiça") return "Liga da Justiça";
+  if (normalized === "superman") return "Superman";
+  if (normalized === "godzilla") return "Godzilla";
+  if (normalized === "kong") return "Kong";
+  if (normalized === "batman") return "Batman";
+  if (normalized === "wonder woman") return "Mulher-Maravilha";
+  if (normalized === "flash") return "Flash";
+  if (normalized === "green lantern") return "Lanterna Verde";
+  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+const COMIC_CREDIT_OCR_PATTERN = /\b(writer|artist|colorist|letterer|editor|variant\s+cover|cover\s+artist|designer|translation|traducao|roteiro|arte|cores|letras|dc\s+comics|copyright|all\s+rights|brian\s+buccellato|christian\s+duce|luis\s+guerrero|richard\s+starkings|francesco\s+mattina|dan\s+mora)\b/i;
+
+function cleanOcrQuote(value: string | null): string | null {
+  if (!value) return null;
+  const cleaned = value.replace(/[^\p{L}\p{N}?!.,:;"' \-]/gu, " ").replace(/\s+/g, " ").trim();
+  if (COMIC_CREDIT_OCR_PATTERN.test(cleaned)) return null;
+  if (cleaned.length < 12 || cleaned.length > 100) return null;
+  const letters = (cleaned.match(/\p{L}/gu) ?? []).length;
+  const noisy = (cleaned.match(/[0-9#|/\\_=+<>~]/g) ?? []).length;
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length < 4) return null;
+  const shortWordCount = words.filter((word) => word.replace(/[^\p{L}]/gu, "").length <= 2).length;
+  const averageWordLength = letters / Math.max(1, words.length);
+  if (shortWordCount >= 2 || averageWordLength < 3.8) return null;
+  if (letters / Math.max(1, cleaned.length) < 0.62) return null;
+  if (noisy > 1) return null;
+  return cleaned;
+}
+function panelDialogue(panel: ComicStoryMinerPanelRef | undefined): string | null {
+  const runtime = panel as (ComicStoryMinerPanelRef & { localEvidence?: { dialogue?: string[]; narrationBoxes?: string[]; detectedText?: string[]; soundEffects?: string[]; actions?: string[] } }) | undefined;
+  const text = panel?.localDialogue?.[0]
+    ?? panel?.localNarrationBoxes?.[0]
+    ?? runtime?.localEvidence?.dialogue?.[0]
+    ?? runtime?.localEvidence?.narrationBoxes?.[0]
+    ?? panel?.visualCropEvidence?.textSamples?.[0]
+    ?? runtime?.localEvidence?.detectedText?.[0];
+  return cleanOcrQuote(text ? text.replace(/\s+/g, " ").trim().slice(0, 140) : null);
+}
+
+function panelAction(panel: ComicStoryMinerPanelRef | undefined): string | null {
+  const runtime = panel as (ComicStoryMinerPanelRef & { localEvidence?: { actions?: string[]; soundEffects?: string[] } }) | undefined;
+  const raw = panel?.visualCropEvidence?.strongestActionLabel
+    ?? panel?.soundEffects?.[0]
+    ?? runtime?.localEvidence?.actions?.[0]
+    ?? runtime?.localEvidence?.soundEffects?.[0]
+    ?? panel?.visualCropEvidence?.storyFunction
+    ?? null;
+  if (!raw) return null;
+  const normalized = raw.toLowerCase().replace(/_/g, " ").trim();
+  if (!normalized || ["unknown", "splash", "rural scene", "hero presence", "mystical speech"].includes(normalized)) return null;
+  if (normalized.includes("duo presence") || normalized.includes("duo visible")) return "os dois lados finalmente batem de frente";
+  if (normalized.includes("blast")) return "o disparo corta o ar como uma sentença";
+  if (normalized.includes("fight") || normalized.includes("battle")) return "a luta toma conta de tudo";
+  if (normalized.includes("hit") || normalized.includes("impact")) return "o impacto muda o rumo da batalha";
+  if (normalized.includes("run") || normalized.includes("cross")) return "o movimento rasga a tensão em segundos";
+  return normalized;
+}
+
+function roleForSequenceIndex(index: number, total: number, fallback: ComicArcScriptBeat["role"]): ComicArcScriptBeat["role"] {
+  if (index === 0) return "hook";
+  if (index === 1) return "setup";
+  if (index >= total - 1) return "payoff";
+  if (index >= total - 3) return "climax";
+  if (fallback === "hook" || fallback === "setup" || fallback === "payoff") return "tension";
+  return fallback;
+}
+
+function captionForSequenceRole(role: ComicArcScriptBeat["role"], panel: ComicStoryMinerPanelRef | undefined): string {
+  const action = panelAction(panel);
+  if (role === "hook") return "A AMEACA APARECE";
+  if (role === "setup") return panelDialogue(panel) ? "OLHA O QUE ELES PERCEBEM" : "O CONTEXTO MUDA TUDO";
+  if (role === "climax") return action ? "O IMPACTO CHEGA" : "A ESCALA EXPLODE";
+  if (role === "payoff") return "E AGORA?";
+  return action ? "A TENSAO SOBE" : "A HISTORIA AVANCA";
+}
+
+function storyNarrationForPanel(input: {
+  arc: ComicStoryArcV2;
+  panel: ComicStoryMinerPanelRef | undefined;
+  role: ComicArcScriptBeat["role"];
+  index: number;
+  total: number;
+  fallback: string;
+}): string {
+  const main = displayName(input.arc.characters[0], "Liga da Justiça");
+  const mainLead = main === "Liga da Justiça" ? "A Liga da Justiça" : main;
+  const mainObject = main === "Liga da Justiça" ? "a Liga da Justiça" : main;
+  const second = displayName(input.arc.characters[1], "Godzilla");
+  const action = panelAction(input.panel);
+  const progress = input.total <= 1 ? 0 : input.index / Math.max(1, input.total - 1);
+  const pick = (lines: string[]) => lines[Math.abs(input.index) % lines.length]!;
+
+  if (input.role === "hook") {
+    return pick([
+      `${mainLead} achava que ainda existia controle... até ${second} transformar a crise em um desastre impossível de ignorar.`,
+      `Tudo começa como mais uma emergência para ${mainObject}. Só que dessa vez, o problema tem o tamanho de ${second}.`,
+      `Ninguém ali entende ainda, mas essa não é uma missão comum. É o começo de uma colisão entre heróis e monstros.`
+    ]);
+  }
+
+  if (input.role === "setup") {
+    return pick([
+      `O clima parece calmo por um instante, mas por baixo da conversa já existe algo prestes a quebrar.`,
+      `Antes da pancadaria, vem o pior tipo de silêncio: aquele em que todo mundo sente que alguma coisa está errada.`,
+      `Os heróis tentam ler a situação, mas a ameaça já está grande demais para caber em qualquer plano.`
+    ]);
+  }
+
+  if (input.role === "climax") {
+    if (action) {
+      return pick([
+        `Então vem o choque: ${action}, e a cidade inteira parece prender a respiração.`,
+        `${action}. Nesse momento, a luta deixa de ser estratégia e vira sobrevivência.`,
+        `Quando ${action}, a Liga percebe que força bruta talvez não resolva nada.`
+      ]);
+    }
+    return pick([
+      `A partir daqui, a história para de respirar: o perigo cresce e os heróis ficam sem tempo para pensar.`,
+      `O confronto toma conta de tudo, e cada decisão parece pequena perto do tamanho de ${second}.`,
+      `Agora a escala explode; não é mais sobre vencer bonito, é sobre impedir que tudo desabe.`,
+      `A pressão chega no limite, e ${mainObject} entende que o desastre já começou.`,
+      `O impacto muda tudo: se eles errarem agora, a cidade inteira paga o preço.`,
+      `${second} deixa de ser uma ameaça distante e vira o centro absoluto do caos.`
+    ]);
+  }
+
+  if (input.role === "payoff") {
+    return pick([
+      `E o trecho fecha com uma pergunta impossível de largar: se a Liga já está no limite, o que acontece quando ${second} avançar de verdade?`,
+      `No fim, a sensação é uma só: eles sobreviveram ao primeiro choque... mas a guerra ainda nem começou.`,
+      `E é aí que a história prende de vez, porque agora não é mais sobre parar ${second}; é sobre descobrir se alguém consegue.`
+    ]);
+  }
+
+  if (action && progress >= 0.35) {
+    return pick([
+      `${action}, e a tensão vira impacto antes que alguém consiga reagir.`,
+      `${action}; a ameaça deixa de ser teoria e passa a esmagar tudo ao redor.`,
+      `${action}, mostrando que a crise já passou do ponto de controle.`,
+      `${action}; agora cada segundo parece empurrar os heróis para uma escolha pior.`
+    ]);
+  }
+
+  if (progress < 0.28) {
+    return pick([
+      `Os heróis ainda estão montando o tabuleiro: dúvidas, pressa e uma ameaça que ninguém mediu direito.`,
+      `O caos fica suspenso por alguns segundos, como se todo mundo tentasse entender o que acabou de aparecer.`,
+      `Antes da pancadaria, fica claro o detalhe mais perigoso: ninguém sabe o tamanho real do problema.`,
+      `Tudo parece pequeno demais diante do que está chegando, e essa é exatamente a armadilha.`
+    ]);
+  }
+
+  if (progress < 0.52) {
+    return pick([
+      `A tensão cresce sem pedir licença, e qualquer escolha errada pode custar caro.`,
+      `Agora a história começa a apertar: não tem resposta fácil, não tem plano perfeito, só pressão subindo.`,
+      `${mainLead} é empurrada para mais perto do confronto, enquanto ${second} vira uma presença impossível de ignorar.`,
+      `O perigo para de ser uma ideia distante; ele está ali, crescendo diante dos heróis.`,
+      `A cada nova decisão, fica mais claro que ninguém está preparado para uma ameaça desse tamanho.`
+    ]);
+  }
+
+  if (progress < 0.74) {
+    return pick([
+      `O ritmo acelera, e a ameaça não espera ninguém se preparar.`,
+      `A partir daqui, tudo fica mais físico: o espaço diminui, a cidade pesa, e os heróis perdem margem.`,
+      `O perigo muda de escala, e o que parecia uma missão vira uma tentativa desesperada de conter o inevitável.`,
+      `Cada nova imagem deixa a mesma sensação: o desastre está avançando mais rápido que a solução.`
+    ]);
+  }
+
+  const cleanFallback = input.fallback.trim();
+  if (cleanFallback && !META_NARRATION_PATTERN.test(cleanFallback) && !/\bpagina\b|\bpage\b|\bbalao\b|\bwriter\b|\bartist\b|\bhq\b|\bquadro\b|\bcorte\b/i.test(cleanFallback)) return cleanFallback;
+  return pick([
+    `O monstro avança, os heróis recuam, e tudo ganha aquele gosto de desastre chegando.`,
+    `Nesse ponto, a promessa fica clara: não é uma luta comum, é uma colisão de mundos.`,
+    `A sequência fecha o cerco e prepara o momento em que ${mainObject} vai precisar encarar ${second} de verdade.`
+  ]);
+}
+function sanitizeBeatNarration(input: { arc: ComicStoryArcV2; beat: ComicArcScriptBeat; panel: ComicStoryMinerPanelRef | undefined; index: number; total: number }): ComicArcScriptBeat {
+  const narrationText = META_NARRATION_PATTERN.test(input.beat.narrationText)
+    ? storyNarrationForPanel({ arc: input.arc, panel: input.panel, role: input.beat.role, index: input.index, total: input.total, fallback: input.beat.narrationText })
+    : input.beat.narrationText;
+  return {
+    ...input.beat,
+    narrationText,
+    captionText: META_NARRATION_PATTERN.test(input.beat.captionText) ? captionForSequenceRole(input.beat.role, input.panel) : input.beat.captionText
+  };
+}
+
+function avoidLikelyReaderSafeDuplicates(input: {
+  panelIds: string[];
+  panelsById: Map<string, ComicStoryMinerPanelRef>;
+}): string[] {
+  const pagePanelCounts = new Map<number, number>();
+  for (const panel of input.panelsById.values()) {
+    pagePanelCounts.set(panel.pageNumber, (pagePanelCounts.get(panel.pageNumber) ?? 0) + 1);
+  }
+  const selectedByPage = new Map<number, string[]>();
+  for (const panelId of input.panelIds) {
+    const panel = input.panelsById.get(panelId);
+    if (!panel) continue;
+    selectedByPage.set(panel.pageNumber, [...(selectedByPage.get(panel.pageNumber) ?? []), panelId]);
+  }
+  const removed = new Set<string>();
+  for (const [pageNumber, pagePanelIds] of selectedByPage.entries()) {
+    const totalPanelsOnPage = pagePanelCounts.get(pageNumber) ?? pagePanelIds.length;
+    if (totalPanelsOnPage <= 2 && pagePanelIds.length > 1) {
+      const scored = pagePanelIds.map((panelId) => {
+        const panel = input.panelsById.get(panelId);
+        const dialogue = panelDialogue(panel) ? 12 : 0;
+        const action = panelAction(panel) ? 18 : 0;
+        const panelOrderMatch = panelId.match(/panel(\d+)/i);
+        const order = panelOrderMatch ? Number(panelOrderMatch[1]) : 0;
+        return { panelId, score: dialogue + action + order };
+      }).sort((left, right) => right.score - left.score);
+      const keep = scored[0]?.panelId;
+      for (const panelId of pagePanelIds) {
+        if (panelId !== keep) removed.add(panelId);
+      }
+    }
+  }
+  const filtered = input.panelIds.filter((panelId) => !removed.has(panelId));
+  return filtered.length >= 8 ? filtered : input.panelIds;
+}
+function expandScriptWithNarrativeSequence(input: {
+  arc: ComicStoryArcV2;
+  script: ComicArcScriptDoctorV2Result;
+  sequenceSelector: ComicSequenceSelectorReport;
+  panelsById: Map<string, ComicStoryMinerPanelRef>;
+}): ComicArcScriptDoctorV2Result {
+  const sequence = input.sequenceSelector.selectedCandidate;
+  const rawSelectedPanelIds = sequence?.panelSequence.filter((panelId) => input.panelsById.has(panelId)) ?? [];
+  const selectedPanelIds = avoidLikelyReaderSafeDuplicates({ panelIds: rawSelectedPanelIds, panelsById: input.panelsById });
+  if (selectedPanelIds.length < Math.max(7, input.script.beats.length + 2)) {
+    const beats = input.script.beats.map((beat, index) => sanitizeBeatNarration({
+      arc: input.arc,
+      beat,
+      panel: input.panelsById.get(beat.panelId),
+      index,
+      total: input.script.beats.length
+    }));
+    return {
+      ...input.script,
+      beats,
+      fullNarration: beats.map((beat) => beat.narrationText).join(" "),
+      warnings: unique([...input.script.warnings, "comic_meta_narration_sanitized"])
+    };
+  }
+  const sourceBeats = input.script.beats.length ? input.script.beats : [];
+  const maxSequenceScenes = input.arc.pages.length >= 15 ? 18 : 12;
+  const beats = selectedPanelIds.slice(0, maxSequenceScenes).map((panelId, index, all): ComicArcScriptBeat => {
+    const source = sourceBeats[Math.min(sourceBeats.length - 1, Math.round((index / Math.max(1, all.length - 1)) * Math.max(0, sourceBeats.length - 1)))] ?? sourceBeats[0];
+    const panel = input.panelsById.get(panelId);
+    const role = roleForSequenceIndex(index, all.length, source?.role ?? "tension");
+    const base: ComicArcScriptBeat = source ? { ...source, role, panelId, pageNumber: panel?.pageNumber ?? source.pageNumber } : {
+      role,
+      panelId,
+      pageNumber: panel?.pageNumber ?? input.arc.pages[0] ?? 1,
+      narrationText: "",
+      captionText: "",
+      delivery: { energy: role === "hook" || role === "climax" ? "extreme" : "high", pace: role === "setup" ? "controlled" : "fast", pauseAfterMs: role === "climax" ? 140 : role === "payoff" ? 180 : 70, emphasisWords: [], voiceNote: "Narrar como historia em progresso, nao como resumo." },
+      purpose: "keep_retention" as ComicArcScriptBeat["purpose"],
+      evidenceReason: "expanded_from_sequence_panel"
+    };
+    return {
+      ...base,
+      narrationText: storyNarrationForPanel({ arc: input.arc, panel, role, index, total: all.length, fallback: source?.narrationText ?? "" }),
+      captionText: index === all.length - 3 ? "A PRESSAO ESTOURA" : index === all.length - 2 ? "O IMPACTO CHEGA" : captionForSequenceRole(role, panel),
+      delivery: {
+        ...base.delivery,
+        energy: role === "hook" || role === "climax" ? "extreme" : "high",
+        pace: role === "setup" ? "controlled" : "fast",
+        pauseAfterMs: role === "climax" ? 140 : role === "payoff" ? 180 : 70,
+        voiceNote: `${base.delivery.voiceNote} ExpandedSequence: contar a HQ em ordem, sem voltar pagina.`
+      },
+      evidenceReason: `${base.evidenceReason}; expanded_sequence_panel=${panelId}`
+    };
+  });
+  return {
+    ...input.script,
+    beats,
+    fullNarration: beats.map((beat) => beat.narrationText).join(" "),
+    estimatedDurationSeconds: Math.max(30, Math.min(60, beats.length * 4)),
+    warnings: unique([...input.script.warnings, "comic_sequence_expanded_for_story_progression", "comic_meta_narration_sanitized"])
+  };
+}
 function applyHumanizedNarration(input: {
   script: ComicArcScriptDoctorV2Result;
   humanizerGate: ComicNarrationHumanizerGate;
@@ -152,26 +463,41 @@ function captionStyleForArc(arc: ComicStoryArcV2): string {
 }
 
 function transitionForBeat(beat: ComicArcScriptBeat): string {
-  if (beat.role === "hook" || beat.role === "climax") return "flash";
-  if (beat.role === "tension") return "whoosh";
-  return "cut";
+  if (beat.role === "payoff") return "page_tear_hold";
+  return "page_tear";
 }
 
 function durationPlan(beats: ComicArcScriptBeat[], targetDurationSeconds: number): number[] {
   if (beats.length === 0) return [];
+  const minSceneSeconds = 3.2;
+  const maxSceneSeconds = 4;
+  const target = Math.min(Math.max(30, targetDurationSeconds), beats.length * maxSceneSeconds);
   const weights = beats.map((beat) => {
-    if (beat.role === "hook") return 1.1;
-    if (beat.role === "setup") return 1.05;
-    if (beat.role === "tension") return 1.15;
-    if (beat.role === "climax") return 1.25;
-    return 1;
+    if (beat.role === "hook") return 1.05;
+    if (beat.role === "setup") return 1;
+    if (beat.role === "tension") return 1.08;
+    if (beat.role === "climax") return 1.15;
+    return 0.98;
   });
   const weightTotal = weights.reduce((sum, value) => sum + value, 0);
-  const raw = weights.map((weight) => Math.max(5, Math.round((targetDurationSeconds * weight) / weightTotal)));
-  const diff = targetDurationSeconds - raw.reduce((sum, value) => sum + value, 0);
-  const lastIndex = raw.length - 1;
-  raw[lastIndex] = Math.max(5, (raw[lastIndex] ?? 5) + diff);
-  return raw;
+  const raw = weights.map((weight) => Math.max(minSceneSeconds, Math.min(maxSceneSeconds, (target * weight) / weightTotal)));
+  let diff = target - raw.reduce((sum, value) => sum + value, 0);
+  let guard = 0;
+  while (Math.abs(diff) > 0.05 && guard < 200) {
+    const index = guard % raw.length;
+    const current = raw[index] ?? minSceneSeconds;
+    if (diff > 0 && current < maxSceneSeconds) {
+      const delta = Math.min(0.1, diff, maxSceneSeconds - current);
+      raw[index] = current + delta;
+      diff -= delta;
+    } else if (diff < 0 && current > minSceneSeconds) {
+      const delta = Math.min(0.1, -diff, current - minSceneSeconds);
+      raw[index] = current - delta;
+      diff += delta;
+    }
+    guard += 1;
+  }
+  return raw.map((value) => Number(value.toFixed(2)));
 }
 
 function beatTitle(beat: ComicArcScriptBeat, order: number): string {
@@ -188,13 +514,7 @@ function safeCaptionPosition(value: string | undefined, fallback: CaptionPositio
 
 function visualPromptForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, visualDirection?: ComicArcVisualDirection): string {
   return [
-    `Use o painel autorizado ${beat.panelId} como imagem principal da cena.`,
-    `Pagina fonte: ${beat.pageNumber}.`,
-    `Historia do short: ${arc.title}.`,
-    `Papel narrativo: ${beat.role}.`,
-    `Objetivo da narracao: ${beat.purpose}.`,
-    `Foque no elemento que prova esta frase: ${beat.narrationText}`,
-    visualDirection?.renderInstruction ?? "Enquadramento vertical 9:16, zoom dinamico no rosto, balao, impacto ou reacao mais importante.",
+    `Use o painel autorizado ${beat.panelId} como imagem principal da cena.`,    `Pagina fonte: ${beat.pageNumber}.`,    `Historia do short: ${arc.title}.`,    `Papel narrativo: ${beat.role}.`,    `Objetivo da narracao: ${beat.purpose}.`,    `Foque no elemento que prova esta frase: ${beat.narrationText}`,    visualDirection?.renderInstruction ?? "Enquadramento vertical 9:16, zoom dinamico no rosto, balao, impacto ou reacao mais importante.",
     "Nao inventar evento, personagem ou acao fora da HQ; usar somente material autorizado/importado."
   ].join(" ");
 }
@@ -218,6 +538,18 @@ function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, scr
     captionRenderPlan: premiumDirectives?.captionCue ?? null,
     continuityInstruction: premiumDirectives?.continuityCut ?? null,
     cropQaInstruction: premiumDirectives?.cropQaScene ?? null,
+    comicDynamicEditing: {
+      maxVisualHoldSeconds: timingScene?.maxVisualHoldSeconds ?? 4,
+      transitionStyle: timingScene?.cutStyle === "hold_reveal" ? "page_tear_hold" : "page_tear",
+      motionPolicy: "anchored_zoom_no_shake",
+      focusTarget: visualDirection?.primaryTarget ?? "story_evidence",
+      anchorPoint: visualDirection?.anchorPoint ?? { x: 0.5, y: 0.5 },
+      cameraMove: visualDirection?.cameraMove ?? "context_slow_push",
+      startScale: visualDirection?.startScale ?? 1.02,
+      endScale: visualDirection?.endScale ?? 1.12,
+      pageTearEverySeconds: timingScene?.maxVisualHoldSeconds ?? 4,
+      note: "Nao deixar tela parada mais de 4s; usar rasgo de pagina e zoom ancorado no balao/rosto/acao citado pela narracao."
+    },
     viewerPromise: arc.viewerPromise,
     payoff: arc.payoff,
     requiresManualPanelImport: true,
@@ -225,10 +557,91 @@ function visualRecipeForBeat(beat: ComicArcScriptBeat, arc: ComicStoryArcV2, scr
   });
 }
 
+function storyStrengthGate(input: {
+  arc: ComicStoryArcV2;
+  script: ComicArcScriptDoctorV2Result;
+  finalQualityGate: ComicShortFinalQaReport;
+  panelBattleTest: ComicPanelBattleTestReport;
+  narrativeContinuityHardGate: ComicNarrativeContinuityHardGate;
+  sequenceSelector: ComicSequenceSelectorReport;
+}): { status: "ready" | "needs_review" | "blocked"; score: number; blockers: string[]; warnings: string[] } {
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  const sequence = input.sequenceSelector.selectedCandidate;
+  if (!sequence) blockers.push("story_sequence_missing");
+  if (sequence && sequence.score < 70) blockers.push(`story_sequence_score_too_low:${sequence.score}`);
+  else if (sequence && sequence.score < 82) warnings.push(`story_sequence_score_needs_review:${sequence.score}`);
+  const sequenceWarnings = input.sequenceSelector.warnings.join("|");
+  if (/missing_payoff|missing_visual_conflict|missing_opening_context/i.test(sequenceWarnings)) blockers.push("story_sequence_missing_beginning_conflict_or_payoff");
+  if (/crop_score_low|material_score_low/i.test(sequenceWarnings)) warnings.push("story_sequence_visual_material_needs_review");
+  if (input.arc.overallScore < 74) blockers.push(`arc_story_score_too_low:${input.arc.overallScore}`);
+  else if (input.arc.overallScore < 82) warnings.push(`arc_story_score_needs_review:${input.arc.overallScore}`);
+  if (input.script.retentionScore < 66) blockers.push(`retention_score_too_low:${input.script.retentionScore}`);
+  else if (input.script.retentionScore < 80) warnings.push(`retention_score_needs_review:${input.script.retentionScore}`);
+  if (input.panelBattleTest.averageSelectedScore < 72) blockers.push(`panel_battle_score_too_low:${input.panelBattleTest.averageSelectedScore}`);
+  else if (input.panelBattleTest.averageSelectedScore < 82) warnings.push(`panel_battle_score_needs_review:${input.panelBattleTest.averageSelectedScore}`);
+  if (input.narrativeContinuityHardGate.status !== "passed") blockers.push("narrative_hard_gate_blocked");
+  if (input.finalQualityGate.status === "rejected") blockers.push("final_quality_gate_rejected");
+  if (input.finalQualityGate.status === "needs_review") warnings.push("final_quality_gate_needs_review");
+
+  let score = 0;
+  score += input.arc.overallScore * 0.22;
+  score += input.script.retentionScore * 0.16;
+  score += input.script.humanScore * 0.12;
+  score += (sequence?.score ?? 0) * 0.2;
+  score += input.panelBattleTest.averageSelectedScore * 0.16;
+  score += input.narrativeContinuityHardGate.score * 0.1;
+  score += input.finalQualityGate.score * 0.04;
+  score -= blockers.length * 18;
+  score -= warnings.length * 6;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  return {
+    status: blockers.length > 0 ? "blocked" : warnings.length <= 1 && score >= 82 ? "ready" : "needs_review",
+    score,
+    blockers,
+    warnings
+  };
+}
+
+function arcWithSelectedCandidateContext(input: { arc: ComicStoryArcV2; candidate: NonNullable<ReturnType<typeof buildComicIssueNarrativeMap>["storyCandidates"][number]> | null | undefined }): ComicStoryArcV2 {
+  if (!input.candidate) return input.arc;
+  const overlapsPanel = input.arc.panelIds.some((panelId) => input.candidate?.panelIds.includes(panelId));
+  const overlapsPage = input.arc.pages.some((page) => input.candidate?.pages.includes(page));
+  const sameArc = input.candidate.source === "story_arc_v2" && input.candidate.id.endsWith(input.arc.id);
+  return {
+    ...input.arc,
+    pages: unique([...input.candidate.pages]).sort((left, right) => left - right),
+    panelIds: unique([...input.candidate.panelIds]),
+    characters: unique([...input.candidate.characters, ...input.arc.characters]),
+    themes: unique([...input.candidate.themes, ...input.arc.themes]),
+    recommendedDurationSeconds: Math.max(30, input.arc.recommendedDurationSeconds, input.candidate.estimatedDurationSeconds),
+    reasons: unique([...input.arc.reasons, "selected_issue_story_candidate_context_applied", "selected_candidate_pages_take_priority"]),
+    warnings: unique([...input.arc.warnings, ...input.candidate.warnings.map((warning) => `selected_candidate:${warning}`)])
+  };
+}
+
+function selectedCandidateProjectBonus(project: ComicArcProjectBuilderV2Payload, selectedCandidate: NonNullable<ReturnType<typeof buildComicIssueNarrativeMap>["storyCandidates"][number]> | null | undefined): number {
+  if (!selectedCandidate) return 0;
+  const arc = project.renderBlueprintHints.storyArc;
+  const panelOverlap = arc.panelIds.filter((panelId) => selectedCandidate.panelIds.includes(panelId)).length;
+  const pageOverlap = arc.pages.filter((page) => selectedCandidate.pages.includes(page)).length;
+  const sameArc = selectedCandidate.source === "story_arc_v2" && selectedCandidate.id.endsWith(arc.id);
+  return (sameArc ? 3500 : 0) + panelOverlap * 80 + pageOverlap * 40;
+}
+function projectStorySelectionScore(project: ComicArcProjectBuilderV2Payload): number {
+  const gate = project.renderBlueprintHints.narrativeContinuityHardGate;
+  const storyGate = project.renderBlueprintHints.storyStrengthGate;
+  const sequence = project.renderBlueprintHints.sequenceSelector.selectedCandidate;
+  const statusBonus = storyGate.status === "ready" ? 5000 : storyGate.status === "needs_review" ? 1200 : 0;
+  const hardGateBonus = gate.status === "passed" ? 900 : 0;
+  const finalGateBonus = project.renderBlueprintHints.finalQualityGate.status === "passed" ? 600 : project.renderBlueprintHints.finalQualityGate.status === "needs_review" ? 150 : 0;
+  return statusBonus + hardGateBonus + finalGateBonus + storyGate.score * 24 + (sequence?.score ?? 0) * 9 + project.renderBlueprintHints.panelBattleTest.averageSelectedScore * 7 + project.renderBlueprintHints.storyArc.overallScore * 5 + project.renderBlueprintHints.script.retentionScore * 4;
+}
 function buildScenes(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; targetDurationSeconds: number; arcVisualPlan: ReturnType<typeof directComicArcVisualPlan>; beatTimingPlan: ComicBeatTimingPlan; narrationHumanizerGate: ComicNarrationHumanizerGate; captionImpactPlan: ComicCaptionImpactPlan; panelContinuityReport: ComicPanelContinuityReport; postRenderCropQa: ComicPostRenderCropQaReport }): ComicProjectBridgeSceneInput[] {
   const durations = durationPlan(input.script.beats, input.targetDurationSeconds);
   const visualPreset = visualPresetForArc(input.arc);
-  const captionStyle = captionStyleForArc(input.arc);
+  const longStoryReaderSafeMode = input.arc.pages.length >= 15;
+  const captionStyle = longStoryReaderSafeMode ? "comic_reader_safe_subtle" : captionStyleForArc(input.arc);
   return input.script.beats.map((beat, index) => {
     const visualDirection = input.arcVisualPlan.scenes.find((scene) => scene.panelId === beat.panelId && scene.beatRole === beat.role);
     const timingScene = input.beatTimingPlan.scenes.find((scene) => scene.panelId === beat.panelId && scene.beatRole === beat.role);
@@ -261,7 +674,7 @@ function buildScenes(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctor
       generationSeed: null,
       transition: transitionForBeat(beat),
       captionStyle,
-      captionPosition: safeCaptionPosition(captionCue?.safeZone, beat.role === "hook" || beat.role === "climax" ? "center" : "lower-third"),
+      captionPosition: longStoryReaderSafeMode ? "bottom" : safeCaptionPosition(captionCue?.safeZone, beat.role === "hook" || beat.role === "climax" ? "center" : "lower-third"),
       captionEmphasisWords: captionCue?.emphasisWords ?? beat.delivery.emphasisWords,
       energyLevel: beat.role === "hook" || beat.role === "climax" ? 9 : beat.role === "tension" ? 8 : 7,
       narrationStatus: null,
@@ -278,11 +691,7 @@ function buildProject(input: BuildComicArcProjectPayloadV2Input, targetDurationS
     status: "SCENE_PLANNING",
     channelId: input.channelId,
     script: [
-      `SHORT EXTRAIDO DE ARCO DE HQ: ${input.script.title}`,
-      `Tipo de arco: ${input.arc.type}`,
-      `Promessa: ${input.arc.viewerPromise}`,
-      `Payoff: ${input.arc.payoff}`,
-      "",
+      `SHORT EXTRAIDO DE ARCO DE HQ: ${input.script.title}`,      `Tipo de arco: ${input.arc.type}`,      `Promessa: ${input.arc.viewerPromise}`,      `Payoff: ${input.arc.payoff}`,      "",
       input.script.beats.map((beat, index) => `${index + 1}. ${beat.narrationText}`).join("\n"),
       "",
       "Observacao: payload candidate-first; importar paineis e aprovar manualmente antes de renderizar."
@@ -292,7 +701,7 @@ function buildProject(input: BuildComicArcProjectPayloadV2Input, targetDurationS
     templateId: input.templateId ?? "comic_story_premium",
     editingReferencePresetId: input.editingReferencePresetId ?? "builtin-comic-viral-reference-antman",
     editingStyleSummary: null,
-    defaultCaptionStyle: captionStyleForArc(input.arc),
+    defaultCaptionStyle: input.arc.pages.length >= 15 ? "comic_reader_safe_subtle" : captionStyleForArc(input.arc),
     backgroundMusicAssetId: null,
     musicPresetId,
     voiceoverAssetId: null,
@@ -316,16 +725,13 @@ function buildManifest(beats: ComicArcScriptBeat[], arc: ComicStoryArcV2): Comic
     recommendedTags: [
       "comic-panel",
       "comic-arc-v2",
-      `arc:${arc.id}`,
-      `arc-type:${arc.type}`,
-      `role:${beat.role}`,
-      `page:${beat.pageNumber}`
+      `arc:${arc.id}`,      `arc-type:${arc.type}`,      `role:${beat.role}`,      `page:${beat.pageNumber}`
     ],
     importRequired: true
   }));
 }
 
-function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; scenes: ComicProjectBridgeSceneInput[]; targetDurationSeconds: number; finalQualityGate: ComicShortFinalQaReport; panelBattleTest: ComicPanelBattleTestReport; narrationHumanizerGate: ComicNarrationHumanizerGate; captionImpactPlan: ComicCaptionImpactPlan; panelContinuityReport: ComicPanelContinuityReport; postRenderCropQa: ComicPostRenderCropQaReport }): ComicArcProjectBuilderV2Payload["qualityChecklist"] {
+function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2Result; scenes: ComicProjectBridgeSceneInput[]; targetDurationSeconds: number; finalQualityGate: ComicShortFinalQaReport; panelBattleTest: ComicPanelBattleTestReport; narrationHumanizerGate: ComicNarrationHumanizerGate; captionImpactPlan: ComicCaptionImpactPlan; panelContinuityReport: ComicPanelContinuityReport; postRenderCropQa: ComicPostRenderCropQaReport; narrativeContinuityHardGate: ComicNarrativeContinuityHardGate; sequenceSelector: ComicSequenceSelectorReport; storyStrengthGate: ReturnType<typeof storyStrengthGate> }): ComicArcProjectBuilderV2Payload["qualityChecklist"] {
   return [
     {
       id: "manual_rights_review",
@@ -358,6 +764,20 @@ function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2
       detail: `score=${input.finalQualityGate.score}/${input.finalQualityGate.minimumScore}; blockers=${input.finalQualityGate.blockers.join(",") || "none"}; warnings=${input.finalQualityGate.warnings.join(",") || "none"}.`
     },
     {
+      id: "story_strength_gate",
+      label: "Historia forte o bastante para short",
+      status: input.storyStrengthGate.status,
+      detail: `score=${input.storyStrengthGate.score}; blockers=${input.storyStrengthGate.blockers.join(",") || "none"}; warnings=${input.storyStrengthGate.warnings.join(",") || "none"}.`
+    },
+    {
+      id: "comic_sequence_selector",
+      label: "Sequencia narrativa continua escolhida",
+      status: input.sequenceSelector.selectedCandidate && input.sequenceSelector.selectedCandidate.score >= 78 ? "ready" : input.sequenceSelector.selectedCandidate ? "needs_review" : "blocked",
+      detail: input.sequenceSelector.selectedCandidate
+        ? `score=${input.sequenceSelector.selectedCandidate.score}; pages=${input.sequenceSelector.selectedCandidate.pageSequence.join(">")}; panels=${input.sequenceSelector.selectedCandidate.panelSequence.join(",")}; warnings=${input.sequenceSelector.warnings.join(",") || "none"}.`
+        : `no_sequence_selected; warnings=${input.sequenceSelector.warnings.join(",") || "none"}.`
+    },
+    {
       id: "panel_battle_test",
       label: "Paineis testados contra alternativas",
       status: input.panelBattleTest.averageSelectedScore >= 78 ? "ready" : input.panelBattleTest.averageSelectedScore >= 68 ? "needs_review" : "blocked",
@@ -386,11 +806,18 @@ function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2
       label: "QA de crop, legenda e foco visual",
       status: input.postRenderCropQa.status === "passed" ? "ready" : input.postRenderCropQa.status === "rejected" ? "blocked" : "needs_review",
       detail: `score=${input.postRenderCropQa.score}; overlap=${input.postRenderCropQa.captionOverlapRiskCount}; weakFocus=${input.postRenderCropQa.weakFocusCount}.`
-    },    {
+    },
+    {
       id: "scene_structure",
       label: "Hook, tensao, climax e payoff planejados",
       status: input.scenes.length >= 4 && input.script.beats.some((beat) => beat.role === "hook") && input.script.beats.some((beat) => beat.role === "climax") ? "ready" : "needs_review",
       detail: `roles=${input.script.beats.map((beat) => beat.role).join(",")}.`
+    },
+    {
+      id: "narrative_continuity_hard_gate",
+      label: "Historia em ordem, sem voltar paginas",
+      status: input.narrativeContinuityHardGate.status === "passed" ? "ready" : "blocked",
+      detail: `score=${input.narrativeContinuityHardGate.score}/${input.narrativeContinuityHardGate.minimumScore}; pages=${input.narrativeContinuityHardGate.pageSequence.join(">")}; repeated=${input.narrativeContinuityHardGate.repeatedPanelCount}; backward=${input.narrativeContinuityHardGate.backwardPageJumpCount}; blockers=${input.narrativeContinuityHardGate.blockers.join(",") || "none"}.`
     },
     {
       id: "panel_assets_required",
@@ -408,12 +835,29 @@ function checklist(input: { arc: ComicStoryArcV2; script: ComicArcScriptDoctorV2
 }
 
 export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayloadV2Input): ComicArcProjectBuilderV2Payload {
-  const targetDurationSeconds = Math.max(30, input.script.estimatedDurationSeconds, input.arc.recommendedDurationSeconds);
+  let targetDurationSeconds = Math.max(30, input.script.estimatedDurationSeconds, input.arc.recommendedDurationSeconds);
   const panelsById = input.panelsById ?? new Map();
-  const panelBattleTest = runComicPanelBattleTest({ arc: input.arc, script: input.script, panelsById });
+  const sequenceSelector = selectComicNarrativeSequence({
+    arc: input.arc,
+    script: input.script,
+    panelsById,
+    maxWindowPages: Math.max(20, input.arc.pages.length),
+    minWindowPages: input.arc.pages.length >= 15 ? 15 : 1,
+    minPanels: input.arc.pages.length >= 15 ? 12 : Math.min(8, Math.max(3, panelsById.size || input.arc.panelIds.length || input.script.beats.length)),
+    maxPanels: input.arc.pages.length >= 15 ? Math.min(18, Math.max(15, panelsById.size || input.arc.panelIds.length || input.script.beats.length)) : Math.min(12, Math.max(8, panelsById.size || input.arc.panelIds.length || input.script.beats.length))
+  });
+  const panelBattleTest = runComicPanelBattleTest({
+    arc: input.arc,
+    script: input.script,
+    panelsById,
+    preferredPanelIds: sequenceSelector.selectedCandidate?.panelSequence,
+    preferredBeatPanelIds: sequenceSelector.selectedCandidate?.suggestedBeatPanelIds
+  });
   const preHumanizedScript: ComicArcScriptDoctorV2Result = { ...input.script, beats: panelBattleTest.optimizedBeats };
   const preHumanizerGate = evaluateComicNarrationHumanizerGate({ arc: input.arc, script: preHumanizedScript });
-  const optimizedScript = applyHumanizedNarration({ script: preHumanizedScript, humanizerGate: preHumanizerGate });
+  const humanizedScript = applyHumanizedNarration({ script: preHumanizedScript, humanizerGate: preHumanizerGate });
+  const optimizedScript = expandScriptWithNarrativeSequence({ arc: input.arc, script: humanizedScript, sequenceSelector, panelsById });
+  targetDurationSeconds = Math.max(input.arc.pages.length >= 15 ? 40 : 30, Math.min(Math.max(targetDurationSeconds, input.arc.pages.length >= 15 ? 40 : 30), optimizedScript.beats.length * 4));
   const arcVisualPlan = directComicArcVisualPlan({
     arc: input.arc,
     scriptBeats: optimizedScript.beats,
@@ -424,7 +868,11 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
   const narrationHumanizerGate = evaluateComicNarrationHumanizerGate({ arc: input.arc, script: optimizedScript });
   const captionImpactPlan = buildComicCaptionImpactPlan({ beats: optimizedScript.beats, timingPlan: beatTimingPlan, visualDirections: arcVisualPlan.scenes });
   const panelContinuityReport = checkComicPanelContinuity({ arc: input.arc, beats: optimizedScript.beats, visualDirections: arcVisualPlan.scenes });
-  const postRenderCropQa = evaluateComicPostRenderCropQa({ visualDirections: arcVisualPlan.scenes, captionImpactPlan });
+  const postRenderCropQa = evaluateComicPostRenderCropQa({
+    visualDirections: arcVisualPlan.scenes,
+    captionImpactPlan,
+    longStoryReaderSafeMode: input.arc.pages.length >= 15
+  });
   const scenes = buildScenes({ arc: input.arc, script: optimizedScript, targetDurationSeconds, arcVisualPlan, beatTimingPlan, narrationHumanizerGate: preHumanizerGate, captionImpactPlan, panelContinuityReport, postRenderCropQa });
   const project = buildProject({ ...input, script: optimizedScript }, scenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0));
   const panelAssetManifest = buildManifest(optimizedScript.beats, input.arc);
@@ -434,7 +882,24 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
     scenes,
     panelAssetManifest,
     targetDurationSeconds: project.durationTarget ?? targetDurationSeconds,
-    arcVisualPlan
+    arcVisualPlan,
+    longStoryReaderSafeMode: input.arc.pages.length >= 15
+  });
+  const narrativeContinuityHardGate = evaluateComicNarrativeContinuityHardGate({
+    beats: optimizedScript.beats,
+    panelBattleTest,
+    panelContinuityReport,
+    postRenderCropQa,
+    finalQualityGate,
+    allowReaderSafeWideContext: input.arc.pages.length >= 15
+  });
+  const storyGate = storyStrengthGate({
+    arc: input.arc,
+    script: optimizedScript,
+    finalQualityGate,
+    panelBattleTest,
+    narrativeContinuityHardGate,
+    sequenceSelector
   });
   const warnings = unique([
     ...input.arc.warnings,
@@ -448,14 +913,20 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
     "no_render_started_automatically",
     `comic_final_quality_gate:${finalQualityGate.status}`,
     `comic_arc_visual_alignment:${arcVisualPlan.averagePanelNarrationAlignmentScore}`,
+    `comic_sequence_selector:${sequenceSelector.selectedCandidate?.score ?? 0}`,
+    ...sequenceSelector.warnings.map((warning) => `comic_sequence_selector_warning:${warning}`),
+    `comic_story_strength_gate:${storyGate.status}:${storyGate.score}`,
+    ...storyGate.blockers.map((blocker) => `story_strength_blocker:${blocker}`),
+    ...storyGate.warnings.map((warning) => `story_strength_warning:${warning}`),
     `comic_panel_battle_test:${panelBattleTest.averageSelectedScore}`,
     `comic_beat_timing:${beatTimingPlan.averagePacingScore}`,
     `comic_narration_humanizer:${narrationHumanizerGate.score}`,
     `comic_caption_impact:${captionImpactPlan.averageImpactScore}`,
     `comic_panel_continuity:${panelContinuityReport.score}`,
-    `comic_post_render_crop_qa:${postRenderCropQa.score}`
+    `comic_post_render_crop_qa:${postRenderCropQa.score}`,
+    `comic_narrative_continuity_hard_gate:${narrativeContinuityHardGate.status}:${narrativeContinuityHardGate.score}`,
+    ...narrativeContinuityHardGate.blockers.map((blocker) => `narrative_hard_gate_blocker:${blocker}`)
   ]);
-
   return {
     source: "comic-arc-project-builder-v2",
     generatedAt: new Date().toISOString(),
@@ -481,9 +952,12 @@ export function buildComicArcProjectPayloadV2(input: BuildComicArcProjectPayload
       narrationHumanizerGate,
       captionImpactPlan,
       panelContinuityReport,
-      postRenderCropQa
+      postRenderCropQa,
+      narrativeContinuityHardGate,
+      sequenceSelector,
+      storyStrengthGate: storyGate
     },
-    qualityChecklist: checklist({ arc: input.arc, script: optimizedScript, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds, finalQualityGate, panelBattleTest, narrationHumanizerGate, captionImpactPlan, panelContinuityReport, postRenderCropQa }),
+    qualityChecklist: checklist({ arc: input.arc, script: optimizedScript, scenes, targetDurationSeconds: project.durationTarget ?? targetDurationSeconds, finalQualityGate, panelBattleTest, narrationHumanizerGate, captionImpactPlan, panelContinuityReport, postRenderCropQa, narrativeContinuityHardGate, sequenceSelector, storyStrengthGate: storyGate }),
     warnings,
     candidateFirst: true,
     requiresManualApproval: true
@@ -497,10 +971,13 @@ export function buildComicArcProjectsFromMinerV2(input: {
   templateId?: string | null;
   editingReferencePresetId?: string | null;
   titlePrefix?: string;
+  storyCandidateId?: string | null;
 }): ComicArcBatchProjectBuilderV2Payload {
   const arcReport = input.report.storyArcMinerV2;
   const warnings: string[] = [];
   if (!arcReport) warnings.push("story_arc_miner_v2_missing");
+  const issueNarrativeMap = buildComicIssueNarrativeMap(input.report);
+  const selectedStoryCandidateId = input.storyCandidateId ?? issueNarrativeMap.productionStrategy.firstShortId ?? null;
 
   const arcs = arcReport?.arcs ?? [];
   const scripts = arcReport?.scriptDoctor.recommendedScripts.length
@@ -508,26 +985,79 @@ export function buildComicArcProjectsFromMinerV2(input: {
     : arcReport?.scriptDoctor.scripts ?? [];
   const arcById = new Map(arcs.map((arc) => [arc.id, arc]));
   const panelsById = new Map(input.report.opportunities.flatMap((opportunity) => opportunity.panels.map((panel) => [panel.panelId, panel] as const)));
-  const maxProjects = Math.max(1, Math.min(input.maxProjects ?? scripts.length, scripts.length || 1));
-  const projects = scripts
-    .slice(0, maxProjects)
+  const selectedCandidate = selectedStoryCandidateId
+    ? issueNarrativeMap.storyCandidates.find((candidate) => candidate.id === selectedStoryCandidateId)
+    : null;
+  const selectedPanelIds = new Set(selectedCandidate?.panelIds ?? []);
+  const selectedPages = new Set(selectedCandidate?.pages ?? []);
+  const sortedScripts = [...scripts].sort((left, right) => {
+    if (!selectedCandidate) return 0;
+    const leftArc = arcById.get(left.arcId);
+    const rightArc = arcById.get(right.arcId);
+    const scoreArc = (arc: typeof leftArc) => {
+      if (!arc) return 0;
+      let score = 0;
+      for (const panelId of arc.panelIds) if (selectedPanelIds.has(panelId)) score += 12;
+      for (const page of arc.pages) if (selectedPages.has(page)) score += 3;
+      if (arc.characters.some((character) => selectedCandidate.characters.includes(character))) score += 8;
+      if (arc.themes.some((theme) => selectedCandidate.themes.includes(theme))) score += 6;
+      if (selectedCandidate.source === "story_arc_v2" && selectedCandidate.id.endsWith(arc.id)) score += 80;
+      return score;
+    };
+    return scoreArc(rightArc) - scoreArc(leftArc);
+  });
+  if (selectedCandidate) warnings.push(`issue_narrative_map_selected_story:${selectedCandidate.id}`);
+  if (selectedStoryCandidateId && !selectedCandidate) warnings.push(`issue_narrative_map_story_candidate_not_found:${selectedStoryCandidateId}`);
+  const maxProjects = Math.max(1, Math.min(input.maxProjects ?? sortedScripts.length, sortedScripts.length || 1));
+  const candidateProjects = sortedScripts
     .flatMap((script) => {
       const arc = arcById.get(script.arcId);
       if (!arc) {
         warnings.push(`missing_arc_for_script:${script.arcId}`);
         return [];
       }
+      const projectArc = arcWithSelectedCandidateContext({ arc, candidate: selectedCandidate });
+      const scopedPanelsById = selectedCandidate
+        ? new Map([...panelsById.entries()].filter(([panelId]) => selectedCandidate.panelIds.includes(panelId)))
+        : panelsById;
       return [buildComicArcProjectPayloadV2({
-        arc,
+        arc: projectArc,
         script,
         channelId: input.channelId,
         ...(input.templateId !== undefined ? { templateId: input.templateId } : {}),
         ...(input.editingReferencePresetId !== undefined ? { editingReferencePresetId: input.editingReferencePresetId } : {}),
         ...(input.titlePrefix !== undefined ? { titlePrefix: input.titlePrefix } : {}),
-        panelsById
+        panelsById: scopedPanelsById.size > 0 ? scopedPanelsById : panelsById
       })];
+    })
+    .map((project) => ({
+      ...project,
+      renderBlueprintHints: {
+        ...project.renderBlueprintHints,
+        issueNarrativeMap,
+        selectedStoryCandidateId
+      },
+      warnings: unique([
+        ...project.warnings,
+        "issue_narrative_map_applied",
+        ...(selectedCandidate ? [`selected_story_candidate:${selectedCandidate.id}`] : [])
+      ])
+    }))
+    .sort((left, right) => {
+      const leftStoryGate = left.renderBlueprintHints.storyStrengthGate;
+      const rightStoryGate = right.renderBlueprintHints.storyStrengthGate;
+      return selectedCandidateProjectBonus(right, selectedCandidate) - selectedCandidateProjectBonus(left, selectedCandidate)
+        || projectStorySelectionScore(right) - projectStorySelectionScore(left)
+        || rightStoryGate.score - leftStoryGate.score
+        || right.renderBlueprintHints.storyArc.overallScore - left.renderBlueprintHints.storyArc.overallScore;
     });
-
+  const projects = candidateProjects.slice(0, maxProjects);
+  if (candidateProjects.length > 0 && projects.every((project) => project.renderBlueprintHints.narrativeContinuityHardGate.status !== "passed")) {
+    warnings.push("narrative_hard_gate:no_candidate_passed");
+  }
+  if (candidateProjects.length > 0 && projects.every((project) => project.renderBlueprintHints.storyStrengthGate.status === "blocked")) {
+    warnings.push("story_strength_gate:no_candidate_ready_for_render");
+  }
   if (projects.length === 0) warnings.push("no_comic_arc_projects_generated");
 
   return {
@@ -540,6 +1070,7 @@ export function buildComicArcProjectsFromMinerV2(input: {
       ...warnings,
       ...(arcReport?.warnings ?? []),
       "candidate_first_payload_only",
+      "issue_narrative_map_applied",
       "no_assets_imported_automatically",
       "no_render_started_automatically"
     ]),
@@ -547,13 +1078,3 @@ export function buildComicArcProjectsFromMinerV2(input: {
     requiresManualApproval: true
   };
 }
-
-
-
-
-
-
-
-
-
-

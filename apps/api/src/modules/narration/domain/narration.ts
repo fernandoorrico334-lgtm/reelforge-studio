@@ -113,7 +113,7 @@ export interface CreateNarrationJobInput {
 export type UpdateNarrationJobInput = Partial<CreateNarrationJobInput>;
 
 export interface GenerateNarrationRequestInput {
-  provider: "mock-tts" | "windows-sapi-local";
+  provider: "mock-tts" | "windows-sapi-local" | "f5-tts-local";
   voicePackId: string | null;
   text: string | null;
   language: string | null;
@@ -246,7 +246,8 @@ export function validateGenerateNarrationRequestInput(
 
   if (
     provider !== "mock-tts" &&
-    provider !== "windows-sapi-local"
+    provider !== "windows-sapi-local" &&
+    provider !== "f5-tts-local"
   ) {
     throw new ValidationError(
       `provider must be one of: ${narrationProviderIds.join(", ")}.`

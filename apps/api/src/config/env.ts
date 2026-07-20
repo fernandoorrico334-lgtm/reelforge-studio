@@ -8,6 +8,9 @@ export interface AppEnv {
   comfyUiWorkflowDir: string;
   comfyUiTimeoutMs: number;
   narrationWindowsSapiEnabled: boolean;
+  f5TtsEnabled: boolean;
+  f5TtsBaseUrl: string;
+  f5TtsTimeoutMs: number;
   port: number;
 }
 
@@ -24,6 +27,7 @@ function parseDataBackend(input: string | undefined): DataBackend {
 export function loadEnv(): AppEnv {
   const port = Number(process.env.PORT ?? 4000);
   const comfyUiTimeoutMs = Number(process.env.COMFYUI_TIMEOUT_MS ?? 300000);
+  const f5TtsTimeoutMs = Number(process.env.F5_TTS_TIMEOUT_MS ?? 300000);
 
   if (!Number.isFinite(port) || port <= 0) {
     throw new Error("PORT must be a positive number.");
@@ -31,6 +35,10 @@ export function loadEnv(): AppEnv {
 
   if (!Number.isFinite(comfyUiTimeoutMs) || comfyUiTimeoutMs <= 0) {
     throw new Error("COMFYUI_TIMEOUT_MS must be a positive number.");
+  }
+
+  if (!Number.isFinite(f5TtsTimeoutMs) || f5TtsTimeoutMs <= 0) {
+    throw new Error("F5_TTS_TIMEOUT_MS must be a positive number.");
   }
 
   return {
@@ -50,6 +58,11 @@ export function loadEnv(): AppEnv {
       String(process.env.NARRATION_WINDOWS_SAPI_ENABLED ?? "false")
         .trim()
         .toLowerCase() === "true",
+    f5TtsEnabled:
+      String(process.env.F5_TTS_ENABLED ?? "false").trim().toLowerCase() ===
+      "true",
+    f5TtsBaseUrl: (process.env.F5_TTS_BASE_URL ?? "http://127.0.0.1:7860").trim(),
+    f5TtsTimeoutMs,
     port
   };
 }

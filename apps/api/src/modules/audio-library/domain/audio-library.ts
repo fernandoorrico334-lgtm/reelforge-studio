@@ -1,4 +1,4 @@
-import {
+﻿import {
   audioLicenseStatuses,
   musicGenres,
   musicMoods,
@@ -14,6 +14,7 @@ import {
 import { ValidationError } from "../../../shared/errors.js";
 import type {
   BuildBeatSyncPlanRequestInput,
+  AutoMapSfxCuesRequestInput,
   SelectMusicRequestInput
 } from "../application/audio-library-service.js";
 import type {
@@ -188,6 +189,48 @@ function normalizeOptionalEnergyTimeline(value: unknown) {
   }) as MusicAssetProfile["energyTimeline"];
 }
 
+export function validateAutoMapSfxCuesRequestInput(payload: unknown): AutoMapSfxCuesRequestInput {
+  const record = asRecord(payload);
+  const rawCues = record.cues;
+
+  if (!Array.isArray(rawCues) || rawCues.length === 0) {
+    throw new ValidationError("cues must be a non-empty array.");
+  }
+
+  const cues = rawCues.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new ValidationError(`cues[${index}] must be an object.`);
+    }
+
+    const cue = entry as Record<string, unknown>;
+    return {
+      cueId: normalizeOptionalString(cue.cueId, `cues[${index}].cueId`) ?? null,
+      sceneId: normalizeOptionalString(cue.sceneId, `cues[${index}].sceneId`) ?? null,
+      sceneOrder: normalizeOptionalNumber(cue.sceneOrder, `cues[${index}].sceneOrder`) ?? null,
+      cueIndex: normalizeOptionalNumber(cue.cueIndex, `cues[${index}].cueIndex`) ?? null,
+      text: normalizeOptionalString(cue.text, `cues[${index}].text`) ?? null,
+      keyword: normalizeOptionalString(cue.keyword, `cues[${index}].keyword`) ?? null,
+      sfxSuggestion: normalizeString(cue.sfxSuggestion, `cues[${index}].sfxSuggestion`),
+      emphasis: normalizeOptionalString(cue.emphasis, `cues[${index}].emphasis`) ?? null,
+      colorMood: normalizeOptionalString(cue.colorMood, `cues[${index}].colorMood`) ?? null,
+      startSeconds: normalizeOptionalNumber(cue.startSeconds, `cues[${index}].startSeconds`) ?? null,
+      absoluteStartSeconds: normalizeOptionalNumber(cue.absoluteStartSeconds, `cues[${index}].absoluteStartSeconds`) ?? null,
+      volume: normalizeOptionalNumber(cue.volume, `cues[${index}].volume`) ?? null
+    };
+  });
+
+  const allowUnknownLicense = normalizeOptionalBoolean(
+    record.allowUnknownLicense,
+    "allowUnknownLicense"
+  );
+
+  return {
+    cues,
+    ...(allowUnknownLicense !== undefined ? { allowUnknownLicense } : {}),
+    preferredUseCase: normalizeOptionalString(record.preferredUseCase, "preferredUseCase") ?? null,
+    maxDurationSeconds: normalizeOptionalNumber(record.maxDurationSeconds, "maxDurationSeconds") ?? null
+  };
+}
 export function validateMusicProfileFilters(
   rawFilters: Record<string, string | undefined>
 ): MusicProfileFilters {

@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+﻿import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, appendFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
@@ -336,7 +336,7 @@ function toJobRelativePath(jobRoot: string, absolutePath: string) {
 
 
 function buildSubtitleScenes(blueprint: RenderBlueprint) {
-  const subtitleScenes: Array<{ order: number; captionText: string | null; duration: number; captionStyle: string; highlightedWords?: string[]; animation?: string | null; readingImpactScore?: number | null }> = [];
+  const subtitleScenes: Array<{ order: number; captionText: string | null; duration: number; captionStyle: string; highlightedWords?: string[]; animation?: string | null; readingImpactScore?: number | null; keyword?: string | null; emphasis?: string | null; colorMood?: string | null }> = [];
   for (const scene of [...blueprint.scenes].sort((left, right) => left.order - right.order)) {
     if (scene.captionCues.length === 0) {
       subtitleScenes.push({
@@ -358,7 +358,10 @@ function buildSubtitleScenes(blueprint: RenderBlueprint) {
         captionStyle: scene.captionStyle.style.id,
         highlightedWords: cue.highlightedWords,
         animation: cue.animation,
-        readingImpactScore: cue.readingImpactScore
+        readingImpactScore: cue.readingImpactScore,
+        keyword: cue.keyword,
+        emphasis: cue.emphasis,
+        colorMood: cue.colorMood
       });
     }
   }
@@ -473,13 +476,97 @@ function buildSceneVisualSegments(
   return segments;
 }
 
+type FocusAnchor = {
+  x: number;
+  y: number;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function clampRatio(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0.08, Math.min(0.92, value))
+    : fallback;
+}
+
+function getComicDynamicEditingRecipe(scene: RenderBlueprintScene): Record<string, unknown> | null {
+  const recipe = scene.premiumVisualRecipe;
+  if (!isRecord(recipe)) return null;
+  const dynamic = recipe.comicDynamicEditing;
+  return isRecord(dynamic) ? dynamic : null;
+}
+
+function getSceneFocusAnchor(scene: RenderBlueprintScene): FocusAnchor | null {
+  const dynamic = getComicDynamicEditingRecipe(scene);
+  const dynamicAnchor = isRecord(dynamic?.anchorPoint) ? dynamic.anchorPoint : null;
+  const smartAnchor = scene.smartCropDirective?.anchorPoint ?? null;
+  if (dynamicAnchor) {
+    return {
+      x: clampRatio(dynamicAnchor.x, smartAnchor?.x ?? 0.5),
+      y: clampRatio(dynamicAnchor.y, smartAnchor?.y ?? 0.5)
+    };
+  }
+  if (smartAnchor) {
+    return {
+      x: clampRatio(smartAnchor.x, 0.5),
+      y: clampRatio(smartAnchor.y, 0.5)
+    };
+  }
+  return null;
+}
+
+function shouldAvoidShake(scene: RenderBlueprintScene) {
+  const dynamic = getComicDynamicEditingRecipe(scene);
+  return String(dynamic?.motionPolicy ?? "").includes("no_shake") || scene.transition.includes("page_tear");
+}
+
+function shouldUsePageTear(scene: RenderBlueprintScene) {
+  const dynamic = getComicDynamicEditingRecipe(scene);
+  return scene.transition.includes("page_tear") || String(dynamic?.transitionStyle ?? "").includes("page_tear");
+}
+
+function getMaxVisualHoldSeconds(scene: RenderBlueprintScene) {
+  const dynamic = getComicDynamicEditingRecipe(scene);
+  const value = dynamic?.maxVisualHoldSeconds;
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(2.5, Math.min(4, value))
+    : 4;
+}
+
+function buildPageTearFilters(scene: RenderBlueprintScene, duration: number): string[] {
+  if (!shouldUsePageTear(scene)) return [];
+  const maxHold = getMaxVisualHoldSeconds(scene);
+  const cutTimes = [0];
+  for (let time = maxHold; time < duration - 0.45; time += maxHold) {
+    cutTimes.push(Number(time.toFixed(2)));
+  }
+
+  return cutTimes.flatMap((start, index) => {
+    const st = start.toFixed(3);
+    const sweep = `(t-${st})`;
+    const direction = index % 2 === 0 ? 1 : -1;
+    const xExpression = direction > 0
+      ? `if(between(t,${st},${(start + 0.28).toFixed(3)}),-180+${sweep}*4700,2000)`
+      : `if(between(t,${st},${(start + 0.28).toFixed(3)}),1160-${sweep}*4700,2000)`;
+    const shadowExpression = direction > 0
+      ? `if(between(t,${st},${(start + 0.28).toFixed(3)}),-230+${sweep}*4700,2000)`
+      : `if(between(t,${st},${(start + 0.28).toFixed(3)}),1210-${sweep}*4700,2000)`;
+    return [
+      `drawbox=x='${shadowExpression}':y=0:w=54:h=1920:color=black@0.28:t=fill`,
+      `drawbox=x='${xExpression}':y=0:w=38:h=1920:color=white@0.82:t=fill`,
+    ];
+  });
+}
 function createImageZoomExpressions(
   totalFrames: number,
   startZoom: number,
   endZoom: number,
   panMode: RenderBlueprintScene["visualPreset"]["preset"]["defaultPanMode"],
   order: number,
-  energyLevel: number | null
+  energyLevel: number | null,
+  focusAnchor: FocusAnchor | null
 ) {
   const zoomStep = Math.max(Math.abs(endZoom - startZoom) / Math.max(totalFrames, 1), 0.0001);
   const direction = endZoom >= startZoom ? "in" : "out";
@@ -494,32 +581,39 @@ function createImageZoomExpressions(
   let xExpression = `${xRange}/2`;
   let yExpression = `${yRange}/2`;
 
-  switch (panMode) {
-    case "slow-left":
-      xExpression = `${xRange}*(0.72-0.42*on/${Math.max(totalFrames, 1)})`;
-      yExpression = `${yRange}*(0.36+0.06*sin(on/${phase}))`;
-      break;
-    case "slow-right":
-      xExpression = `${xRange}*(0.12+0.46*on/${Math.max(totalFrames, 1)})`;
-      yExpression = `${yRange}*(0.34+0.05*cos(on/${phase}))`;
-      break;
-    case "parallax":
-      xExpression = `${xRange}*(0.18+0.42*on/${Math.max(totalFrames, 1)})`;
-      yExpression = `${yRange}*(0.24+0.16*sin(on/${Math.max(phase, 8)}))`;
-      break;
-    case "push-in":
-    case "push-out":
-      xExpression = `${xRange}/2+6*sin(on/${Math.max(phase, 8)})`;
-      yExpression = `${yRange}*(0.42+0.04*cos(on/${Math.max(phase, 8)}))`;
-      break;
-    case "drift":
-      xExpression = `${xRange}*(0.28+0.12*sin(on/${Math.max(phase, 8)}))`;
-      yExpression = `${yRange}*(0.32+0.08*cos(on/${Math.max(phase, 8)}))`;
-      break;
-    default:
-      xExpression = `${xRange}/2`;
-      yExpression = `${yRange}/2`;
-      break;
+  if (focusAnchor) {
+    const anchorX = focusAnchor.x.toFixed(4);
+    const anchorY = focusAnchor.y.toFixed(4);
+    xExpression = `min(max(iw*${anchorX}-(iw/zoom/2),0),max(iw-iw/zoom,0))`;
+    yExpression = `min(max(ih*${anchorY}-(ih/zoom/2),0),max(ih-ih/zoom,0))`;
+  } else {
+    switch (panMode) {
+      case "slow-left":
+        xExpression = `${xRange}*(0.72-0.42*on/${Math.max(totalFrames, 1)})`;
+        yExpression = `${yRange}*(0.36+0.06*sin(on/${phase}))`;
+        break;
+      case "slow-right":
+        xExpression = `${xRange}*(0.12+0.46*on/${Math.max(totalFrames, 1)})`;
+        yExpression = `${yRange}*(0.34+0.05*cos(on/${phase}))`;
+        break;
+      case "parallax":
+        xExpression = `${xRange}*(0.18+0.42*on/${Math.max(totalFrames, 1)})`;
+        yExpression = `${yRange}*(0.24+0.16*sin(on/${Math.max(phase, 8)}))`;
+        break;
+      case "push-in":
+      case "push-out":
+        xExpression = `${xRange}/2+6*sin(on/${Math.max(phase, 8)})`;
+        yExpression = `${yRange}*(0.42+0.04*cos(on/${Math.max(phase, 8)}))`;
+        break;
+      case "drift":
+        xExpression = `${xRange}*(0.28+0.12*sin(on/${Math.max(phase, 8)}))`;
+        yExpression = `${yRange}*(0.32+0.08*cos(on/${Math.max(phase, 8)}))`;
+        break;
+      default:
+        xExpression = `${xRange}/2`;
+        yExpression = `${yRange}/2`;
+        break;
+    }
   }
 
   return {
@@ -528,7 +622,6 @@ function createImageZoomExpressions(
     yExpression
   };
 }
-
 function buildColorFilters(plan: ReturnType<typeof resolveCinematicFilterPlan>["plan"]) {
   return [
     `eq=brightness=${plan.brightness.toFixed(3)}:contrast=${plan.contrast.toFixed(
@@ -649,7 +742,8 @@ async function renderImageSegment(
     plan.zoomEnd,
     plan.panMode === "center" ? "drift" : plan.panMode,
     scene.order,
-    scene.energyLevel
+    scene.energyLevel,
+    getSceneFocusAnchor(scene)
   );
   const smartCrop = normalizedSmartCropFilter(scene);
   const filter = joinFilters([
@@ -658,6 +752,7 @@ async function renderImageSegment(
     `crop=${overscan.width}:${overscan.height}`,
     `zoompan=z='${zoomExpressions.zoomExpression}':x='${zoomExpressions.xExpression}':y='${zoomExpressions.yExpression}':d=${totalFrames}:s=1080x1920:fps=30`,
     ...buildColorFilters(plan),
+    ...buildPageTearFilters(scene, duration),
     ...fadeFilters,
     "fps=30",
     "format=yuv420p"
@@ -728,11 +823,12 @@ async function renderVideoSegment(
       scene,
       plan.driftX,
       plan.driftY,
-      plan.shakeX,
-      plan.shakeY
+      shouldAvoidShake(scene) ? 0 : plan.shakeX,
+      shouldAvoidShake(scene) ? 0 : plan.shakeY
     ),
     ...buildColorFilters(plan),
     options.overlayFilter ?? null,
+    ...buildPageTearFilters(scene, duration),
     ...fadeFilters,
     "fps=30",
     "format=yuv420p"
@@ -1573,4 +1669,3 @@ export async function renderCinematicV2({
     audioQualityReport: audioResult.audioQualityReport
   };
 }
-

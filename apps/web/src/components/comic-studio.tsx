@@ -614,7 +614,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
           minScore,
           titlePrefix: "Comic Arc",
           editingReferencePresetId: "builtin-comic-viral-reference-antman",
-          templateId: "comic_story_premium",
+          templateId: "comic_story_premium_v1",
           approvedArcIds: review.approvedArcIds,
           approvedPanelIdsByArcId: review.approvedPanelIdsByArcId,
           selectedPanelReplacementsByArcId: review.selectedPanelReplacementsByArcId
@@ -641,7 +641,7 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
           minScore,
           titlePrefix: "Comic Studio",
           editingReferencePresetId: "builtin-comic-viral-reference-antman",
-          templateId: "comic_drama"
+          templateId: "comic_story_premium_v1"
         });
         setCreated(response);
       } catch (err) {

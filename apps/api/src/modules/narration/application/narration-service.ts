@@ -1,6 +1,7 @@
 import {
   buildNarrationPlan,
   buildNarrationTextFromScene,
+  generateF5TtsNarrationWav,
   generateMockNarrationWav,
   generateWindowsSapiNarrationWav,
   getNarrationProviders,
@@ -31,7 +32,13 @@ import type {
   UseNarrationForSceneResponse
 } from "../domain/narration.js";
 
-type NarrationEnv = Pick<AppEnv, "narrationWindowsSapiEnabled">;
+type NarrationEnv = Pick<
+  AppEnv,
+  | "narrationWindowsSapiEnabled"
+  | "f5TtsEnabled"
+  | "f5TtsBaseUrl"
+  | "f5TtsTimeoutMs"
+>;
 
 function buildNarrationJobNotFoundError(jobId: string) {
   return new NotFoundError(`Narration job '${jobId}' was not found.`);
@@ -50,7 +57,19 @@ function resolveNarrationEnv(
         ? appEnv.narrationWindowsSapiEnabled
         : String(process.env.NARRATION_WINDOWS_SAPI_ENABLED ?? "false")
             .trim()
-            .toLowerCase() === "true"
+            .toLowerCase() === "true",
+    f5TtsEnabled:
+      typeof appEnv.f5TtsEnabled === "boolean"
+        ? appEnv.f5TtsEnabled
+        : String(process.env.F5_TTS_ENABLED ?? "false").trim().toLowerCase() ===
+          "true",
+    f5TtsBaseUrl:
+      appEnv.f5TtsBaseUrl?.trim() ||
+      (process.env.F5_TTS_BASE_URL ?? "http://127.0.0.1:7860").trim(),
+    f5TtsTimeoutMs:
+      typeof appEnv.f5TtsTimeoutMs === "number" && appEnv.f5TtsTimeoutMs > 0
+        ? appEnv.f5TtsTimeoutMs
+        : Number(process.env.F5_TTS_TIMEOUT_MS ?? 300_000)
   };
 }
 
@@ -281,7 +300,8 @@ async function writeNarrationWav(
   text: string,
   voicePack: VoicePack,
   outputAbsolutePath: string,
-  language: string
+  language: string,
+  env: NarrationEnv
 ) {
   if (provider === "windows-sapi-local") {
     return generateWindowsSapiNarrationWav({
@@ -291,6 +311,21 @@ async function writeNarrationWav(
       language,
       outputAbsolutePath
     });
+  }
+
+  if (provider === "f5-tts-local") {
+    const audio = await generateF5TtsNarrationWav({
+      provider,
+      voicePackId: voicePack.id,
+      text,
+      language,
+      outputAbsolutePath,
+      baseUrl: env.f5TtsBaseUrl,
+      timeoutMs: env.f5TtsTimeoutMs
+    });
+
+    await writeFile(outputAbsolutePath, audio.wavBuffer);
+    return audio;
   }
 
   const audio = generateMockNarrationWav({
@@ -309,7 +344,9 @@ export async function listNarrationProvidersSnapshot(
 ): Promise<NarrationProvidersSnapshot> {
   const resolved = resolveNarrationEnv(appEnv);
   return getNarrationProviders({
-    windowsSapiEnabled: resolved.narrationWindowsSapiEnabled
+    windowsSapiEnabled: resolved.narrationWindowsSapiEnabled,
+    f5TtsEnabled: resolved.f5TtsEnabled,
+    f5TtsBaseUrl: resolved.f5TtsBaseUrl
   });
 }
 
@@ -490,6 +527,12 @@ export async function generateNarrationForScene(
     );
   }
 
+  if (input.provider === "f5-tts-local" && !env.f5TtsEnabled) {
+    throw new ValidationError(
+      "f5-tts-local is disabled. Set F5_TTS_ENABLED=true and F5_TTS_BASE_URL to enable it."
+    );
+  }
+
   const plan = buildNarrationPlan({
     provider: input.provider,
     voicePackId: voicePack.id,
@@ -524,7 +567,8 @@ export async function generateNarrationForScene(
       text,
       voicePack,
       artifact.outputAbsolutePath,
-      plan.language
+      plan.language,
+      env
     );
     const asset = await assetRepository.create(
       createNarrationAssetInput(

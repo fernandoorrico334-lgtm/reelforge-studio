@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
+﻿import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   getMusicPresetById,
   getMusicPresets
@@ -7,6 +7,7 @@ import type { AssetRepository } from "../../modules/assets/application/asset-rep
 import type { AudioLibraryRepository } from "../../modules/audio-library/application/audio-library-repository.js";
 import {
   analyzeMusicLibraryAsset,
+  autoMapSfxLibraryCues,
   buildProjectBeatSyncPlan,
   listMusicLibrary,
   listSfxLibrary,
@@ -15,6 +16,7 @@ import {
   updateSfxLibraryProfile
 } from "../../modules/audio-library/application/audio-library-service.js";
 import {
+  validateAutoMapSfxCuesRequestInput,
   validateBeatSyncPlanRequestInput,
   validateMusicProfileFilters,
   validatePartialMusicProfileInput,
@@ -135,6 +137,21 @@ export async function handleAudioLibraryRoute(
       return true;
     }
 
+    if (pathname === "/audio/sfx-library/auto-map") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody(request);
+      const input = validateAutoMapSfxCuesRequestInput(payload);
+      const result = await autoMapSfxLibraryCues(
+        dependencies.assetRepository,
+        input
+      );
+      sendJson(response, 200, result);
+      return true;
+    }
     if (pathname === "/audio/sfx-library") {
       if (request.method !== "GET") {
         sendMethodNotAllowed(response, ["GET"]);

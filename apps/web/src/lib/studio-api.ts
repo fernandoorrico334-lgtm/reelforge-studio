@@ -546,6 +546,18 @@ const mockNarrationProviders: NarrationProviderDescriptor[] = [
     offline: true,
     status: "disabled",
     reason: "Habilite NARRATION_WINDOWS_SAPI_ENABLED=true na API local."
+  },
+  {
+    id: "f5-tts-local",
+    name: "F5-TTS Local",
+    description: "Provider premium opcional via bridge local F5-TTS.",
+    available: false,
+    enabled: false,
+    requiresWindows: false,
+    offline: true,
+    status: "disabled",
+    reason: "Habilite F5_TTS_ENABLED=true e F5_TTS_BASE_URL na API local.",
+    baseUrl: "http://127.0.0.1:7860"
   }
 ];
 

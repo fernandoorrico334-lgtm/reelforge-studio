@@ -91,7 +91,7 @@ import type { NarrationRetentionOverlayMetadata } from "./narration-retention-ad
 export interface NarrationOverlayPlan {
   language: string;
   voicePackHint: string;
-  provider: "mock-tts" | "windows-sapi-local";
+  provider: "mock-tts" | "windows-sapi-local" | "f5-tts-local";
   productionEmotion: string;
   pacing: "tight" | "balanced" | "breathing";
   voiceVariations: NarrationVoiceVariation[];

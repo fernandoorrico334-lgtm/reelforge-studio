@@ -1,4 +1,4 @@
-import type { ComicStoryArcV2 } from "./comic-story-arc-miner-v2.js";
+﻿import type { ComicStoryArcV2 } from "./comic-story-arc-miner-v2.js";
 import type { ComicArcScriptDoctorV2Result } from "./comic-arc-script-doctor-v2.js";
 import type { ComicProjectBridgeSceneInput, ComicProjectPanelAssetManifestEntry } from "./comic-project-bridge.js";
 import type { directComicArcVisualPlan } from "./comic-arc-visual-director.js";
@@ -41,6 +41,7 @@ export type ComicShortFinalQaInput = {
   panelAssetManifest: ComicProjectPanelAssetManifestEntry[];
   targetDurationSeconds: number;
   arcVisualPlan?: ReturnType<typeof directComicArcVisualPlan>;
+  longStoryReaderSafeMode?: boolean;
 };
 
 const genericNarrationPatterns = [
@@ -88,6 +89,7 @@ export function evaluateComicShortFinalQualityGate(input: ComicShortFinalQaInput
   const strengths: string[] = [];
 
   if (totalDuration < 30) blockers.push("duration_below_30_seconds");
+  if (totalDuration > 59) blockers.push("duration_above_59_seconds");
   if (input.scenes.length < 4) blockers.push("too_few_scenes_for_story_short");
   if (!roles.has("hook")) blockers.push("missing_hook_beat");
   if (!roles.has("climax")) blockers.push("missing_climax_beat");
@@ -100,8 +102,11 @@ export function evaluateComicShortFinalQualityGate(input: ComicShortFinalQaInput
   if (missingPanelScenes > 0) blockers.push("scenes_missing_visual_panel_reference");
   if (repeatedPanelCount > Math.max(1, Math.floor(panelIds.length * 0.35))) warnings.push("too_many_reused_panels");
   if (averageSceneDuration > 9) warnings.push("scene_pace_too_slow_for_shorts");
-  if (input.arcVisualPlan && averagePanelNarrationAlignmentScore < 72) blockers.push("panel_narration_alignment_below_minimum");
-  else if (input.arcVisualPlan && averagePanelNarrationAlignmentScore < 82) warnings.push("panel_narration_alignment_needs_review");
+  const allowCinematicLongStoryNarration = Boolean(input.longStoryReaderSafeMode && input.arc.pages.length >= 15 && input.scenes.length >= 15 && totalDuration >= 40 && repeatedPanelCount === 0);
+  if (input.arcVisualPlan && averagePanelNarrationAlignmentScore < 72) {
+    if (allowCinematicLongStoryNarration && averagePanelNarrationAlignmentScore >= 60) warnings.push("panel_narration_alignment_cinematic_long_story_review");
+    else blockers.push("panel_narration_alignment_below_minimum");
+  } else if (input.arcVisualPlan && averagePanelNarrationAlignmentScore < 82) warnings.push("panel_narration_alignment_needs_review");
   if (input.arc.visualStrengthScore >= 85) strengths.push("strong_visual_arc");
   if (input.script.humanScore >= 90) strengths.push("human_narration_ready");
   if (input.script.retentionScore >= 85) strengths.push("strong_retention_structure");
@@ -126,11 +131,13 @@ export function evaluateComicShortFinalQualityGate(input: ComicShortFinalQaInput
 
   const nextActions: string[] = [];
   if (blockers.includes("duration_below_30_seconds")) nextActions.push("Aumentar duracao total para pelo menos 30 segundos.");
+  if (blockers.includes("duration_above_59_seconds")) nextActions.push("Comprimir a espinha narrativa para no maximo 59 segundos, sem acelerar artificialmente a voz.");
   if (blockers.includes("generic_narration_detected")) nextActions.push("Reprocessar Script Doctor para remover frases genericas e criar fala mais humana.");
   if (blockers.includes("scenes_missing_visual_panel_reference")) nextActions.push("Selecionar paineis reais para todas as cenas antes do render.");
   if (warnings.includes("scene_pace_too_slow_for_shorts")) nextActions.push("Dividir cenas longas em cortes menores com zoom/SFX.");
   if (warnings.includes("too_many_reused_panels")) nextActions.push("Substituir paineis repetidos por alternativas da mesma pagina/arco.");
-  if (blockers.includes("panel_narration_alignment_below_minimum") || warnings.includes("panel_narration_alignment_needs_review")) nextActions.push("Trocar painel ou reescrever narracao para provar exatamente o que aparece no quadro.");
+  if (blockers.includes("panel_narration_alignment_below_minimum")) nextActions.push("Trocar painel ou reescrever narracao para provar exatamente o que aparece no quadro.");
+  if (warnings.includes("panel_narration_alignment_needs_review") || warnings.includes("panel_narration_alignment_cinematic_long_story_review")) nextActions.push("Revisar se a narracao cinematografica acompanha o sentido visual da sequencia, sem exigir leitura literal de cada balao.");
   if (nextActions.length === 0) nextActions.push("Revisar direitos, importar paineis aprovados e validar render blueprint antes do render final.");
 
   return {

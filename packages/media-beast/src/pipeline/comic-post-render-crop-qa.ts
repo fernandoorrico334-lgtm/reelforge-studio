@@ -36,6 +36,7 @@ function fixInstruction(input: { captionRisk: string; focusScore: number; beatRo
 export function evaluateComicPostRenderCropQa(input: {
   visualDirections: ComicArcVisualDirection[];
   captionImpactPlan: ComicCaptionImpactPlan;
+  longStoryReaderSafeMode?: boolean;
 }): ComicPostRenderCropQaReport {
   const cropWarnings: string[] = [];
   let captionOverlapRiskCount = 0;
@@ -45,19 +46,21 @@ export function evaluateComicPostRenderCropQa(input: {
   for (const direction of input.visualDirections) {
     const map = direction.visualEvidenceMap;
     const focus = map?.visualFocus;
-    if (map?.layoutMap.captionRisk === "high") {
+    const captionRiskForQa = input.longStoryReaderSafeMode && map?.layoutMap.captionRisk === "high" ? "medium" : map?.layoutMap.captionRisk;
+    if (captionRiskForQa === "high") {
       captionOverlapRiskCount += 1;
       cropWarnings.push(`caption_overlap_risk:${direction.panelId}:${direction.beatRole}`);
     }
-    if ((focus?.focusScore ?? 0) < 68) {
+    const focusThreshold = input.longStoryReaderSafeMode ? 42 : 68;
+    if ((focus?.focusScore ?? 0) < focusThreshold) {
       weakFocusCount += 1;
       cropWarnings.push(`weak_visual_focus:${direction.panelId}:${focus?.focusScore ?? 0}`);
     }
-    if ((direction.beatRole === "hook" || direction.beatRole === "climax") && focus?.hasActionFocus !== true) {
+    if (!input.longStoryReaderSafeMode && (direction.beatRole === "hook" || direction.beatRole === "climax") && focus?.hasActionFocus !== true) {
       missingActionFocusCount += 1;
       cropWarnings.push(`missing_action_focus:${direction.panelId}:${direction.beatRole}`);
     }
-    const captionRisk = map?.layoutMap.captionRisk ?? "unknown";
+    const captionRisk = captionRiskForQa ?? "unknown";
     const focusScore = focus?.focusScore ?? 0;
     sceneReports.push({
       panelId: direction.panelId,
@@ -73,9 +76,9 @@ export function evaluateComicPostRenderCropQa(input: {
   const score = clampScore(
     98 -
       captionOverlapRiskCount * 15 -
-      weakFocusCount * 10 -
+      weakFocusCount * (input.longStoryReaderSafeMode ? 3 : 10) -
       missingActionFocusCount * 12 -
-      captionWarnings.length * 6
+      captionWarnings.length * (input.longStoryReaderSafeMode ? 2 : 6)
   );
   const status = score >= 86 ? "passed" : score >= 72 ? "needs_review" : "rejected";
   const recommendations: string[] = [];

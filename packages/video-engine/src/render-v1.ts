@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+﻿import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, appendFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { basename, relative, resolve } from "node:path";
@@ -496,7 +496,7 @@ function buildMicroclipTextOverlayFilter(
 
 
 function buildSubtitleScenes(blueprint: RenderBlueprint) {
-  const subtitleScenes: Array<{ order: number; captionText: string | null; duration: number; captionStyle: string; highlightedWords?: string[]; animation?: string | null; readingImpactScore?: number | null }> = [];
+  const subtitleScenes: Array<{ order: number; captionText: string | null; duration: number; captionStyle: string; highlightedWords?: string[]; animation?: string | null; readingImpactScore?: number | null; keyword?: string | null; emphasis?: string | null; colorMood?: string | null }> = [];
   for (const scene of [...blueprint.scenes].sort((left, right) => left.order - right.order)) {
     if (scene.captionCues.length === 0) {
       subtitleScenes.push({
@@ -518,7 +518,10 @@ function buildSubtitleScenes(blueprint: RenderBlueprint) {
         captionStyle: scene.captionStyle.style.id,
         highlightedWords: cue.highlightedWords,
         animation: cue.animation,
-        readingImpactScore: cue.readingImpactScore
+        readingImpactScore: cue.readingImpactScore,
+        keyword: cue.keyword,
+        emphasis: cue.emphasis,
+        colorMood: cue.colorMood
       });
     }
   }
@@ -1409,4 +1412,3 @@ export async function renderBlueprintV1({
     audioQualityReport: audioResult.audioQualityReport
   };
 }
-

@@ -1,7 +1,8 @@
-import {
+﻿import {
   buildBeatSyncPlan,
   getMusicPresetById,
   selectMusicForReel,
+  autoMapSfxCues,
   suggestMusicPresetByContext,
   summarizeMusicProfile,
   type AudioLicenseStatus,
@@ -14,6 +15,7 @@ import {
   type MusicSourceType,
   type MusicUseCase,
   type SfxAssetProfile,
+  type SfxAutoMapCueInput,
   type SfxLibraryItem
 } from "@reelforge/audio-engine";
 import { analyzeAudioAsset } from "@reelforge/audio-engine/music-analysis";
@@ -71,6 +73,13 @@ export interface BuildBeatSyncPlanRequestInput {
   musicAssetId?: string | null;
   musicPresetId?: string | null;
   reelDurationSeconds?: number | null;
+}
+
+export interface AutoMapSfxCuesRequestInput {
+  cues: SfxAutoMapCueInput[];
+  allowUnknownLicense?: boolean;
+  preferredUseCase?: string | null;
+  maxDurationSeconds?: number | null;
 }
 
 export interface BuildBeatSyncPlanResponse {
@@ -524,6 +533,50 @@ export async function analyzeMusicLibraryAsset(
   };
 }
 
+export async function autoMapSfxLibraryCues(
+  assetRepository: AssetRepository,
+  input: AutoMapSfxCuesRequestInput
+) {
+  const sfxLibrary = await listSfxLibrary(assetRepository);
+  const sfxAssets: SfxLibraryItem[] = sfxLibrary
+    .filter((item) => item.status === "profiled" || item.status === "pending")
+    .map((item) => {
+      const profile = item.profile ?? defaultSfxProfile(item.asset);
+      return {
+        asset: {
+          id: item.asset.id,
+          filename: item.asset.filename,
+          type: item.asset.type,
+          tags: item.asset.tags,
+          recommendedUse: item.asset.recommendedUse,
+          duration: item.asset.duration
+        },
+        profile
+      };
+    });
+
+  const mappedCues = autoMapSfxCues(input.cues, sfxAssets, {
+    allowUnknownLicense: input.allowUnknownLicense ?? false,
+    preferredUseCase: input.preferredUseCase === "football" ||
+      input.preferredUseCase === "transition" ||
+      input.preferredUseCase === "impact_moment" ||
+      input.preferredUseCase === "reveal" ||
+      input.preferredUseCase === "microclip" ||
+      input.preferredUseCase === "generic"
+      ? input.preferredUseCase
+      : null,
+    maxDurationSeconds: input.maxDurationSeconds ?? null
+  });
+
+  return {
+    cueCount: input.cues.length,
+    mappedCount: mappedCues.filter((item) => item.selectedAsset !== null).length,
+    mappedCues,
+    warnings: [
+      ...new Set(mappedCues.flatMap((item) => item.warnings))
+    ]
+  };
+}
 export async function selectMusicForProject(
   assetRepository: AssetRepository,
   input: SelectMusicRequestInput

@@ -78,6 +78,7 @@ export type VisualGenerationStatus =
 export const narrationProviders = [
   "mock-tts",
   "windows-sapi-local",
+  "f5-tts-local",
   "manual",
   "other"
 ] as const;

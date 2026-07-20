@@ -32,6 +32,16 @@ const genericPatterns = [
   /voce nao vai acreditar/i,
   /olha so/i,
   /nesse video/i,
+  /esse video/i,
+  /shorts?/i,
+  /conteudo/i,
+  /viral/i,
+  /render/i,
+  /frame/i,
+  /rende short/i,
+  /segura o short/i,
+  /vende a ideia/i,
+  /prova visual/i,
   /algo acontece/i,
   /essa cena/i,
   /neste painel/i,
@@ -86,7 +96,7 @@ function subjectPair(arc: ComicStoryArcV2) {
 function humanizeLine(input: { arc: ComicStoryArcV2; role: string; line: string }) {
   const { main, second } = subjectPair(input.arc);
   const line = input.line.trim();
-  if (input.role === "hook") return `${main} contra ${second} nao devia funcionar... mas esse quadro vende a ideia em segundos.`;
+  if (input.role === "hook") return `${main} contra ${second} parece impossivel... ate a primeira pagina mostrar que a ameaca e real.`;
   if (input.role === "setup") {
     return line.length > 95
       ? `Antes da pancada, a pagina faz uma coisa importante: ela mostra que ${main} nao esta diante de um inimigo comum.`
@@ -97,11 +107,11 @@ function humanizeLine(input: { arc: ComicStoryArcV2; role: string; line: string 
       ? line
       : `E aqui a tensao muda de tamanho: cada quadro empurra ${main} para perto do impossivel.`;
   }
-  if (input.role === "climax") return `Esse e o momento que segura o short: ${main} e ${second} viram uma imagem de impacto puro.`;
+  if (input.role === "climax") return `Quando ${main} encara ${second}, a historia para de explicar e vira impacto puro.`;
   if (input.role === "payoff") {
     return line.includes("?")
       ? line
-      : `E e por isso essa luta rende short: ela deixa uma pergunta simples... quem realmente aguenta esse impacto?`;
+      : `E a pergunta que sobra e simples: quem realmente aguenta esse impacto ate o fim?`;
   }
   return line;
 }

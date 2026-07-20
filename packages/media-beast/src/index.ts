@@ -72,6 +72,10 @@ export * from "./pipeline/comic-panel-battle-test.js";
 export * from "./pipeline/comic-beat-timing-plan.js";
 export * from "./pipeline/comic-final-video-dna.js";
 export * from "./pipeline/comic-smart-crop-director.js";
+export * from "./pipeline/comic-reader-safe-panel-assets.js";
+export * from "./pipeline/comic-issue-narrative-map.js";
+export * from "./pipeline/comic-project-reader-safe-materializer.js";
+export * from "./pipeline/comic-narrative-continuity-hard-gate.js";
 export * from "./pipeline/local-comic-ingestion.js";
 export * from "./pipeline/comics-scene-evidence-audit.js";
 export * from "./pipeline/comics-crop-visual-evidence.js";
@@ -134,5 +138,49 @@ export * from "./editorial/topic-knowledge.js";
 export * from "./editorial/discovery-ranker.js";
 export * from "./editorial/short-form-editorial-pack.js";
 
+
+
+
+
+
+export * from "./pipeline/comic-sequence-selector.js";
+export * from "./pipeline/comic-saga-narrative-map.js";
+export * from "./pipeline/comic-story-event-extractor.js";
+
+export * from "./pipeline/comic-hq-wide-story-bank.js";
+export * from "./pipeline/comic-story-bank-project-builder.js";
+export * from "./pipeline/comic-story-compression-director.js";
+export * from "./pipeline/comic-panel-shot-director.js";
+export * from "./pipeline/comic-complete-saga-director.js";
+export * from "./pipeline/comic-stereo-sfx-director.js";
+export * from "./pipeline/comic-narration-visual-sync-director.js";
+export * from "./pipeline/comic-narration-zoom-director.js";
+export * from "./pipeline/comic-visual-evidence-gate.js";
+export * from "./pipeline/comic-cinematic-narration-director.js";
+export * from "./pipeline/comic-retention-rewrite-gate.js";
+export * from "./pipeline/comic-phrase-voice-director.js";
+export * from "./pipeline/comic-combat-framing-director.js";
+export * from "./pipeline/comic-curiosity-engine.js";
+export * from "./pipeline/comic-payoff-manager.js";
+export * from "./pipeline/comic-narration-performance-director.js";
+export * from "./pipeline/comic-narration-language-gate.js";
+export * from "./pipeline/comic-narration-acting-director-v2.js";
+export * from "./pipeline/comic-narrator-director.js";
+export * from "./pipeline/comic-narration-reference-dna.js";
+export * from "./pipeline/comic-visual-narration-contract-gate.js";
+export * from "./pipeline/comic-narration-emotion-arc-director.js";
+export * from "./pipeline/comic-reference-style-score.js";
+export * from "./pipeline/comic-dialogue-awareness-director.js";
+export * from "./pipeline/comic-narration-visual-drift-auto-fixer.js";
+export * from "./pipeline/comic-scene-emotion-voice-renderer.js";
+export * from "./pipeline/comic-oral-performance-rewriter.js";
+export * from "./pipeline/comic-pronunciation-dictionary.js";
+export * from "./pipeline/comic-micro-pause-director.js";
+export * from "./pipeline/comic-narration-take-selector.js";
+export * from "./pipeline/comic-prosody-quality-gate.js";
+export * from "./pipeline/comic-temporal-hook-director.js";
+export * from "./pipeline/comic-audience-context-director.js";
+export * from "./pipeline/comic-issue-transition-director.js";
+export * from "./pipeline/comic-premium-flow-policy.js";
 
 

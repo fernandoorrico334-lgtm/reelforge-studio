@@ -1,4 +1,4 @@
-import {
+﻿import {
   getMusicPresetById,
   type BeatSyncPlan,
   type BeatSyncSfxCue,
@@ -273,7 +273,7 @@ const audioMoodPresets: AudioMoodPreset[] = [
   {
     id: "action_pulse",
     name: "Action Pulse",
-    description: "Impulso direto para acao, urgencia e aceleração de ritmo.",
+    description: "Impulso direto para acao, urgencia e aceleraÃ§Ã£o de ritmo.",
     musicMood: "tight pulse with aggressive percussive bed",
     recommendedMusicVolume: 0.2,
     recommendedSfxVolume: 0.8,
@@ -782,3 +782,5 @@ export function buildAudioMixPlan(
 }
 
 export * from "./music-library.js";
+
+export * from './sfx-auto-mapper.js';

@@ -57,6 +57,9 @@ storage/assets/generated/narrations/*
 storage/renders/*
 !storage/renders/.gitkeep
 
+storage/ocr/*
+!storage/ocr/.gitkeep
+
 storage/inbox/*
 !storage/inbox/.gitkeep
 !storage/inbox/**/
@@ -96,3 +99,7 @@ storage/editorial/*
 packages/*/src/**/*.js
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.d.ts.map
+__pycache__/
+scripts/__pycache__/
+*.pyc
+*.pyo

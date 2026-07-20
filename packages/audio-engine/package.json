@@ -21,6 +21,10 @@
     "./music-analysis": {
       "types": "./dist/music-analysis.d.ts",
       "default": "./dist/music-analysis.js"
+    },
+    "./sfx-auto-mapper": {
+      "types": "./dist/sfx-auto-mapper.d.ts",
+      "default": "./dist/sfx-auto-mapper.js"
     }
   },
   "scripts": {
@@ -31,4 +35,3 @@
     "typescript": "^5.7.0"
   }
 }
-

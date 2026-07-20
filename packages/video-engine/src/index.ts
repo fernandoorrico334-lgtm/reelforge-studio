@@ -1,4 +1,4 @@
-import {
+﻿import {
   analyzeCaptionQuality,
   generateAssSubtitle,
   generateSrt,
@@ -252,7 +252,25 @@ export interface RenderBlueprintCaptionCue {
   animation: string | null;
   sfxSuggestion: string | null;
   readingImpactScore: number | null;
+  keyword: string | null;
+  emphasis: string | null;
+  colorMood: string | null;
   readingWarnings: string[];
+}
+
+export interface RenderBlueprintCaptionSfxCue {
+  sceneId: string;
+  sceneOrder: number;
+  cueIndex: number;
+  text: string;
+  keyword: string | null;
+  sfxSuggestion: string;
+  emphasis: string | null;
+  colorMood: string | null;
+  startSeconds: number;
+  endSeconds: number;
+  absoluteStartSeconds: number;
+  volume: number;
 }
 
 export interface RenderBlueprintSmartCropDirective {
@@ -393,6 +411,8 @@ export interface RenderBlueprint {
   musicLicenseStatus: AudioLicenseStatus | null;
   beatSyncPlan: AudioMixPlan["beatSyncPlan"];
   sfxCueCount: number;
+  captionSfxCueCount: number;
+  captionSfxCues: RenderBlueprintCaptionSfxCue[];
   musicWarnings: string[];
   audio: AudioMixPlan;
   summary: RenderBlueprintSummary;
@@ -492,6 +512,9 @@ function parseCaptionCues(recipe: Record<string, unknown> | null): RenderBluepri
         animation: typeof cue.animation === "string" ? cue.animation : null,
         sfxSuggestion: typeof cue.sfxSuggestion === "string" ? cue.sfxSuggestion : null,
         readingImpactScore: typeof cue.readingImpactScore === "number" ? cue.readingImpactScore : null,
+        keyword: typeof cue.keyword === "string" ? cue.keyword : null,
+        emphasis: typeof cue.emphasis === "string" ? cue.emphasis : null,
+        colorMood: typeof cue.colorMood === "string" ? cue.colorMood : null,
         readingWarnings: stringArrayFromRecord(cue, "readingWarnings")
       };
     }).filter((cue) => cue.text.trim().length > 0);
@@ -522,6 +545,9 @@ function parseCaptionCues(recipe: Record<string, unknown> | null): RenderBluepri
       animation,
       sfxSuggestion: emphasis === "impact" || animation.includes("slam") || animation.includes("shake") ? "caption_hit" : null,
       readingImpactScore: impactScore,
+      keyword: text || null,
+      emphasis,
+      colorMood: null,
       readingWarnings: []
     };
   }).filter((cue) => cue.text.trim().length > 0);
@@ -1273,6 +1299,34 @@ export function buildProjectCaptionAnalysis(
 }
 
 
+function buildCaptionSfxCues(scenes: RenderBlueprintScene[]): RenderBlueprintCaptionSfxCue[] {
+  let sceneCursor = 0;
+  const cues: RenderBlueprintCaptionSfxCue[] = [];
+
+  for (const scene of [...scenes].sort((left, right) => left.order - right.order)) {
+    const sceneDuration = normalizeSceneDurationValue(scene.duration);
+    for (const cue of scene.captionCues) {
+      if (!cue.sfxSuggestion?.trim()) continue;
+      cues.push({
+        sceneId: scene.sceneId,
+        sceneOrder: scene.order,
+        cueIndex: cue.cueIndex,
+        text: cue.text,
+        keyword: cue.keyword,
+        sfxSuggestion: cue.sfxSuggestion,
+        emphasis: cue.emphasis,
+        colorMood: cue.colorMood,
+        startSeconds: roundToThreeDecimals(cue.startSeconds),
+        endSeconds: roundToThreeDecimals(cue.endSeconds),
+        absoluteStartSeconds: roundToThreeDecimals(sceneCursor + cue.startSeconds),
+        volume: cue.emphasis === "impact" || cue.emphasis === "shake" ? 0.78 : 0.58
+      });
+    }
+    sceneCursor += sceneDuration;
+  }
+
+  return cues;
+}
 function buildCaptionExportScenesFromBlueprintScenes(scenes: RenderBlueprintScene[]): Array<{
   order: number;
   captionText: string | null;
@@ -1281,6 +1335,9 @@ function buildCaptionExportScenesFromBlueprintScenes(scenes: RenderBlueprintScen
   highlightedWords?: string[];
   animation?: string | null;
   readingImpactScore?: number | null;
+  keyword?: string | null;
+  emphasis?: string | null;
+  colorMood?: string | null;
 }> {
   const exportScenes: Array<{
     order: number;
@@ -1290,6 +1347,9 @@ function buildCaptionExportScenesFromBlueprintScenes(scenes: RenderBlueprintScen
     highlightedWords?: string[];
     animation?: string | null;
     readingImpactScore?: number | null;
+    keyword?: string | null;
+    emphasis?: string | null;
+    colorMood?: string | null;
   }> = [];
   for (const scene of [...scenes].sort((left, right) => left.order - right.order)) {
     if (scene.captionCues.length === 0) {
@@ -1313,7 +1373,10 @@ function buildCaptionExportScenesFromBlueprintScenes(scenes: RenderBlueprintScen
         captionStyle: scene.captionStyle.style.id,
         highlightedWords: cue.highlightedWords,
         animation: cue.animation,
-        readingImpactScore: cue.readingImpactScore
+        readingImpactScore: cue.readingImpactScore,
+        keyword: cue.keyword,
+        emphasis: cue.emphasis,
+        colorMood: cue.colorMood
       });
     }
   }
@@ -1432,6 +1495,7 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     )
   );
   const hasEditorialMicroclips = microclipCount > 0;
+  const captionSfxCues = buildCaptionSfxCues(scenes);
   const durationTotal = roundToSingleDecimal(
     orderedScenes.reduce((total, scene) => total + (scene.duration ?? 0), 0)
   );
@@ -1470,7 +1534,9 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     musicLicenseStatus:
       project.backgroundMusicAsset?.musicProfile?.licenseStatus ?? null,
     beatSyncPlan: audio.beatSyncPlan,
-    sfxCueCount: audio.sfxCues.length,
+    sfxCueCount: audio.sfxCues.length + captionSfxCues.length,
+    captionSfxCueCount: captionSfxCues.length,
+    captionSfxCues,
     musicWarnings: audio.musicWarnings,
     audio,
     summary: {
@@ -1500,4 +1566,3 @@ export function buildRenderBlueprint(project: BlueprintProjectInput): RenderBlue
     scenes
   };
 }
-

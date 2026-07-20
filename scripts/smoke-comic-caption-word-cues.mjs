@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from "node:path";
+﻿import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,16 +20,46 @@ async function main() {
   const { buildRenderBlueprint } = await importVideoEngine();
   const visualRecipe = {
     source: "smoke-comic-caption-word-cues",
-    captionRenderPlan: {
-      text: "SUPERMAN SENTIU O IMPACTO",
-      safeZone: "lower-third",
-      animation: "slam_pop",
-      impactScore: 96,
-      emphasisWords: ["SUPERMAN", "IMPACTO"],
-      wordCues: [
-        { word: "SUPERMAN", startSeconds: 0, endSeconds: 0.55, emphasis: "impact", animation: "slam_pop" },
-        { word: "SENTIU", startSeconds: 0.55, endSeconds: 1.05, emphasis: "punch", animation: "shake_pop" },
-        { word: "IMPACTO", startSeconds: 1.05, endSeconds: 1.8, emphasis: "impact", animation: "slam_pop" }
+    premiumDirection: {
+      captionCues: [
+        {
+          cueIndex: 1,
+          text: "SUPERMAN SENTIU",
+          keyword: "SUPERMAN",
+          startSeconds: 0,
+          endSeconds: 0.65,
+          emphasis: "impact",
+          colorMood: "red",
+          highlightedWords: ["SUPERMAN"],
+          animation: "slam_pop",
+          sfxSuggestion: "caption_hit",
+          readingImpactScore: 98
+        },
+        {
+          cueIndex: 2,
+          text: "O IMPACTO",
+          keyword: "IMPACTO",
+          startSeconds: 0.65,
+          endSeconds: 1.2,
+          emphasis: "shake",
+          colorMood: "gold",
+          highlightedWords: ["IMPACTO"],
+          animation: "shake_pop",
+          sfxSuggestion: "caption_hit",
+          readingImpactScore: 95
+        },
+        {
+          cueIndex: 3,
+          text: "NA HORA",
+          keyword: "HORA",
+          startSeconds: 1.2,
+          endSeconds: 1.8,
+          emphasis: "glow",
+          colorMood: "blue",
+          highlightedWords: ["HORA"],
+          animation: "flash_glow",
+          readingImpactScore: 91
+        }
       ]
     }
   };
@@ -132,14 +162,20 @@ async function main() {
   const blueprint = buildRenderBlueprint(project);
   const scene = blueprint.scenes[0];
   assert(scene.captionCues.length === 3, "expected three caption cues from wordCues");
-  assert(scene.captionCues[0].text === "SUPERMAN", "first cue should preserve punch word");
+  assert(scene.captionCues[0].text === "SUPERMAN SENTIU", "first cue should preserve premium phrase");
+  assert(scene.captionCues[0].keyword === "SUPERMAN", "first cue should preserve keyword");
+  assert(scene.captionCues[1].emphasis === "shake", "second cue should preserve emphasis");
+  assert(scene.captionCues[2].colorMood === "blue", "third cue should preserve color mood");
   assert(scene.captionCues.some((cue) => cue.sfxSuggestion === "caption_hit"), "impact cues should suggest caption hit sfx");
-  assert(scene.captionCues.every((cue) => cue.layout === "lower-third"), "word cues should inherit safe caption zone");
-  assert(blueprint.subtitleExports.srt.includes("SUPERMAN"), "SRT export should include word cue text");
+  assert(scene.captionCues.every((cue) => cue.layout === null), "premium cues can omit layout and use style defaults");
+  assert(blueprint.subtitleExports.srt.includes("SUPERMAN SENTIU"), "SRT export should include premium cue text");
   assert(blueprint.subtitleExports.ass.includes("IMPACTO"), "ASS export should include word cue text");
-  assert(blueprint.subtitleExports.ass.includes("\\fscx118") || blueprint.subtitleExports.ass.includes("\\fscx108"), "ASS export should include kinetic scale override");
+  assert(/\\fscx(?:1[01][0-9]|12[0-9])/.test(blueprint.subtitleExports.ass), "ASS export should include kinetic scale override");
   assert(blueprint.subtitleExports.ass.includes("\\1c&H00"), "ASS export should include color override for impact words");
   assert(blueprint.subtitleExports.ass.includes("\\rDefault"), "ASS export should reset highlighted words to default style");
+  assert(blueprint.captionSfxCueCount === 2, "expected caption impact cues to be counted as SFX cues");
+  assert(blueprint.captionSfxCues[0]?.absoluteStartSeconds === 0, "expected first caption SFX cue at project start");
+  assert(blueprint.captionSfxCues[1]?.sfxSuggestion === "caption_hit", "expected caption SFX suggestion to survive blueprint export");
 
   console.log(JSON.stringify({
     status: "completed",
@@ -148,6 +184,9 @@ async function main() {
     cueCount: scene.captionCues.length,
     cues: scene.captionCues.map((cue) => ({
       text: cue.text,
+      keyword: cue.keyword,
+      emphasis: cue.emphasis,
+      colorMood: cue.colorMood,
       startSeconds: cue.startSeconds,
       endSeconds: cue.endSeconds,
       animation: cue.animation,
@@ -155,8 +194,10 @@ async function main() {
       highlightedWords: cue.highlightedWords
     })),
     subtitleExportReady: blueprint.subtitleExports.srt.includes("SUPERMAN") && blueprint.subtitleExports.ass.includes("IMPACTO"),
-    assHasKineticStyle: blueprint.subtitleExports.ass.includes("\\fscx118") || blueprint.subtitleExports.ass.includes("\\fscx108"),
-    assHasWordHighlight: blueprint.subtitleExports.ass.includes("\\rDefault")
+    assHasKineticStyle: /\\fscx(?:1[01][0-9]|12[0-9])/.test(blueprint.subtitleExports.ass),
+    assHasWordHighlight: blueprint.subtitleExports.ass.includes("\\rDefault"),
+    captionSfxCueCount: blueprint.captionSfxCueCount,
+    captionSfxCues: blueprint.captionSfxCues
   }, null, 2));
 }
 

@@ -1,4 +1,4 @@
-export const captionStyleIds = [
+﻿export const captionStyleIds = [
   "bold_impact",
   "premium_yellow",
   "anime_punch",
@@ -107,6 +107,9 @@ export interface CaptionExportSceneInput {
   highlightedWords?: string[];
   animation?: string | null;
   readingImpactScore?: number | null;
+  keyword?: string | null;
+  emphasis?: string | null;
+  colorMood?: string | null;
 }
 export interface CaptionExportProjectInput {
   title?: string;
@@ -522,20 +525,65 @@ function assColor(hex: string) {
   return `&H00${bb}${gg}${rr}`;
 }
 
+function captionMoodColor(colorMood: string | null | undefined) {
+  switch (colorMood) {
+    case "red":
+      return "#fb7185";
+    case "gold":
+      return "#facc15";
+    case "blue":
+      return "#60a5fa";
+    case "white":
+      return "#ffffff";
+    default:
+      return "#fde047";
+  }
+}
+
+function normalizeCaptionEmphasis(scene: CaptionExportSceneInput, style: CaptionStyle) {
+  const raw = `${scene.emphasis ?? ""} ${scene.animation ?? style.animation.emphasis}`.toLowerCase();
+  if (raw.includes("shake")) return "shake";
+  if (raw.includes("impact") || raw.includes("slam")) return "impact";
+  if (raw.includes("glow") || raw.includes("flash")) return "glow";
+  if (raw.includes("whisper")) return "whisper";
+  return "pop";
+}
+
 function buildAssCueOverride(scene: CaptionExportSceneInput, style: CaptionStyle) {
   const animation = scene.animation ?? style.animation.emphasis;
   const impact = typeof scene.readingImpactScore === "number" ? scene.readingImpactScore : 70;
+  const emphasis = normalizeCaptionEmphasis(scene, style);
   const tags: string[] = [];
+  const primaryColor = captionMoodColor(scene.colorMood);
 
-  if (impact >= 90 || animation.includes("slam") || animation.includes("shake")) {
-    tags.push("\\fscx118\\fscy118");
-    tags.push("\\t(0,120,\\fscx100\\fscy100)");
-    tags.push(`\\1c${assColor("#fde047")}`);
+  if (emphasis === "impact" || impact >= 90 || animation.includes("slam")) {
+    tags.push("\\fscx122\\fscy122");
+    tags.push("\\t(0,130,\\fscx100\\fscy100)");
+    tags.push(`\\1c${assColor(primaryColor)}`);
     tags.push(`\\3c${assColor("#111827")}`);
-  } else if (animation.includes("pop") || style.animation.speed === "aggressive") {
+    tags.push(`\\bord${Math.max(style.outline.width + 2, 7)}`);
+  } else if (emphasis === "shake" || animation.includes("shake")) {
+    tags.push("\\fscx116\\fscy116");
+    tags.push("\\t(0,90,\\fscx96\\fscy96)");
+    tags.push("\\t(90,190,\\fscx104\\fscy104)");
+    tags.push("\\t(190,280,\\fscx100\\fscy100)");
+    tags.push(`\\1c${assColor(primaryColor)}`);
+    tags.push(`\\3c${assColor("#030712")}`);
+    tags.push(`\\bord${Math.max(style.outline.width + 3, 8)}`);
+  } else if (emphasis === "glow") {
     tags.push("\\fscx108\\fscy108");
+    tags.push("\\t(0,160,\\fscx100\\fscy100)");
+    tags.push(`\\1c${assColor(primaryColor)}`);
+    tags.push(`\\3c${assColor("#0f172a")}`);
+    tags.push("\\blur0.45");
+  } else if (emphasis === "whisper") {
+    tags.push("\\fscx96\\fscy96");
+    tags.push(`\\1c${assColor("#e5e7eb")}`);
+    tags.push("\\alpha&H18&");
+  } else if (animation.includes("pop") || style.animation.speed === "aggressive") {
+    tags.push("\\fscx110\\fscy110");
     tags.push("\\t(0,150,\\fscx100\\fscy100)");
-    tags.push(`\\1c${assColor("#ffffff")}`);
+    tags.push(`\\1c${assColor(primaryColor)}`);
   }
 
   if (animation.includes("flash")) {
@@ -892,8 +940,9 @@ export function generateAssSubtitle(
     }
 
     const override = buildAssCueOverride(scene, style);
+    const highlightedWords = [scene.keyword ?? "", ...(scene.highlightedWords ?? [])].filter(Boolean);
     const lines = splitCaptionIntoLines(captionText, style)
-      .map((line) => `${override}${applyAssWordHighlights(line, scene.highlightedWords)}`)
+      .map((line) => `${override}${applyAssWordHighlights(line, highlightedWords)}`)
       .join("\\N");
 
     dialogueRows.push(
@@ -927,4 +976,3 @@ export function generateAssSubtitle(
 }
 
 export const captionStyles = getCaptionStyles();
-
