@@ -155,8 +155,10 @@
                     "smoke:comic-post-render-director":  "node scripts/smoke-comic-post-render-director.mjs",
                     "comic:post-render-qa":  "node scripts/comic-post-render-qa.mjs",
                     "comic:rerender-request-from-qa":  "node scripts/comic-rerender-request-from-qa.mjs",
+                    "comic:scene-patch-renderer":  "node scripts/comic-scene-patch-renderer.mjs",
                     "smoke:comic-post-render-real-qa":  "node scripts/smoke-comic-post-render-real-qa.mjs",
-                    "smoke:comic-assisted-rerender-request":  "node scripts/smoke-comic-assisted-rerender-request.mjs"
+                    "smoke:comic-assisted-rerender-request":  "node scripts/smoke-comic-assisted-rerender-request.mjs",
+                    "smoke:comic-scene-patch-renderer":  "node scripts/smoke-comic-scene-patch-renderer.mjs"
                 },
     "prisma":  {
                    "seed":  "node prisma/seed.mjs"
