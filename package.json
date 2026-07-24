@@ -159,8 +159,10 @@
                     "smoke:comic-post-render-real-qa":  "node scripts/smoke-comic-post-render-real-qa.mjs",
                     "smoke:comic-assisted-rerender-request":  "node scripts/smoke-comic-assisted-rerender-request.mjs",
                     "smoke:comic-scene-patch-renderer":  "node scripts/smoke-comic-scene-patch-renderer.mjs",
+                    "comic:suggest-patch-sources":  "node scripts/comic-suggest-patch-sources.mjs",
                     "comic:generate-scene-patches":  "node scripts/comic-generate-scene-patches.mjs",
-                    "smoke:comic-generate-scene-patches":  "node scripts/smoke-comic-generate-scene-patches.mjs"
+                    "smoke:comic-generate-scene-patches":  "node scripts/smoke-comic-generate-scene-patches.mjs",
+                    "smoke:comic-patch-source-suggestions":  "node scripts/smoke-comic-patch-source-suggestions.mjs"
                 },
     "prisma":  {
                    "seed":  "node prisma/seed.mjs"
