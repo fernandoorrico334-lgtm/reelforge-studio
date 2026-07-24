@@ -285,8 +285,12 @@ function run(command, args, options = {}) {
     let stderr = "";
     child.stdout?.on("data", (chunk) => { stdout += chunk; });
     child.stderr?.on("data", (chunk) => { stderr += chunk; });
-    child.on("error", reject);
-    child.on("close", (code) => code === 0 ? resolvePromise({ stdout, stderr }) : reject(new Error(`${command} exited ${code}\n${stderr.slice(-12000)}`)));
+    child.on("error", (error) => {
+      const details = [`${command} failed to spawn`, `code=${error.code ?? "unknown"}`, `message=${error.message}`];
+      if (args?.length) details.push(`args=${args.join(" ")}`);
+      reject(new Error(details.join("\n")));
+    });
+    child.on("close", (code) => code === 0 ? resolvePromise({ stdout, stderr }) : reject(new Error(`${command} exited ${code}\nargs=${args.join(" ")}\n${stderr.slice(-12000)}`)));
   });
 }
 
@@ -690,7 +694,7 @@ async function synthesizeNarrationSessions() {
       phraseIds: group.performances.map(({ performance }) => performance.phraseId),
       phraseIndexes: group.performances.map(({ phraseIndex }) => phraseIndex),
       spokenText,
-      qaText: displayText,
+      qaText: narrationProvider === "voicebox-qwen" ? spokenText : displayText,
       displayText,
       takeId: `${group.sessionId}-single-take`,
       sourceBeatId: firstPerformance?.sourceBeatId ?? group.sessionId,
@@ -859,7 +863,7 @@ async function synthesizeNarrationSessions() {
       const selection = takeSelections[index];
       return {
         spokenText,
-        qaText: displayText,
+        qaText: narrationProvider === "voicebox-qwen" ? spokenText : displayText,
         displayText,
         phraseId: performance.phraseId,
         sourceBeatId: performance.sourceBeatId,
@@ -931,37 +935,39 @@ async function synthesize() {
     voiceIdentityPolicy: narrationVoiceLock ? "single_voice_locked_reference" : narrationProvider === "voicebox-qwen" ? "single_identity_profile" : "style_routed_reference",
     identityVoiceboxProfileId,
     beats: generationEntries.map(({ performance, phraseIndex, take, takeIndex }) => {
-    const acting = actingDirectionByPhraseId.get(performance.phraseId);
-    return {
-      spokenText: narrationTextForTts(narratorCueByPhraseId.get(performance.phraseId)?.spokenText ?? acting?.actingText ?? performance.text),
-      qaText: narratorCueByPhraseId.get(performance.phraseId)?.displayText ?? acting?.displayText ?? performance.text,
-      displayText: narratorCueByPhraseId.get(performance.phraseId)?.displayText ?? acting?.displayText ?? performance.text,
-      phraseId: performance.phraseId,
-      takeId: take.takeId,
-      sourceBeatId: performance.sourceBeatId,
-      emotion: performance.emotion,
-      actingIntention: acting?.intention,
-      referenceAudio: resolveVoiceReference(acting?.intention ?? "context"),
-      voiceboxProfileId: resolveVoiceboxProfile(acting?.intention ?? "context"),
-      actingEndingContour: acting?.endingContour,
-      actingSubtext: acting?.subtext,
-      narratorDeliveryMode: narratorCueByPhraseId.get(performance.phraseId)?.deliveryMode,
-      narratorPerformanceNote: narratorCueByPhraseId.get(performance.phraseId)?.performanceNote,
-      narratorVisualContract: narratorCueByPhraseId.get(performance.phraseId)?.visualContract,
-      narratorOpenQuestion: narratorCueByPhraseId.get(performance.phraseId)?.openQuestion,
-      narratorAppliedPronunciations: narratorCueByPhraseId.get(performance.phraseId)?.appliedPronunciations ?? [],
-      narrativeFunction: performance.narrativeFunction,
-      subtext: performance.subtext,
-      pitchContour: performance.pitchContour,
-      energy: performance.energy,
-      deliveryNote: performance.deliveryNote,
-      emphasisWords: performance.emphasisWords,
-      expectedVisualTerms: acting?.expectedVisualTerms ?? [],
-      seed: narrationVoiceLock ? narrationVoiceLock.seed + takeIndex : 4100 + phraseIndex + take.seedOffset,
-      exaggeration: narrationVoiceLock?.exaggeration ?? Math.min(0.95, take.exaggeration + (acting?.exaggerationOffset ?? 0)),
-      cfgWeight: narrationVoiceLock?.cfgWeight ?? Math.max(0.22, take.cfgWeight + (acting?.cfgWeightOffset ?? 0)),
-      temperature: narrationVoiceLock?.temperature ?? Math.min(0.8, Math.max(0.5, take.temperature + (acting?.temperatureOffset ?? 0))),
-    };
+      const acting = actingDirectionByPhraseId.get(performance.phraseId);
+      const displayText = narratorCueByPhraseId.get(performance.phraseId)?.displayText ?? acting?.displayText ?? performance.text;
+      const spokenText = narrationTextForTts(narratorCueByPhraseId.get(performance.phraseId)?.spokenText ?? acting?.actingText ?? performance.text);
+      return {
+        spokenText,
+        qaText: narrationProvider === "voicebox-qwen" ? spokenText : displayText,
+        displayText,
+        phraseId: performance.phraseId,
+        takeId: take.takeId,
+        sourceBeatId: performance.sourceBeatId,
+        emotion: performance.emotion,
+        actingIntention: acting?.intention,
+        referenceAudio: resolveVoiceReference(acting?.intention ?? "context"),
+        voiceboxProfileId: resolveVoiceboxProfile(acting?.intention ?? "context"),
+        actingEndingContour: acting?.endingContour,
+        actingSubtext: acting?.subtext,
+        narratorDeliveryMode: narratorCueByPhraseId.get(performance.phraseId)?.deliveryMode,
+        narratorPerformanceNote: narratorCueByPhraseId.get(performance.phraseId)?.performanceNote,
+        narratorVisualContract: narratorCueByPhraseId.get(performance.phraseId)?.visualContract,
+        narratorOpenQuestion: narratorCueByPhraseId.get(performance.phraseId)?.openQuestion,
+        narratorAppliedPronunciations: narratorCueByPhraseId.get(performance.phraseId)?.appliedPronunciations ?? [],
+        narrativeFunction: performance.narrativeFunction,
+        subtext: performance.subtext,
+        pitchContour: performance.pitchContour,
+        energy: performance.energy,
+        deliveryNote: performance.deliveryNote,
+        emphasisWords: performance.emphasisWords,
+        expectedVisualTerms: acting?.expectedVisualTerms ?? [],
+        seed: narrationVoiceLock ? narrationVoiceLock.seed + takeIndex : 4100 + phraseIndex + take.seedOffset,
+        exaggeration: narrationVoiceLock?.exaggeration ?? Math.min(0.95, take.exaggeration + (acting?.exaggerationOffset ?? 0)),
+        cfgWeight: narrationVoiceLock?.cfgWeight ?? Math.max(0.22, take.cfgWeight + (acting?.cfgWeightOffset ?? 0)),
+        temperature: narrationVoiceLock?.temperature ?? Math.min(0.8, Math.max(0.5, take.temperature + (acting?.temperatureOffset ?? 0))),
+      };
     }),
   };
   const corruptedTtsText = generationManifest.beats.find((item) => /[\u00c2\u00c3\u00ef\uFFFD]/u.test(item.spokenText));
