@@ -504,7 +504,7 @@ function semanticCueScore(phraseText, cueText) {
 
 function buildMeasuredVisualCues(beat, beatIndex, measuredPhrasePlan) {
   const measuredPhrases = measuredPhrasePlan.filter((phrase) => phrase.sourceBeatIndex === beatIndex);
-  const overrides = visualCueOverrides.get(beatIndex);
+  const overrides = visualCueOverrides.get(beatIndex) ?? beat.visualCues;
   if (overrides?.length) {
     let minimumOverrideIndex = 0;
     const selections = measuredPhrases.map((phrase, phraseIndex) => {

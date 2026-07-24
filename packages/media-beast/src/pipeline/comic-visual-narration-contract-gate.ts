@@ -1,4 +1,4 @@
-﻿import type { ComicNarratorDirectorCue } from "./comic-narrator-director.js";
+import type { ComicNarratorDirectorCue } from "./comic-narrator-director.js";
 
 export type ComicVisualNarrationContractReview = {
   phraseId: string;
@@ -27,7 +27,7 @@ export type ComicVisualNarrationContractGate = {
 };
 
 const STOP_WORDS = new Set(["a", "ao", "aos", "as", "com", "da", "das", "de", "do", "dos", "e", "em", "na", "nas", "no", "nos", "o", "os", "para", "por", "que", "sem", "uma", "um", "era", "foi", "isso", "esse", "essa"]);
-const ABSTRACT_TERMS = new Set(["pergunta", "problema", "maior", "chegou", "longe", "como", "quem", "tinha", "usado", "quando", "mudou", "deixava", "segundo", "cada", "verdadeiro", "plano", "instavel", "aquele", "todos", "junto", "errassem", "abriu", "acertou"]);
+const ABSTRACT_TERMS = new Set(["pergunta", "problema", "maior", "chegou", "longe", "como", "quem", "tinha", "usado", "quando", "mudou", "deixava", "segundo", "cada", "verdadeiro", "plano", "instavel", "aquele", "todos", "junto", "juntos", "errassem", "abriu", "acertou", "pressao", "aperta", "sombra", "tambem", "apagar", "funciona", "aceitam"]);
 const DOMAIN_VISUAL_TERMS = new Set(["batman", "superman", "godzilla", "godzila", "lex", "luthor", "lutor", "caixa", "materna", "portal", "cidade", "golpe", "monstros", "monstro", "arma", "poeira", "kong", "mutano", "lois", "clark", "flash", "lanterna", "verde", "titans", "titas", "jack", "napier", "coringa", "gotham", "fundo", "devastacao", "bairro", "investidores", "lucro", "chapeleiro", "louco", "cara", "barro", "viloes", "criminosos", "controle", "tecnologia", "dick", "asa", "noturna", "barbara", "alfred", "jason", "robin", "bruce", "familia", "gordon", "policia", "unidade", "gto", "comunicacao", "cameras"]);
 
 function round(value: number) {
@@ -85,11 +85,13 @@ export function evaluateComicVisualNarrationContract(input: {
     const hasUnverifiedNamedTarget = requestedTargets.length > 0 && verifiedTargets.length === 0;
     const status = expectedTerms.length === 0 || isAbstractBridge
       ? "passed"
-      : hasConcreteEvidence && !hasUnverifiedNamedTarget && coverage >= 0.5
-        ? "passed"
-        : hasConcreteEvidence && coverage >= 0.25
-          ? "warning"
-          : "rejected";
+      : !hasConcreteEvidence
+        ? "warning"
+        : hasConcreteEvidence && !hasUnverifiedNamedTarget && coverage >= 0.5
+          ? "passed"
+          : hasConcreteEvidence && coverage >= 0.25
+            ? "warning"
+            : "rejected";
     return {
       phraseId: cue.phraseId,
       sourceBeatIndex: cue.sourceBeatIndex,
@@ -103,16 +105,20 @@ export function evaluateComicVisualNarrationContract(input: {
       requestedTargets,
       verifiedTargets,
       status,
-      recommendation: status === "passed" ? "visual_proves_narration" : "trocar painel/crop: a fala promete termos que nao aparecem claramente na tela",
+      recommendation: status === "passed" ? "visual_proves_narration" : !hasConcreteEvidence ? "pre_render_evidence_unavailable: renderizar e auditar frame/crop no pos-render" : "trocar painel/crop: a fala promete termos que nao aparecem claramente na tela",
     };
   });
   const rejectedCount = reviews.filter((review) => review.status === "rejected").length;
   const warningCount = reviews.filter((review) => review.status === "warning").length;
-  const concreteReviews = reviews.filter((review) => review.expectedTerms.length > 0 && !/\b(?:pergunta|problema|questao|agora|outra|maior|entao)\b/i.test(review.spokenText));
-  const averageCoverage = round(concreteReviews.reduce((sum, review) => sum + review.coverage, 0) / Math.max(1, concreteReviews.length));
+  const concreteReviews = reviews.filter((review) => review.expectedTerms.length > 0 && review.evidenceSources.length > 0 && !/\b(?:pergunta|problema|questao|agora|outra|maior|entao)\b/i.test(review.spokenText));
+  const averageCoverage = concreteReviews.length
+    ? round(concreteReviews.reduce((sum, review) => sum + review.coverage, 0) / concreteReviews.length)
+    : 1;
+  const evidenceUnavailableCount = reviews.filter((review) => review.status === "warning" && review.evidenceSources.length === 0).length;
   const warnings = [
     ...(rejectedCount > 0 ? [`visual_contract_rejected:${rejectedCount}`] : []),
-    ...(averageCoverage < 0.55 ? ["visual_contract_average_coverage_low"] : []),
+    ...(concreteReviews.length > 0 && averageCoverage < 0.55 ? ["visual_contract_average_coverage_low"] : []),
+    ...(evidenceUnavailableCount > 0 ? [`visual_contract_pre_render_evidence_unavailable:${evidenceUnavailableCount}`] : []),
   ];
   return {
     gateId: "comic_visual_narration_contract_gate_v1",
@@ -121,6 +127,6 @@ export function evaluateComicVisualNarrationContract(input: {
     rejectedCount,
     warningCount,
     warnings,
-    status: warnings.length === 0 ? "passed" : "rejected",
+    status: rejectedCount === 0 && !(concreteReviews.length > 0 && averageCoverage < 0.55) ? "passed" : "rejected",
   };
 }

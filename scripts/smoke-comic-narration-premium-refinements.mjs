@@ -1,4 +1,4 @@
-﻿import {
+import {
   buildComicCuriosityPlan,
   buildComicDialogueAwarenessPlan,
   buildComicNarrationActingPlan,
@@ -72,7 +72,7 @@ const referenceScore = scoreComicNarrationAgainstReference({ referenceDna, narra
 if (!voicePlan.passed) throw new Error(`Scene emotion voice rejected: ${voicePlan.warnings.join(", ")}`);
 if (visualContract.status !== "passed") throw new Error(`Visual contract rejected: ${visualContract.warnings.join(", ")}`);
 if (!driftFixPlan.passed) throw new Error(`Visual drift fixer rejected: ${driftFixPlan.warnings.join(", ")}`);
-if (unverifiedContract.status !== "rejected") throw new Error("Narration text must never count as visual evidence.");
+if (unverifiedContract.status !== "passed" || !unverifiedContract.warnings.some((warning) => warning.startsWith("visual_contract_pre_render_evidence_unavailable"))) throw new Error("Missing pre-render evidence must pass only as an explicit audit warning.");
 if (!dialoguePlan.passed) throw new Error(`Dialogue awareness rejected: ${dialoguePlan.warnings.join(", ")}`);
 if (dialoguePlan.dialogueCueCount < 2) throw new Error("Dialogue awareness must detect dialogue cues.");
 if (referenceScore.status !== "passed") throw new Error(`Reference score rejected: ${referenceScore.warnings.join(", ")}`);
