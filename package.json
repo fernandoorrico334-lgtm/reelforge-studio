@@ -154,7 +154,9 @@
                     "smoke:comic-god-mode-gate":  "node scripts/smoke-comic-god-mode-gate.mjs",
                     "smoke:comic-post-render-director":  "node scripts/smoke-comic-post-render-director.mjs",
                     "comic:post-render-qa":  "node scripts/comic-post-render-qa.mjs",
-                    "smoke:comic-post-render-real-qa":  "node scripts/smoke-comic-post-render-real-qa.mjs"
+                    "comic:rerender-request-from-qa":  "node scripts/comic-rerender-request-from-qa.mjs",
+                    "smoke:comic-post-render-real-qa":  "node scripts/smoke-comic-post-render-real-qa.mjs",
+                    "smoke:comic-assisted-rerender-request":  "node scripts/smoke-comic-assisted-rerender-request.mjs"
                 },
     "prisma":  {
                    "seed":  "node prisma/seed.mjs"
