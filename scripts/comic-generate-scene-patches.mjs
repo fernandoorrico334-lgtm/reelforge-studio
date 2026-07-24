@@ -1,4 +1,4 @@
-﻿import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
@@ -324,7 +324,7 @@ function markdownForPlan(plan, execution = null) {
   return `${lines.join("\n")}\n`;
 }
 
-async function generatePatches({ plan, ffmpegCommand, failOnMissingSource }) {
+export async function generatePatches({ plan, ffmpegCommand, failOnMissingSource }) {
   const results = [];
   let generatedCount = 0;
   let failedCount = 0;

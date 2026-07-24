@@ -159,12 +159,14 @@
                     "smoke:comic-post-render-real-qa":  "node scripts/smoke-comic-post-render-real-qa.mjs",
                     "smoke:comic-assisted-rerender-request":  "node scripts/smoke-comic-assisted-rerender-request.mjs",
                     "smoke:comic-scene-patch-renderer":  "node scripts/smoke-comic-scene-patch-renderer.mjs",
+                    "comic:approved-patch-execution":  "node scripts/comic-approved-patch-execution.mjs",
                     "comic:assisted-patch-workflow":  "node scripts/comic-assisted-patch-workflow.mjs",
                     "comic:suggest-patch-sources":  "node scripts/comic-suggest-patch-sources.mjs",
                     "comic:generate-scene-patches":  "node scripts/comic-generate-scene-patches.mjs",
                     "smoke:comic-generate-scene-patches":  "node scripts/smoke-comic-generate-scene-patches.mjs",
                     "smoke:comic-patch-source-suggestions":  "node scripts/smoke-comic-patch-source-suggestions.mjs",
-                    "smoke:comic-assisted-patch-workflow":  "node scripts/smoke-comic-assisted-patch-workflow.mjs"
+                    "smoke:comic-assisted-patch-workflow":  "node scripts/smoke-comic-assisted-patch-workflow.mjs",
+                    "smoke:comic-approved-patch-execution":  "node scripts/smoke-comic-approved-patch-execution.mjs"
                 },
     "prisma":  {
                    "seed":  "node prisma/seed.mjs"

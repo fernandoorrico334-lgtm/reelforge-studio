@@ -252,7 +252,7 @@ async function writeConcatList(path, entries) {
   await writeFile(path, entries.map((entry) => `file '${entry.replaceAll("'", "'\\''")}'`).join("\n"), "utf8");
 }
 
-async function executePatchManifest({ manifest, ffmpegCommand, ffprobeCommand, failOnMissingPatches }) {
+export async function executePatchManifest({ manifest, ffmpegCommand, ffprobeCommand, failOnMissingPatches }) {
   if (!manifest.sourceVideoPath || !(await fileExists(manifest.sourceVideoPath))) {
     throw new Error(`Source video is missing: ${manifest.sourceVideoPath ?? "n/a"}`);
   }
