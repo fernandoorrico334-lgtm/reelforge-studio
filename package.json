@@ -166,7 +166,9 @@
                     "smoke:comic-generate-scene-patches":  "node scripts/smoke-comic-generate-scene-patches.mjs",
                     "smoke:comic-patch-source-suggestions":  "node scripts/smoke-comic-patch-source-suggestions.mjs",
                     "smoke:comic-assisted-patch-workflow":  "node scripts/smoke-comic-assisted-patch-workflow.mjs",
-                    "smoke:comic-approved-patch-execution":  "node scripts/smoke-comic-approved-patch-execution.mjs"
+                    "smoke:comic-approved-patch-execution":  "node scripts/smoke-comic-approved-patch-execution.mjs",
+                    "comic:god-mode-patch-cycle":  "node scripts/comic-god-mode-patch-cycle.mjs",
+                    "smoke:comic-god-mode-patch-cycle":  "node scripts/smoke-comic-god-mode-patch-cycle.mjs"
                 },
     "prisma":  {
                    "seed":  "node prisma/seed.mjs"

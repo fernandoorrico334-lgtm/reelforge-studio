@@ -1011,16 +1011,20 @@ function OneClickAssistedPanel() {
 }
 
 function ComicPatchWorkflowPanel() {
+  const [videoPath, setVideoPath] = useState("storage/renders/comic/latest/output.mp4");
+  const [scenePlanPath, setScenePlanPath] = useState("tmp/comic-scene-plan.json");
   const [retryPlanPath, setRetryPlanPath] = useState("tmp/comic-post-render-qa/comic-post-render-retry-plan.json");
   const [panelCatalogPath, setPanelCatalogPath] = useState("tmp/comic-panel-catalog.json");
-  const [outputDir, setOutputDir] = useState("tmp/comic-assisted-patch-workflow");
-  const [patchSourcesPath, setPatchSourcesPath] = useState("tmp/comic-assisted-patch-workflow/patch-sources-draft.json");
+  const [outputDir, setOutputDir] = useState("tmp/comic-god-mode-patch-cycle");
+  const [patchSourcesPath, setPatchSourcesPath] = useState("tmp/comic-god-mode-patch-cycle/workflow/patch-sources-draft.json");
   const [copied, setCopied] = useState<string | null>(null);
 
-  const manifestPath = `${outputDir.replace(/[\\/]$/u, "")}/scene-patch-manifest.json`;
-  const workflowCommand = `npm run comic:assisted-patch-workflow -- --retry-plan "${retryPlanPath}" --panel-catalog "${panelCatalogPath}" --output-dir "${outputDir}" --approved-request`;
-  const planExecutionCommand = `npm run comic:approved-patch-execution -- --manifest "${manifestPath}" --patch-sources "${patchSourcesPath}" --output-dir "${outputDir}"`;
-  const executeCommand = `npm run comic:approved-patch-execution -- --manifest "${manifestPath}" --patch-sources "${patchSourcesPath}" --output-dir "${outputDir}" --mode execute --approved --fail-on-missing-source --fail-on-missing-patches`;
+  const cleanOutputDir = outputDir.replace(/[\\/]$/u, "");
+  const manifestPath = `${cleanOutputDir}/workflow/scene-patch-manifest.json`;
+  const godModeCommand = `npm run comic:god-mode-patch-cycle -- --input "${videoPath}" --scene-plan "${scenePlanPath}" --panel-catalog "${panelCatalogPath}" --output-dir "${outputDir}" --approved-request`;
+  const workflowCommand = `npm run comic:assisted-patch-workflow -- --retry-plan "${retryPlanPath}" --panel-catalog "${panelCatalogPath}" --output-dir "${cleanOutputDir}/workflow" --approved-request`;
+  const planExecutionCommand = `npm run comic:approved-patch-execution -- --manifest "${manifestPath}" --patch-sources "${patchSourcesPath}" --output-dir "${cleanOutputDir}/workflow"`;
+  const executeCommand = `npm run comic:approved-patch-execution -- --manifest "${manifestPath}" --patch-sources "${patchSourcesPath}" --output-dir "${cleanOutputDir}/workflow" --mode execute --approved --fail-on-missing-source --fail-on-missing-patches`;
 
   async function copyCommand(id: string, command: string) {
     try {
@@ -1047,7 +1051,36 @@ function ComicPatchWorkflowPanel() {
         </span>
       </div>
 
+      <div className="mt-6 rounded-3xl border border-sky-200/20 bg-black/25 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-sky-100/55">God Mode Patch Cycle</p>
+            <p className="mt-2 text-sm leading-6 text-mist/68">Comece pelo MP4 final: o sistema analisa repeticoes, desalinhamento visual, cenas pretas e prepara os patches candidatos para aprovacao manual.</p>
+          </div>
+          <button type="button" onClick={() => copyCommand("god-mode", godModeCommand)} className="rounded-full bg-sky-200 px-5 py-3 text-xs font-black uppercase tracking-[0.18em] text-black shadow-[0_0_30px_rgba(125,211,252,0.22)]">
+            {copied === "god-mode" ? "Comando copiado" : "Copiar analisar e corrigir"}
+          </button>
+        </div>
+        <code className="mt-4 block break-words rounded-2xl bg-black/45 p-4 text-xs leading-5 text-sky-100/80">{godModeCommand}</code>
+      </div>
+
       <div className="mt-6 grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">MP4 renderizado para analisar</span>
+          <input
+            value={videoPath}
+            onChange={(event) => setVideoPath(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-sky-200/70"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Plano de cenas / timing</span>
+          <input
+            value={scenePlanPath}
+            onChange={(event) => setScenePlanPath(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-sky-200/70"
+          />
+        </label>
         <label className="block">
           <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Retry plan do QA</span>
           <input
