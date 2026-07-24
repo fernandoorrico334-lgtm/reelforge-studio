@@ -1,5 +1,6 @@
 import base from "./batman-white-knight-issues-01-08.mjs";
 import { narrativeBibleInput, episodeDefinitions } from "./batman-white-knight-narrative-bible.mjs";
+import { buildCoverageRichComicNarration } from "../../packages/media-beast/dist/index.js";
 
 const requestedEpisode = Number.parseInt(process.env.COMIC_SAGA_EPISODE ?? "1", 10);
 const episodeIndex = Number.isFinite(requestedEpisode) ? requestedEpisode - 1 : 0;
@@ -12,10 +13,11 @@ if (selectedEvents.some((event) => !event)) throw new Error(`Episode ${episode.e
 const issueNumbers = [...new Set(selectedEvents.map((event) => event.issueNumber))];
 const issueRanges = base.issueRanges.filter((range) => issueNumbers.includes(range.issueNumber));
 const baseBeatIndexes = selectedEvents.map((event) => Number.parseInt(event.beatIds[0].replace("saga-beat-", ""), 10) - 1);
+const enrichedNarrationByEventId = new Map(selectedEvents.map((event) => [event.eventId, buildCoverageRichComicNarration({ event, bible: narrativeBibleInput, maxAddedSentences: 2 })]));
 
 const beats = selectedEvents.map((event, index) => ({
   ...base.beats[baseBeatIndexes[index]],
-  spokenText: event.narrationText,
+  spokenText: enrichedNarrationByEventId.get(event.eventId) ?? event.narrationText,
   issueNumber: event.issueNumber,
   pages: event.pageNumbers,
   headline: event.title.toLocaleUpperCase("pt-BR"),
@@ -24,7 +26,7 @@ const beats = selectedEvents.map((event, index) => ({
 
 const cinematicNarration = selectedEvents.map((event, index) => ({
   ...(base.cinematicNarration[baseBeatIndexes[index]] ?? {}),
-  cinematicLine: event.narrationText,
+  cinematicLine: enrichedNarrationByEventId.get(event.eventId) ?? event.narrationText,
   characterIntent: event.motivation,
   hiddenInformation: event.facts[0].statement,
   stakes: event.consequences[0] ? `Este acontecimento provoca ${event.consequences[0].replace(/-/g, " ")}.` : "O desfecho da saga depende desta escolha.",

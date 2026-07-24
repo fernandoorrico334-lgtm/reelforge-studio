@@ -146,6 +146,7 @@
                     "smoke:comic-narration-reference-dna":  "node scripts/smoke-comic-narration-reference-dna.mjs",
                     "smoke:comic-historian-narration-stack":  "node scripts/smoke-comic-historian-narration-stack.mjs",
                     "smoke:comic-narration-premium-refinements":  "node scripts/smoke-comic-narration-premium-refinements.mjs",
+                    "smoke:comic-story-coverage-gate":  "node scripts/smoke-comic-story-coverage-gate.mjs",
                     "smoke:comic-premium-safety":  "node scripts/smoke-comic-premium-safety.mjs",
                     "smoke:voicebox-qwen-narration":  "node scripts/smoke-voicebox-qwen-narration.mjs",
                     "benchmark:tts-providers":  "node scripts/benchmark-tts-providers.mjs",

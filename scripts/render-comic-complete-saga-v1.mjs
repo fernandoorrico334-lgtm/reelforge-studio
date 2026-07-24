@@ -40,6 +40,7 @@ import {
   reviewComicCueVisualEvidence,
   sanitizeComicNarrationText,
   prepareComicNarrationForVoiceboxQwen,
+  evaluateComicStoryCoverageGate,
 } from "../packages/media-beast/dist/index.js";
 
 const root = resolve(decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/(.:)/, "$1"));
@@ -452,6 +453,23 @@ function phrases(text) {
 function captionText(words) {
   if (words.length === 1) return `{\\c&H0033CCFF&}${escapeAss(words[0])}`;
   return `${escapeAss(words.slice(0, -1).join(" "))} {\\c&H0033CCFF&}${escapeAss(words.at(-1))}{\\c&H00FFFFFF&}`;
+}
+
+function selectedNarrativeEvents() {
+  const bible = sagaConfig?.narrativeBibleInput;
+  const episode = sagaConfig?.narrativeEpisode;
+  if (!bible?.events?.length || !episode?.eventIds?.length) return [];
+  const eventById = new Map(bible.events.map((event) => [event.eventId, event]));
+  return episode.eventIds.map((eventId) => eventById.get(eventId)).filter(Boolean);
+}
+
+function plannedNarrationTextForCoverage() {
+  return [
+    temporalHookPlan.combinedNarration,
+    ...cinematicNarrationPlan.beats.map((beat) => beat.narrationLine),
+    sagaConfig?.narrativeEpisode?.payoff,
+    sagaConfig?.narrativeEpisode?.nextEpisodeHook,
+  ].filter(Boolean).join(" ");
 }
 
 function distributeMeasuredDurations(measuredPhrases, cues) {
@@ -1189,6 +1207,18 @@ async function main() {
     targetWordsPerMinute: 180,
   });
   if (!sagaPlan.completeStoryCovered) throw new Error("Saga plan rejected: " + sagaPlan.warnings.join(","));
+  const storyCoverageGate = evaluateComicStoryCoverageGate({
+    bible: sagaConfig?.narrativeBibleInput,
+    selectedEvents: selectedNarrativeEvents(),
+    narrationText: plannedNarrationTextForCoverage(),
+    selectedPageCount: sagaPlan.selectedPageCount,
+    maximumDurationSeconds: 180,
+    targetWordsPerMinute: 180,
+    minimumWordsPerSelectedPage: sagaConfig?.minimumWordsPerSelectedPage ?? 7.2,
+    allowCompactIfCriticalCoverage: sagaConfig?.allowCompactIfCriticalCoverage ?? true,
+  });
+  await writeFile(join(outputDir, "story-coverage-gate.json"), JSON.stringify(storyCoverageGate, null, 2), "utf8");
+  if (storyCoverageGate.status !== "passed") throw new Error("Story coverage rejected: " + storyCoverageGate.blockers.join(", "));
   await writeFile(join(outputDir, "complete-saga-plan.json"), JSON.stringify(sagaPlan, null, 2), "utf8");
   await writeFile(join(outputDir, "narration-language-gate.json"), JSON.stringify(narrationLanguageGate, null, 2), "utf8");
 
@@ -1769,11 +1799,12 @@ async function main() {
   const finaleHeadline = sagaConfig?.finaleHeadline ?? "A HISTORIA CONTINUA";
   headlineEvents.push(`Dialogue: 2,${assTime(Math.max(0, cursor - 3.5))},${assTime(cursor)},Finale,,0,0,0,,{\\fad(80,140)}${wrapEditorialText(finaleHeadline, 24)}`);
   const assPath = join(outputDir, "captions.ass");
-  await writeFile(assPath, `[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Subtitle,Arial,38,&H00FFFFFF,&H0000FFFF,&H00101010,&H70000000,-1,0,0,0,100,100,0,0,1,4,1,2,150,150,260,1\nStyle: Editorial,Arial,46,&H00FFFFFF,&H0000FFFF,&H00101010,&H60000000,-1,0,0,0,100,100,1,0,1,4,1,8,120,120,210,1\nStyle: Finale,Arial,48,&H0033CCFF,&H0000FFFF,&H00101010,&H70000000,-1,0,0,0,100,100,1,0,1,4,1,8,100,100,220,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n${[...captionEvents, ...headlineEvents].join("\n")}\n`, "utf8");
+  const assBody = `[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Subtitle,Arial,38,&H00FFFFFF,&H0000FFFF,&H00101010,&H70000000,-1,0,0,0,100,100,0,0,1,4,1,2,150,150,260,1\nStyle: Editorial,Arial,46,&H00FFFFFF,&H0000FFFF,&H00101010,&H60000000,-1,0,0,0,100,100,1,0,1,4,1,8,120,120,210,1\nStyle: Finale,Arial,48,&H0033CCFF,&H0000FFFF,&H00101010,&H70000000,-1,0,0,0,100,100,1,0,1,4,1,8,100,100,220,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n${[...captionEvents, ...headlineEvents].join("\n")}\n`;
+  await writeFile(assPath, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(assBody, "utf8")]));
 
   const outputPath = join(outputDir, "output.mp4");
   const escapedAss = assPath.replaceAll("\\", "/").replace(":", "\\:").replaceAll("'", "\\'");
-  await run(ffmpeg, ["-y", "-i", visuals, "-i", mixedAudio, "-vf", `ass='${escapedAss}'`, "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-c:a", "aac", "-b:a", "256k", "-ar", "48000", "-ac", "2", "-shortest", "-movflags", "+faststart", outputPath]);
+  await run(ffmpeg, ["-y", "-i", visuals, "-i", mixedAudio, "-vf", `subtitles='${escapedAss}':charenc=UTF-8`, "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-c:a", "aac", "-b:a", "256k", "-ar", "48000", "-ac", "2", "-shortest", "-movflags", "+faststart", outputPath]);
   const finalDuration = await duration(outputPath);
   const signalStatsPath = join(outputDir, "signalstats.txt");
   const escapedSignalStats = signalStatsPath.replaceAll("\\", "/").replace(":", "\\:").replaceAll("'", "\\'");
@@ -1866,6 +1897,14 @@ async function main() {
     expectedIssueCount: sagaConfig?.expectedIssueCount ?? sagaPlan.issueCount,
     storyPageCount: sagaPlan.storyPageCount,
     selectedPageCount: sagaPlan.selectedPageCount,
+    storyCoverageGateStatus: storyCoverageGate.status,
+    storyCoverageMode: storyCoverageGate.mode,
+    storyCoverageWordDensityPerPage: storyCoverageGate.wordDensityPerPage,
+    storyCoverageMinimumRecommendedWords: storyCoverageGate.minimumRecommendedWords,
+    storyCoverageCriticalFactCoverage: storyCoverageGate.criticalFactCoverage,
+    storyCoverageExplainedCharacterCoverage: storyCoverageGate.explainedCharacterCoverage,
+    storyCoverageCauseConsequenceCoverage: storyCoverageGate.causeConsequenceCoverage,
+    storyCoverageBlockers: storyCoverageGate.blockers,
     shotCount: shotPlan.shotCount,
     averageShotDurationSeconds: shotPlan.averageShotDurationSeconds,
     maximumShotDurationSeconds: shotPlan.maximumShotDurationSeconds,
@@ -1903,6 +1942,7 @@ async function main() {
     temporalRewindAtSeconds: temporalHookPlan.rewindAtSeconds,
     measuredColdOpenDurationSeconds,
     measuredNarrationVisualSync: true,
+    captionTimingSource: "post_tts_measured_phrase_durations",
     captionNarrationTimelineDriftSeconds: Number(Math.abs(captionCursor - narrationDuration).toFixed(3)),
     issueTransitionDirectorId: issueTransitionPlan.directorId,
     issueTransitionCount: issueTransitionPlan.transitionCount,
@@ -1973,7 +2013,7 @@ async function main() {
     language: "pt-BR",
     shortsLimitPassed: finalDuration <= 180,
     shotDurationCeilingPassed: shotPlan.maximumShotDurationSeconds <= 4,
-    status: finalDuration <= 180 && cinematicNarrationPlan.passed && narrationLanguageGate.status === "passed" && issueTransitionPlan.passed && audienceContextPlan.passed && temporalHookPlan.passed && retentionRewriteGate.status === "passed" && phraseVoicePlan.passed && narratorDirectorPlan.passed && narrationEmotionArcPlan.passed && sceneEmotionVoicePlan.passed && referenceStyleScore.status === "passed" && visualDriftAutoFixPlan.hardSwapCount === 0 && dialogueAwarenessPlan.passed && narration.prosodyGate.status === "passed" && narrationScreenAlignment.status === "passed" && combatFramingPlan.passed && curiosityPlan.passed && payoffReport.status === "passed" && narrationQa.passed && frameFlashQa.passed && narrationVisualSync.timelineDriftSeconds <= 0.01 && Math.abs(captionCursor - narrationDuration) <= 0.02 && narrationZoomPlan.unsafeAggressiveZoomCount === 0 && shotPlan.maximumShotDurationSeconds <= 4 && shotPlan.mainStoryIsMonotonic && repeatedVisualShots.length === 0 && materializedVisualAudit.passed ? "completed" : "failed",
+    status: finalDuration <= 180 && storyCoverageGate.status === "passed" && cinematicNarrationPlan.passed && narrationLanguageGate.status === "passed" && issueTransitionPlan.passed && audienceContextPlan.passed && temporalHookPlan.passed && retentionRewriteGate.status === "passed" && phraseVoicePlan.passed && narratorDirectorPlan.passed && narrationEmotionArcPlan.passed && sceneEmotionVoicePlan.passed && referenceStyleScore.status === "passed" && visualDriftAutoFixPlan.hardSwapCount === 0 && dialogueAwarenessPlan.passed && narration.prosodyGate.status === "passed" && narrationScreenAlignment.status === "passed" && combatFramingPlan.passed && curiosityPlan.passed && payoffReport.status === "passed" && narrationQa.passed && frameFlashQa.passed && narrationVisualSync.timelineDriftSeconds <= 0.01 && Math.abs(captionCursor - narrationDuration) <= 0.02 && narrationZoomPlan.unsafeAggressiveZoomCount === 0 && shotPlan.maximumShotDurationSeconds <= 4 && shotPlan.mainStoryIsMonotonic && repeatedVisualShots.length === 0 && materializedVisualAudit.passed ? "completed" : "failed",
   };
   await writeFile(join(outputDir, "report.json"), JSON.stringify(report, null, 2), "utf8");
   console.log(JSON.stringify(report, null, 2));

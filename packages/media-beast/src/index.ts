@@ -203,3 +203,4 @@ export * from "./pipeline/comic-auto-bible-builder.js";
 export * from "./pipeline/comic-narration-panel-matcher.js";
 export * from "./pipeline/comic-episode-god-mode-gate.js";
 export * from "./pipeline/comic-post-render-director.js";
+export * from "./pipeline/comic-story-coverage-gate.js";
