@@ -39,6 +39,7 @@ import {
   VoiceboxHealthCheck,
   reviewComicCueVisualEvidence,
   sanitizeComicNarrationText,
+  restorePtBrDiacriticsForComicNarration,
   prepareComicNarrationForVoiceboxQwen,
   evaluateComicStoryCoverageGate,
 } from "../packages/media-beast/dist/index.js";
@@ -202,6 +203,9 @@ const cinematicNarrationPlan = buildComicCinematicNarrationPlan({
   })),
 });
 if (!cinematicNarrationPlan.passed) throw new Error(`Cinematic narration rejected: ${cinematicNarrationPlan.descriptiveLanguageViolations.join(",")}`);
+cinematicNarrationPlan.beats.forEach((beat) => {
+  beat.narrationLine = restorePtBrDiacriticsForComicNarration(beat.narrationLine);
+});
 const narrationLanguageGate = evaluateComicNarrationLanguage({
   beats: cinematicNarrationPlan.beats.map((beat) => ({ beatId: beat.beatId, narrationLine: beat.narrationLine })),
 });
@@ -437,7 +441,7 @@ function reviewNarrationFailureGate(narrationQa) {
 
 
 function narrationTextForTts(text) {
-  const speakableText = rewriteFragileNarrationForTts(text);
+  const speakableText = rewriteFragileNarrationForTts(restorePtBrDiacriticsForComicNarration(text));
   if (narrationProvider === "voicebox-qwen") {
     return prepareComicNarrationForVoiceboxQwen(speakableText)
       .spokenText

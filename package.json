@@ -131,6 +131,7 @@
                     "smoke:comic-curiosity-payoff":  "node scripts/smoke-comic-curiosity-payoff.mjs",
                     "smoke:comic-narration-performance":  "node scripts/smoke-comic-narration-performance.mjs",
                     "smoke:comic-narration-language":  "node scripts/smoke-comic-narration-language.mjs",
+                    "smoke:comic-ptbr-diacritic-normalizer":  "node scripts/smoke-comic-ptbr-diacritic-normalizer.mjs",
                     "smoke:comic-narration-acting-v2":  "node scripts/smoke-comic-narration-acting-v2.mjs",
                     "smoke:comic-temporal-hook":  "node scripts/smoke-comic-temporal-hook.mjs",
                     "smoke:comic-audience-context":  "node scripts/smoke-comic-audience-context.mjs",

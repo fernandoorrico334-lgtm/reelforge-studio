@@ -24,6 +24,63 @@ const CANONICAL_TEXT_FIXES: Array<[RegExp, string, string]> = [
   [/\bdestrui\uFFFD\uFFFDo\b/gi, "destrui\u00e7\u00e3o", "destruicao"],
   [/\ba\uFFFD\uFFFDo\b/gi, "a\u00e7\u00e3o", "acao"],
 ];
+const PT_BR_DIACRITIC_FIXES: Array<[RegExp, string]> = [
+  [/\bQuestao\b/g, "Questão"],
+  [/\bquestao\b/gi, "questão"],
+  [/\bTres\b/g, "Três"],
+  [/\btres\b/gi, "três"],
+  [/\bEntao\b/g, "Então"],
+  [/\bentao\b/gi, "então"],
+  [/\btelevisao\b/gi, "televisão"],
+  [/\bninguem\b/gi, "ninguém"],
+  [/\bviolencia\b/gi, "violência"],
+  [/\bseguranca\b/gi, "segurança"],
+  [/\bnao\b/gi, "não"],
+  [/\bmudanca\b/gi, "mudança"],
+  [/\bsalvacao\b/gi, "salvação"],
+  [/\bherois\b/gi, "heróis"],
+  [/\bfabricas\b/gi, "fábricas"],
+  [/\bproducao\b/gi, "produção"],
+  [/\bArtico\b/g, "Ártico"],
+  [/\bartico\b/gi, "ártico"],
+  [/\binstalacao\b/gi, "instalação"],
+  [/\bvigilancia\b/gi, "vigilância"],
+  [/\bexploracao\b/gi, "exploração"],
+  [/\bsacrificio\b/gi, "sacrifício"],
+  [/\bnecessario\b/gi, "necessário"],
+  [/\bporem\b/gi, "porém"],
+  [/\bresistencia\b/gi, "resistência"],
+  [/\bversao\b/gi, "versão"],
+  [/\bunica\b/gi, "única"],
+  [/\bameaca\b/gi, "ameaça"],
+  [/\bsaida\b/gi, "saída"],
+  [/\baviao\b/gi, "avião"],
+  [/\bcombustivel\b/gi, "combustível"],
+  [/\bsatelites\b/gi, "satélites"],
+  [/\bcomunicacao\b/gi, "comunicação"],
+  [/\bconclusao\b/gi, "conclusão"],
+  [/\bmetodos\b/gi, "métodos"],
+  [/\bforcado\b/gi, "forçado"],
+  [/\bheroi\b/gi, "herói"],
+  [/\bperseguicao\b/gi, "perseguição"],
+  [/\bdestruicao\b/gi, "destruição"],
+  [/\bcameras\b/gi, "câmeras"],
+  [/\bcamera\b/gi, "câmera"],
+  [/\bsimbolo\b/gi, "símbolo"],
+  [/\bpolicia\b/gi, "polícia"],
+  [/\bviloes\b/gi, "vilões"],
+  [/\balguem\b/gi, "alguém"],
+  [/\bfamilia\b/gi, "família"],
+  [/\btambem\b/gi, "também"],
+  [/\bmissao\b/gi, "missão"],
+  [/\brazao\b/gi, "razão"],
+  [/\btuneis\b/gi, "túneis"],
+  [/\bpreco\b/gi, "preço"],
+  [/\bproprio\b/gi, "próprio"],
+  [/\bvitoria\b/gi, "vitória"],
+  [/\bunico\b/gi, "único"],
+  [/\bso\b/gi, "só"],
+];
 
 export const comicTtsPronunciationDictionary: ComicPronunciationEntry[] = [
   { label: "forca", displayPattern: /\bforca\b/gi, spokenReplacement: "for\u00e7a", reason: "restore cedilla before TTS" },
@@ -45,7 +102,7 @@ const PHONETIC_DISPLAY_LEAK = /\b(?:B(?:e|\u00e9)tman|B(?:e|\u00e9)timem?|G(?:o|
 
 export function sanitizeComicNarrationText(text: string): ComicPronunciationResult {
   const appliedLabels: string[] = [];
-  let spokenText = text.normalize("NFC");
+  let spokenText = restorePtBrDiacriticsForComicNarration(text);
   for (const [pattern, replacement, label] of CANONICAL_TEXT_FIXES) {
     if (pattern.test(spokenText)) {
       appliedLabels.push(label);
@@ -69,6 +126,14 @@ export function sanitizeComicNarrationText(text: string): ComicPronunciationResu
     appliedLabels: [...new Set(appliedLabels)],
     displayTextSafe: !PHONETIC_DISPLAY_LEAK.test(text),
   };
+}
+export function restorePtBrDiacriticsForComicNarration(text: string) {
+  let normalizedText = text.normalize("NFC");
+  for (const [pattern, replacement] of PT_BR_DIACRITIC_FIXES) {
+    normalizedText = normalizedText.replace(pattern, replacement);
+    pattern.lastIndex = 0;
+  }
+  return normalizedText;
 }
 
 export function applyComicTtsPronunciation(text: string): ComicPronunciationResult {
@@ -100,3 +165,6 @@ export function prepareComicNarrationForVoiceboxQwen(text: string): ComicPronunc
 export function assertComicDisplayTextHasNoPhoneticLeak(text: string) {
   return !PHONETIC_DISPLAY_LEAK.test(text);
 }
+
+
+
