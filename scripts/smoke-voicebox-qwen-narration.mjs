@@ -9,6 +9,7 @@ import {
   VoiceboxApiClient,
   buildNarrationSynthesisBlocks,
   selectBestNarrationSequence,
+  sanitizeComicNarrationText,
 } from "../packages/media-beast/dist/index.js";
 
 const profileStore = new VoiceProfileStore([{
@@ -80,6 +81,10 @@ const pronunciation = new PronunciationMemoryStore();
 pronunciation.remember({ word: "Batman", engine: "qwen", profileId: "fernando-owned-voice", successfulInput: "Batman", rejectedInputs: ["Betimem"], confidence: 0.96 });
 const nameGate = pronunciation.requireCriticalApprovals({ text: "Batman chegou a Gotham.", engine: "qwen", profileId: "fernando-owned-voice" });
 if (nameGate.passed || !nameGate.missing.includes("Gotham")) throw new Error("Critical-name gate must reject unapproved proper names.");
+const sanitizedNarration = sanitizeComicNarrationText("Bétman salvou Gótam pela for�a contra Nêo Coringa, Ása Notúryna e Gê Tê Ó.");
+if (sanitizedNarration.spokenText !== "Batman salvou Gotham pela força contra Neo Coringa, Asa Noturna e GTO.") {
+  throw new Error("Voicebox narration sanitizer failed: " + sanitizedNarration.spokenText);
+}
 
 const requests = [];
 const fakeFetch = async (url, init = {}) => {
@@ -105,4 +110,3 @@ console.log(JSON.stringify({
   qwenBaseInstructApplied: generated.instructApplied,
   status: "completed",
 }, null, 2));
-

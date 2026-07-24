@@ -38,6 +38,7 @@ import {
   VoiceboxApiClient,
   VoiceboxHealthCheck,
   reviewComicCueVisualEvidence,
+  sanitizeComicNarrationText,
 } from "../packages/media-beast/dist/index.js";
 
 const root = resolve(decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/(.:)/, "$1"));
@@ -389,7 +390,12 @@ const narrationVoiceLock = sagaConfig?.narrationVoiceLock?.enabled ? {
 
 
 function narrationTextForTts(text) {
-  return ttsPronunciations.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text)
+  const shouldUsePhoneticMap = narrationProvider !== "voicebox-qwen";
+  const mapped = shouldUsePhoneticMap
+    ? ttsPronunciations.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text)
+    : text;
+  return sanitizeComicNarrationText(mapped)
+    .spokenText
     .replace(/:\s+/g, ": ... ");
 }
 
