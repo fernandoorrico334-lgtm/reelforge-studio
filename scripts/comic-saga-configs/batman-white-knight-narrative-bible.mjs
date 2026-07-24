@@ -1,4 +1,4 @@
-﻿import base from "./batman-white-knight-issues-01-08.mjs";
+import base from "./batman-white-knight-issues-01-08.mjs";
 
 const details = [
   {
@@ -144,7 +144,7 @@ const details = [
     title: "A batalha final vira uma operacao de salvamento",
     narration: "Enquanto a GTO protege civis e enfrenta os viloes controlados, Batman abre caminho para Jack chegar ao centro do plano. A batalha nao e uma guerra aleatoria entre grupos: cada confronto serve para ganhar segundos, desativar uma parte da ameaca e impedir que Gotham seja soterrada pelo gelo.",
     actors: ["GTO", "Batman", "Jack Napier"], action: "A alianca executa o resgate em varias frentes", motivation: "Os aliados querem salvar civis e alcancar a superarma",
-    terms: [["GTO"], ["civis"], ["Batman"], ["superarma", "gelo"]], targets: ["gto_rescue", "batman_path", "controlled_rogues_battle"],
+    terms: [["for\u00e7a policial", "GTO", "equipe de Gordon"], ["civis"], ["Batman"], ["arma final", "amea\u00e7a", "gelo", "superarma"]], targets: ["gto_rescue", "batman_path", "controlled_rogues_battle"],
   },
   {
     id: "jack-accepts-cost",
@@ -324,11 +324,11 @@ revise("jack-relapses", {
   terms: [["Jack"], ["Coringa"], ["medicado", "gestos"], ["salvar Gotham"]],
 });
 revise("final-plan-formed", {
-  narration: "Por isso, com Jack lutando contra o Coringa e Neo Coringa destruindo Gotham, Batman, Jack, Harley, Gordon, Asa Noturna, Batgirl e a GTO montam um plano. Uns cont\u00eam vil\u00f5es, outros retiram civis, e todos correm para impedir a superarma.",
-  terms: [["Batman"], ["Jack"], ["GTO", "Asa Noturna", "Batgirl"], ["plano", "superarma"]],
+  narration: "Por isso, enquanto Jack lutava contra o Coringa dentro da pr\u00f3pria mente, a nova Coringa destru\u00eda Gotham por fora. Batman, Jack e a equipe de Gordon montam um plano simples: conter os vil\u00f5es, tirar civis das ruas e chegar at\u00e9 a arma final.",
+  terms: [["Batman"], ["Jack"], ["equipe de Gordon", "for\u00e7a policial", "GTO", "Asa Noturna", "Batgirl"], ["plano", "arma final", "superarma"]],
 });
 revise("city-rescue", {
-  narration: "Enquanto a GTO protege civis e enfrenta os vil\u00f5es controlados, Batman abre caminho para Jack chegar ao centro da amea\u00e7a. Cada confronto compra segundos para salvar Gotham do gelo.",
+  narration: "Enquanto a for\u00e7a policial de Gotham protege civis e enfrenta os vil\u00f5es controlados, Batman abre caminho para Jack chegar ao centro da amea\u00e7a. Cada confronto compra segundos para salvar a cidade do gelo.",
 });
 revise("jack-accepts-cost", {
   narration: "Jack entende o pre\u00e7o da vit\u00f3ria. Para prever Neo Coringa, precisa se aproximar da mente que tentou abandonar. Se recuar, o perigo vence; se avan\u00e7ar, talvez Jack desapare\u00e7a.",
@@ -500,7 +500,7 @@ if (finalChoiceEpisode) {
     rewindLabel: "Pouco antes",
     hookHeadline: "JACK ESTAVA PERDENDO O CONTROLE",
     issueTransitionEvidence: [
-      { fromIssueNumber: 6, toIssueNumber: 7, previousConflictTerms: ["Jack", "Coringa", "Neo Coringa"], causalBridgeTerms: ["por isso", "com Jack"], newConflictTerms: ["Batman", "GTO", "plano"] },
+      { fromIssueNumber: 6, toIssueNumber: 7, previousConflictTerms: ["Jack", "Coringa", "Neo Coringa"], causalBridgeTerms: ["por isso", "com Jack"], newConflictTerms: ["Batman", "forca policial", "equipe de Gordon", "plano"] },
       { fromIssueNumber: 7, toIssueNumber: 8, previousConflictTerms: ["plano", "Gotham", "Jack"], causalBridgeTerms: ["quando", "plano"], newConflictTerms: ["Neo Coringa", "confronto", "sacrificio"] },
     ],
     payoff: "Jack salva Gotham pagando com a pr\u00f3pria identidade. Bruce entende a li\u00e7\u00e3o: Batman tamb\u00e9m precisa responder pela lei.",
@@ -508,10 +508,3 @@ if (finalChoiceEpisode) {
 }
 
 export default { narrativeBibleInput, episodeDefinitions };
-
-
-
-
-
-
-

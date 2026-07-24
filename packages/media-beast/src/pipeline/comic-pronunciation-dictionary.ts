@@ -34,6 +34,13 @@ export const comicTtsPronunciationDictionary: ComicPronunciationEntry[] = [
   { label: "controle", displayPattern: /\bcontr\u00f3le\b/gi, spokenReplacement: "controle", reason: "avoid unnatural stress" },
 ];
 
+const VOICEBOX_QWEN_SPOKEN_SAFETY: Array<[RegExp, string, string]> = [
+  [/\bGTO\b/g, "for\u00e7a policial de Gotham", "GTO"],
+  [/\bNeo Coringa\b/gi, "a nova Coringa", "Neo Coringa"],
+  [/\bHarley\b(?!\s+Quinn)/gi, "Harley Quinn", "Harley"],
+  [/\bsuperarma\b/gi, "arma final", "superarma"],
+];
+
 const PHONETIC_DISPLAY_LEAK = /\b(?:B(?:e|\u00e9)tman|B(?:e|\u00e9)timem?|G(?:o|\u00f3)tam|N(?:e|\u00ea)o\s+Coringa|J(?:a|\u00e1)ke\s+Napier|A(?:s|z)a\s+Not(?:u|\u00fa)ryna|G(?:e|\u00ea)\s+T(?:e|\u00ea)\s+(?:O|\u00d3)|Superm\u00e3n|Godz\u00edla|L\u00e9ks|L\u00fator|Cl\u00e1rk|L\u00f4is|Fl\u00e9sh)\b/i;
 
 export function sanitizeComicNarrationText(text: string): ComicPronunciationResult {
@@ -66,6 +73,28 @@ export function sanitizeComicNarrationText(text: string): ComicPronunciationResu
 
 export function applyComicTtsPronunciation(text: string): ComicPronunciationResult {
   return sanitizeComicNarrationText(text);
+}
+
+export function prepareComicNarrationForVoiceboxQwen(text: string): ComicPronunciationResult {
+  const base = sanitizeComicNarrationText(text);
+  const appliedLabels = [...base.appliedLabels];
+  let spokenText = base.spokenText;
+  for (const [pattern, replacement, label] of VOICEBOX_QWEN_SPOKEN_SAFETY) {
+    if (pattern.test(spokenText)) {
+      appliedLabels.push(`voicebox-safe-${label}`);
+      spokenText = spokenText.replace(pattern, replacement);
+    }
+    pattern.lastIndex = 0;
+  }
+  spokenText = spokenText
+    .replace(/,\s*([^,.!?]{1,24}),\s*/g, ". $1. ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return {
+    spokenText,
+    appliedLabels: [...new Set(appliedLabels)],
+    displayTextSafe: base.displayTextSafe,
+  };
 }
 
 export function assertComicDisplayTextHasNoPhoneticLeak(text: string) {

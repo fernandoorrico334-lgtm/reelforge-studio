@@ -39,6 +39,7 @@ import {
   VoiceboxHealthCheck,
   reviewComicCueVisualEvidence,
   sanitizeComicNarrationText,
+  prepareComicNarrationForVoiceboxQwen,
 } from "../packages/media-beast/dist/index.js";
 
 const root = resolve(decodeURIComponent(new URL("..", import.meta.url).pathname).replace(/^\/(.:)/, "$1"));
@@ -390,10 +391,12 @@ const narrationVoiceLock = sagaConfig?.narrationVoiceLock?.enabled ? {
 
 
 function narrationTextForTts(text) {
-  const shouldUsePhoneticMap = narrationProvider !== "voicebox-qwen";
-  const mapped = shouldUsePhoneticMap
-    ? ttsPronunciations.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text)
-    : text;
+  if (narrationProvider === "voicebox-qwen") {
+    return prepareComicNarrationForVoiceboxQwen(text)
+      .spokenText
+      .replace(/:\s+/g, ": ... ");
+  }
+  const mapped = ttsPronunciations.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text);
   return sanitizeComicNarrationText(mapped)
     .spokenText
     .replace(/:\s+/g, ": ... ");
@@ -777,7 +780,11 @@ async function synthesizeNarrationSessions() {
       "loudnorm=I=-18:TP=-2:LRA=6",
       "acompressor=threshold=-20dB:ratio=2.0:attack=12:release=180",
     ].join(",");
-    await run(ffmpeg, ["-y", "-i", rawPaths[groupIndex], "-af", filters, "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le", output]);
+    try {
+      await run(ffmpeg, ["-y", "-i", rawPaths[groupIndex], "-af", filters, "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le", output]);
+    } catch (error) {
+      throw new Error(`FFmpeg narration preparation failed. This usually means ffmpeg/spawn is blocked in the current environment, or FFMPEG_PATH points to an executable Windows cannot start. Stage=narration_session_audio_mastering\n${error.message}`);
+    }
     const processedDuration = await duration(output);
     ready.push(output);
 

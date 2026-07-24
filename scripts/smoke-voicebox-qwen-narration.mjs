@@ -10,6 +10,7 @@ import {
   buildNarrationSynthesisBlocks,
   selectBestNarrationSequence,
   sanitizeComicNarrationText,
+  prepareComicNarrationForVoiceboxQwen,
 } from "../packages/media-beast/dist/index.js";
 
 const profileStore = new VoiceProfileStore([{
@@ -84,6 +85,11 @@ if (nameGate.passed || !nameGate.missing.includes("Gotham")) throw new Error("Cr
 const sanitizedNarration = sanitizeComicNarrationText("Bétman salvou Gótam pela for�a contra Nêo Coringa, Ása Notúryna e Gê Tê Ó.");
 if (sanitizedNarration.spokenText !== "Batman salvou Gotham pela força contra Neo Coringa, Asa Noturna e GTO.") {
   throw new Error("Voicebox narration sanitizer failed: " + sanitizedNarration.spokenText);
+}
+
+const voiceboxSafeNarration = prepareComicNarrationForVoiceboxQwen("Batman, Harley, Neo Coringa e a GTO correm para impedir a superarma.");
+if (voiceboxSafeNarration.spokenText !== "Batman. Harley Quinn. a nova Coringa e a for\u00e7a policial de Gotham correm para impedir a arma final.") {
+  throw new Error("Voicebox Qwen safe narration failed: " + voiceboxSafeNarration.spokenText);
 }
 
 const requests = [];
