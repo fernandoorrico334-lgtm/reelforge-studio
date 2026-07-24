@@ -51,6 +51,7 @@ const unverifiedContract = evaluateComicVisualNarrationContract({
     { sourceBeatIndex: 0, text: "Superman encara Godzilla", focusTarget: "Superman Godzilla" },
   ],
 });
+const unverifiedDriftFixPlan = buildComicNarrationVisualDriftAutoFixPlan({ visualContractGate: unverifiedContract });
 
 const dialoguePlan = buildComicDialogueAwarenessPlan({
   cues: [
@@ -73,6 +74,7 @@ if (!voicePlan.passed) throw new Error(`Scene emotion voice rejected: ${voicePla
 if (visualContract.status !== "passed") throw new Error(`Visual contract rejected: ${visualContract.warnings.join(", ")}`);
 if (!driftFixPlan.passed) throw new Error(`Visual drift fixer rejected: ${driftFixPlan.warnings.join(", ")}`);
 if (unverifiedContract.status !== "passed" || !unverifiedContract.warnings.some((warning) => warning.startsWith("visual_contract_pre_render_evidence_unavailable"))) throw new Error("Missing pre-render evidence must pass only as an explicit audit warning.");
+if (!unverifiedDriftFixPlan.passed || unverifiedDriftFixPlan.hardSwapCount !== 0) throw new Error("Missing pre-render evidence must not force hard panel swaps before render.");
 if (!dialoguePlan.passed) throw new Error(`Dialogue awareness rejected: ${dialoguePlan.warnings.join(", ")}`);
 if (dialoguePlan.dialogueCueCount < 2) throw new Error("Dialogue awareness must detect dialogue cues.");
 if (referenceScore.status !== "passed") throw new Error(`Reference score rejected: ${referenceScore.warnings.join(", ")}`);
