@@ -319,6 +319,36 @@ revise("gotham-becomes-war-zone", {
 });
 
 
+revise("jack-relapses", {
+  narration: "A press\u00e3o aperta. Jack Napier, antigo vil\u00e3o medicado, quer salvar Gotham, mas cada crise devolve gestos do Coringa. Usar essa sombra ajuda contra Neo Coringa; tamb\u00e9m pode apagar Jack.",
+  terms: [["Jack"], ["Coringa"], ["medicado", "gestos"], ["salvar Gotham"]],
+});
+revise("final-plan-formed", {
+  narration: "Por isso, com Jack lutando contra o Coringa e Neo Coringa destruindo Gotham, Batman, Jack, Harley, Gordon, Asa Noturna, Batgirl e a GTO montam um plano. Uns cont\u00eam vil\u00f5es, outros retiram civis, e todos correm para impedir a superarma.",
+  terms: [["Batman"], ["Jack"], ["GTO", "Asa Noturna", "Batgirl"], ["plano", "superarma"]],
+});
+revise("city-rescue", {
+  narration: "Enquanto a GTO protege civis e enfrenta os vil\u00f5es controlados, Batman abre caminho para Jack chegar ao centro da amea\u00e7a. Cada confronto compra segundos para salvar Gotham do gelo.",
+});
+revise("jack-accepts-cost", {
+  narration: "Jack entende o pre\u00e7o da vit\u00f3ria. Para prever Neo Coringa, precisa se aproximar da mente que tentou abandonar. Se recuar, o perigo vence; se avan\u00e7ar, talvez Jack desapare\u00e7a.",
+  terms: [["Jack"], ["Neo Coringa", "Coringa"], ["mente", "desaparece"], ["perigo", "vence"]],
+});
+revise("batman-and-jack-confront-neo", {
+  narration: "Quando o plano chega ao limite, Batman e Jack alcan\u00e7am Neo Coringa por caminhos diferentes. Bruce abre passagem pela for\u00e7a; Jack entende o caos por dentro. O confronto s\u00f3 funciona porque os dois aceitam lutar juntos.",
+});
+revise("jack-sacrifices-his-future", {
+  narration: "Para impedir a destrui\u00e7\u00e3o, Jack entrega o que ainda restava de sua vida como Jack Napier. Se ele falhar, Gotham cai e o Coringa volta de vez. Ele escolhe fazer o certo quando o custo se torna pessoal.",
+  terms: [["Jack Napier", "Jack"], ["Gotham", "falhar"], ["Coringa"], ["escolhe", "custo"]],
+});
+revise("batman-accepts-accountability", {
+  narration: "Com isso, Bruce entende a consequ\u00eancia. Jack estava certo: proteger Gotham n\u00e3o dava a Batman o direito de ficar acima da lei. Agora Bruce tamb\u00e9m precisa responder pelo que fez.",
+  terms: [["Bruce", "Batman"], ["Jack"], ["acima da lei"], ["responder"]],
+});
+revise("gotham-redefines-heroes", {
+  narration: "No fim, Jack n\u00e3o era her\u00f3i perfeito, e Batman n\u00e3o era vil\u00e3o simples. Gotham sobrevive quando seus s\u00edmbolos aceitam limites. Se ningu\u00e9m responder pelos riscos, a cidade volta a cair.",
+});
+
 const partTwoOrder = ["backport-fund-exposed", "jack-controls-rogues", "bruce-family-secrets", "nightwing-breaks-with-batman", "gto-created", "nightwing-and-batgirl-join-gto"];
 const partTwoIds = new Set(partTwoOrder);
 const remainingDetails = details.filter((detail) => !partTwoIds.has(detail.id));
@@ -453,6 +483,29 @@ export const episodeDefinitions = [
     payoff: "Jack prova sua mudanca pelo sacrificio, e Bruce admite que nem mesmo Batman pode permanecer acima da lei.",
   },
 ];
+
+const finalChoiceEpisode = episodeDefinitions.find((episode) => episode.episodeId === "white-knight-04-final-choice");
+if (finalChoiceEpisode) {
+  Object.assign(finalChoiceEpisode, {
+    coldOpenPage: "i06-page-0017.jpg",
+    hook: "Jack e Coringa decidiam o destino de Gotham.",
+    context: "Gotham estava em colapso. Jack Napier, antigo Coringa, perdia a lucidez; Neo Coringa tomou o controle dos vil\u00f5es; Batman precisa salvar Gotham e precisa confiar em Jack; e a GTO virou for\u00e7a policial de resgate.",
+    visualPromiseTerms: ["Jack", "Coringa", "Gotham"],
+    contextAnchors: [
+      { entity: "Jack Napier", explanationTerms: ["antigo Coringa", "lucidez", "medicado"] },
+      { entity: "Neo Coringa", explanationTerms: ["tomou o controle", "viloes"] },
+      { entity: "Batman", explanationTerms: ["precisa salvar Gotham", "precisa confiar em Jack"] },
+      { entity: "GTO", explanationTerms: ["forca policial", "resgate"] },
+    ],
+    rewindLabel: "Pouco antes",
+    hookHeadline: "JACK ESTAVA PERDENDO O CONTROLE",
+    issueTransitionEvidence: [
+      { fromIssueNumber: 6, toIssueNumber: 7, previousConflictTerms: ["Jack", "Coringa", "Neo Coringa"], causalBridgeTerms: ["por isso", "com Jack"], newConflictTerms: ["Batman", "GTO", "plano"] },
+      { fromIssueNumber: 7, toIssueNumber: 8, previousConflictTerms: ["plano", "Gotham", "Jack"], causalBridgeTerms: ["quando", "plano"], newConflictTerms: ["Neo Coringa", "confronto", "sacrificio"] },
+    ],
+    payoff: "Jack salva Gotham pagando com a pr\u00f3pria identidade. Bruce entende a li\u00e7\u00e3o: Batman tamb\u00e9m precisa responder pela lei.",
+  });
+}
 
 export default { narrativeBibleInput, episodeDefinitions };
 
