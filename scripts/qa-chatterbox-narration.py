@@ -114,15 +114,31 @@ def main() -> None:
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     expected = " ".join(str(item.get("qaText") or item.get("displayText") or item["spokenText"]) for item in manifest["beats"])
     model = WhisperModel(args.model, device="cpu", compute_type="int8", cpu_threads=6, num_workers=1)
-    segments, info = model.transcribe(
+    segments_iter, info = model.transcribe(
         args.audio,
         language="pt",
         beam_size=1,
         best_of=1,
         temperature=0.0,
         vad_filter=True,
+        word_timestamps=True,
     )
+    segments = list(segments_iter)
     transcript = " ".join(segment.text.strip() for segment in segments)
+    word_timestamps = []
+    for segment in segments:
+        for word in getattr(segment, "words", None) or []:
+            normalized_parts = words(str(getattr(word, "word", "")))
+            if not normalized_parts:
+                continue
+            for part in normalized_parts:
+                word_timestamps.append({
+                    "index": len(word_timestamps),
+                    "word": str(getattr(word, "word", "")).strip(),
+                    "normalizedWord": part,
+                    "startSeconds": round(float(getattr(word, "start", 0.0) or 0.0), 4),
+                    "endSeconds": round(float(getattr(word, "end", 0.0) or 0.0), 4),
+                })
     similarity = SequenceMatcher(None, words(canonicalize_pronunciations(manifest, expected)), words(canonicalize_pronunciations(manifest, transcript)), autojunk=False).ratio()
     critical_reviews = review_critical_pronunciations(manifest, expected, transcript)
     failed_critical = [review["label"] for review in critical_reviews if not review["passed"]]
@@ -162,6 +178,9 @@ def main() -> None:
         "minimumPhraseAlignmentScore": round(minimum_phrase_similarity, 4),
         "averagePhraseAlignmentScore": round(average_phrase_similarity, 4),
         "transcript": transcript,
+        "wordTimestamps": word_timestamps,
+        "wordTimestampCount": len(word_timestamps),
+        "captionAlignmentSource": "whisper_word_timestamps" if word_timestamps else "phrase_review_fallback",
         "voiceIdentityPolicy": manifest.get("voiceIdentityPolicy"),
         "identityVoiceboxProfileId": manifest.get("identityVoiceboxProfileId"),
         "criticalPronunciationCoverage": round(critical_coverage, 4),
@@ -177,3 +196,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

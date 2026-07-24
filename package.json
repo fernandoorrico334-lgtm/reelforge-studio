@@ -108,6 +108,7 @@
                     "smoke:local-comic-pdf-rasterizer":  "node scripts/smoke-local-comic-pdf-rasterizer.mjs",
                     "smoke:comic-ocr-local":  "node scripts/smoke-comic-ocr-local.mjs",
                     "smoke:comic-caption-word-cues":  "node scripts/smoke-comic-caption-word-cues.mjs",
+                    "smoke:comic-caption-audio-alignment":  "node scripts/smoke-comic-caption-audio-alignment.mjs",
                     "smoke:sfx-auto-mapper":  "node scripts/smoke-sfx-auto-mapper.mjs",
                     "sfx:index-local":  "node scripts/index-local-sfx-library.mjs",
                     "smoke:comic-caption-preview-render":  "node scripts/smoke-comic-caption-preview-render.mjs",

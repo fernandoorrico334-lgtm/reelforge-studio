@@ -450,6 +450,108 @@ function phrases(text) {
   return result;
 }
 
+function normalizeCaptionWord(value) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function flatCaptionWords(chunks) {
+  return chunks.flatMap((chunk) => chunk.map((word) => ({ display: word, normalized: normalizeCaptionWord(word) })).filter((word) => word.normalized));
+}
+
+function phraseReviewForCaption(narrationQa, phrase, phraseIndex) {
+  const reviews = narrationQa?.phraseReviews ?? [];
+  return reviews.find((review) => review.phraseId && review.phraseId === phrase.phraseId)
+    ?? reviews[phraseIndex]
+    ?? null;
+}
+
+function timedChunksFromWhisperWords({ phrase, phraseIndex, phraseStart, phraseEnd, chunks, narrationQa }) {
+  const review = phraseReviewForCaption(narrationQa, phrase, phraseIndex);
+  const timestamps = narrationQa?.wordTimestamps ?? [];
+  const range = review?.transcriptWordRange;
+  if (!Array.isArray(range) || range.length !== 2 || !timestamps.length) return null;
+  const startIndex = Math.max(0, Number(range[0]) || 0);
+  const endIndex = Math.min(timestamps.length, Math.max(startIndex + 1, Number(range[1]) || startIndex + 1));
+  const phraseWords = timestamps.slice(startIndex, endIndex)
+    .filter((word) => Number.isFinite(word.startSeconds) && Number.isFinite(word.endSeconds) && word.endSeconds > word.startSeconds);
+  if (phraseWords.length < 1) return null;
+
+  const displayWords = flatCaptionWords(chunks);
+  if (!displayWords.length) return null;
+  const wordCountRatio = phraseWords.length / displayWords.length;
+  if (wordCountRatio < 0.45 || wordCountRatio > 2.35) return null;
+
+  let displayCursor = 0;
+  const events = [];
+  for (const chunk of chunks) {
+    const chunkWordCount = chunk.filter((word) => normalizeCaptionWord(word)).length;
+    const chunkStartWord = Math.min(phraseWords.length - 1, Math.floor(displayCursor * phraseWords.length / displayWords.length));
+    displayCursor += chunkWordCount;
+    const chunkEndWord = Math.min(phraseWords.length - 1, Math.max(chunkStartWord, Math.ceil(displayCursor * phraseWords.length / displayWords.length) - 1));
+    const start = Math.max(phraseStart, phraseStart + (phraseWords[chunkStartWord].startSeconds - phraseWords[0].startSeconds));
+    const end = Math.min(phraseEnd, phraseStart + (phraseWords[chunkEndWord].endSeconds - phraseWords[0].startSeconds));
+    events.push({
+      startSeconds: Number(start.toFixed(3)),
+      endSeconds: Number(Math.max(start + 0.18, end).toFixed(3)),
+      words: chunk,
+      source: "whisper_word_timestamps",
+    });
+  }
+  return events;
+}
+
+function timedChunksFromMeasuredPhrase({ phraseStart, phraseEnd, chunks }) {
+  const phraseDuration = Math.max(0.1, phraseEnd - phraseStart);
+  const totalWords = Math.max(1, chunks.reduce((sum, chunk) => sum + chunk.length, 0));
+  let chunkCursor = phraseStart;
+  return chunks.map((chunk, chunkIndex) => {
+    const chunkEnd = chunkIndex === chunks.length - 1
+      ? phraseEnd
+      : chunkCursor + phraseDuration * chunk.length / totalWords;
+    const event = {
+      startSeconds: Number(chunkCursor.toFixed(3)),
+      endSeconds: Number(Math.max(chunkCursor + 0.18, chunkEnd).toFixed(3)),
+      words: chunk,
+      source: "post_tts_measured_phrase_durations",
+    };
+    chunkCursor = chunkEnd;
+    return event;
+  });
+}
+
+function buildCaptionTimeline(measuredPhrasePlan, narrationQa) {
+  const events = [];
+  let captionCursor = 0;
+  let whisperAlignedCount = 0;
+  let measuredFallbackCount = 0;
+  measuredPhrasePlan.forEach((phrase, phraseIndex) => {
+    const chunks = phrases(phrase.text);
+    const phraseStart = captionCursor;
+    const phraseEnd = captionCursor + phrase.processedDurationSeconds;
+    const timed = timedChunksFromWhisperWords({ phrase, phraseIndex, phraseStart, phraseEnd, chunks, narrationQa })
+      ?? timedChunksFromMeasuredPhrase({ phraseStart, phraseEnd, chunks });
+    for (const event of timed) {
+      if (event.source === "whisper_word_timestamps") whisperAlignedCount += 1;
+      else measuredFallbackCount += 1;
+      events.push(event);
+    }
+    captionCursor = phraseEnd;
+  });
+  return {
+    events,
+    captionCursor,
+    captionTimingSource: whisperAlignedCount > 0 ? "whisper_word_timestamps_with_measured_fallback" : "post_tts_measured_phrase_durations",
+    whisperAlignedCaptionCount: whisperAlignedCount,
+    measuredFallbackCaptionCount: measuredFallbackCount,
+  };
+}
+
+
 function captionText(words) {
   if (words.length === 1) return `{\\c&H0033CCFF&}${escapeAss(words[0])}`;
   return `${escapeAss(words.slice(0, -1).join(" "))} {\\c&H0033CCFF&}${escapeAss(words.at(-1))}{\\c&H00FFFFFF&}`;
@@ -1771,24 +1873,10 @@ async function main() {
   const mixedAudio = await mixAudio(narration.output, sfxPlan, narrationDuration);
 
   let cursor = 0;
-  const captionEvents = [];
+  const captionTimeline = buildCaptionTimeline(narration.measuredPhrasePlan, narrationQa);
+  const captionCursor = captionTimeline.captionCursor;
+  const captionEvents = captionTimeline.events.map((event) => "Dialogue: 0," + assTime(event.startSeconds) + "," + assTime(event.endSeconds) + ",Subtitle,,0,0,0,,{\\fad(25,25)\\t(0,80,\\fscx102\\fscy102)}" + captionText(event.words));
   const headlineEvents = [];
-  let captionCursor = 0;
-  narration.measuredPhrasePlan.forEach((phrase) => {
-    const chunks = phrases(phrase.text);
-    const totalWords = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    let chunkCursor = captionCursor;
-    const phraseEnd = captionCursor + phrase.processedDurationSeconds;
-    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
-      const chunk = chunks[chunkIndex];
-      const chunkEnd = chunkIndex === chunks.length - 1
-        ? phraseEnd
-        : chunkCursor + phrase.processedDurationSeconds * chunk.length / totalWords;
-      captionEvents.push(`Dialogue: 0,${assTime(chunkCursor)},${assTime(chunkEnd)},Subtitle,,0,0,0,,{\\fad(25,25)\\t(0,80,\\fscx102\\fscy102)}${captionText(chunk)}`);
-      chunkCursor = chunkEnd;
-    }
-    captionCursor = phraseEnd;
-  });
   beats.forEach((beat) => {
     const start = cursor;
     const end = start + beat.durationSeconds;
@@ -1942,7 +2030,9 @@ async function main() {
     temporalRewindAtSeconds: temporalHookPlan.rewindAtSeconds,
     measuredColdOpenDurationSeconds,
     measuredNarrationVisualSync: true,
-    captionTimingSource: "post_tts_measured_phrase_durations",
+    captionTimingSource: captionTimeline.captionTimingSource,
+    whisperAlignedCaptionCount: captionTimeline.whisperAlignedCaptionCount,
+    measuredFallbackCaptionCount: captionTimeline.measuredFallbackCaptionCount,
     captionNarrationTimelineDriftSeconds: Number(Math.abs(captionCursor - narrationDuration).toFixed(3)),
     issueTransitionDirectorId: issueTransitionPlan.directorId,
     issueTransitionCount: issueTransitionPlan.transitionCount,
