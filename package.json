@@ -152,7 +152,9 @@
                     "smoke:comic-auto-bible-create-projects":  "node scripts/smoke-comic-auto-bible-create-projects.mjs",
                     "smoke:comic-narration-panel-matcher":  "node scripts/smoke-comic-narration-panel-matcher.mjs",
                     "smoke:comic-god-mode-gate":  "node scripts/smoke-comic-god-mode-gate.mjs",
-                    "smoke:comic-post-render-director":  "node scripts/smoke-comic-post-render-director.mjs"
+                    "smoke:comic-post-render-director":  "node scripts/smoke-comic-post-render-director.mjs",
+                    "comic:post-render-qa":  "node scripts/comic-post-render-qa.mjs",
+                    "smoke:comic-post-render-real-qa":  "node scripts/smoke-comic-post-render-real-qa.mjs"
                 },
     "prisma":  {
                    "seed":  "node prisma/seed.mjs"
