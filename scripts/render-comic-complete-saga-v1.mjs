@@ -395,13 +395,55 @@ const narrationVoiceLock = sagaConfig?.narrationVoiceLock?.enabled ? {
 } : null;
 
 
+const narrationQaPolicyVersion = "comic_narration_qa_v3_word_timestamps_strict_phrase_gate";
+
+function rewriteFragileNarrationForTts(text) {
+  return text
+    .replace(/\bantigo vilão medicado\b/gi, "antigo vilão que toma remédios")
+    .replace(/\bmedicado\b/gi, "tomando remédios")
+    .replace(/\bPara prever a nova Coringa, precisa se aproximar da mente que tentou abandonar\b/gi, "Para prever a nova Coringa, Jack precisa entrar de novo naquela mente que tentou deixar para trás")
+    .replace(/\bSe recuar, o perigo vence\b/gi, "Se Jack recua, o perigo vence")
+    .replace(/\bse avançar, talvez Jack desapareça\b/gi, "se Jack avança, talvez ele desapareça")
+    .replace(/\bEle escolhe fazer o certo quando o custo se torna pessoal\b/gi, "Jack escolhe fazer o certo quando o preço fica pessoal")
+    .replace(/\bO confronto só funciona porque os dois aceitam lutar juntos\b/gi, "O confronto só funciona quando os dois aceitam lutar juntos")
+    .replace(/\bproteger Gotham não dava a Batman o direito de ficar acima da lei\b/gi, "proteger Gotham não dava ao Batman o direito de ficar acima da lei")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function reviewNarrationFailureGate(narrationQa) {
+  const failedPhraseIds = narrationQa?.failedPhraseIds ?? [];
+  const failedCriticalPronunciations = narrationQa?.failedCriticalPronunciations ?? [];
+  const wordTimestampCount = Number(narrationQa?.wordTimestampCount ?? 0);
+  const phraseReviews = narrationQa?.phraseReviews ?? [];
+  const lowPhraseReviews = phraseReviews.filter((review) => review.passed === false || Number(review.alignmentScore ?? 1) < Number(narrationQa?.phraseThreshold ?? 0.78));
+  const blockers = [];
+  if (failedCriticalPronunciations.length > 0) blockers.push("critical_pronunciation_failed");
+  if (failedPhraseIds.length > 0 || lowPhraseReviews.length > 0) blockers.push("phrase_alignment_or_intelligibility_failed");
+  if (wordTimestampCount <= 0) blockers.push("missing_word_timestamps");
+  if (narrationQa?.passed !== true) blockers.push("qa_not_passed");
+  return {
+    gateId: "comic_narration_failure_retry_gate_v1",
+    status: blockers.length ? "blocked" : "passed",
+    policyVersion: narrationQaPolicyVersion,
+    blockers: [...new Set(blockers)],
+    failedPhraseIds: [...new Set([...failedPhraseIds, ...lowPhraseReviews.map((review) => review.phraseId).filter(Boolean)])],
+    failedCriticalPronunciations,
+    wordTimestampCount,
+    minimumPhraseAlignmentScore: narrationQa?.minimumPhraseAlignmentScore ?? null,
+    averagePhraseAlignmentScore: narrationQa?.averagePhraseAlignmentScore ?? null,
+  };
+}
+
+
 function narrationTextForTts(text) {
+  const speakableText = rewriteFragileNarrationForTts(text);
   if (narrationProvider === "voicebox-qwen") {
-    return prepareComicNarrationForVoiceboxQwen(text)
+    return prepareComicNarrationForVoiceboxQwen(speakableText)
       .spokenText
       .replace(/:\s+/g, ": ... ");
   }
-  const mapped = ttsPronunciations.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text);
+  const mapped = ttsPronunciations.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), speakableText);
   return sanitizeComicNarrationText(mapped)
     .spokenText
     .replace(/:\s+/g, ": ... ");
@@ -1344,9 +1386,13 @@ async function main() {
   const qaPath = join(outputDir, "narration-qa.json");
   const qaCacheKeyPath = join(outputDir, "narration-qa-cache-key.txt");
   const narrationManifestJson = await readFile(narration.manifestPath, "utf8");
+  const qaScriptHash = createHash("sha256").update(await readFile(join(root, "scripts/qa-chatterbox-narration.py"))).digest("hex");
   const narrationQaCacheKey = createHash("sha256")
     .update(narration.narrationCacheKey)
     .update(narrationManifestJson)
+    .update(narrationQaPolicyVersion)
+    .update(qaScriptHash)
+    .update(process.env.NARRATION_PHRASE_QA_THRESHOLD || "0.78")
     .digest("hex");
   const reusableNarrationQa = process.env.COMIC_SAGA_REUSE_NARRATION_QA !== "false"
     ? await readFile(qaPath, "utf8").then((value) => JSON.parse(value)).catch(() => null)
@@ -1354,12 +1400,19 @@ async function main() {
   const previousNarrationQaCacheKey = await readFile(qaCacheKeyPath, "utf8").then((value) => value.trim()).catch(() => "");
   const canReuseNarrationQa = reusableNarrationQa?.passed === true
     && Array.isArray(reusableNarrationQa?.phraseReviews)
+    && Number(reusableNarrationQa?.wordTimestampCount ?? 0) > 0
+    && reusableNarrationQa?.captionAlignmentSource === "whisper_word_timestamps"
     && previousNarrationQaCacheKey === narrationQaCacheKey;
   if (!canReuseNarrationQa) {
     await run(qaPython, [join(root, "scripts/qa-chatterbox-narration.py"), "--audio", narration.output, "--manifest", narration.manifestPath, "--output", qaPath, "--model", process.env.WHISPER_MODEL_PATH || "base", "--threshold", "0.80", "--phrase-threshold", process.env.NARRATION_PHRASE_QA_THRESHOLD || "0.78"], { env: { ...process.env, PYTHONUTF8: "1" } });
     await writeFile(qaCacheKeyPath, narrationQaCacheKey, "utf8");
   }
   const narrationQa = JSON.parse(await readFile(qaPath, "utf8"));
+  const narrationFailureGate = reviewNarrationFailureGate(narrationQa);
+  await writeFile(join(outputDir, "narration-failure-gate.json"), JSON.stringify(narrationFailureGate, null, 2), "utf8");
+  if (narrationFailureGate.status !== "passed") {
+    throw new Error("Narration failure gate rejected audio before render: " + narrationFailureGate.blockers.join(", ") + " failedPhrases=" + narrationFailureGate.failedPhraseIds.join(","));
+  }
 
   const tearTexture = join(outputDir, "page-tear-texture.png");
   await run(visionPython, [join(root, "scripts/generate-page-tear-texture.py"), "--output", tearTexture]);
@@ -2096,6 +2149,9 @@ async function main() {
     failedCriticalPronunciations: narrationQa.failedCriticalPronunciations ?? [],
     narrationWordSimilarity: narrationQa.wordSimilarity,
     narrationQaPassed: narrationQa.passed,
+    narrationFailureGateStatus: narrationFailureGate.status,
+    narrationFailureGateBlockers: narrationFailureGate.blockers,
+    narrationFailedPhraseIds: narrationFailureGate.failedPhraseIds,
     pronunciationProfile: "ptbr_comic_cinematic_v1",
     emotionalPerformanceProfile: "acting_director_v2_acoustic_selection",
     audioTargetLufs: -14.5,
@@ -2103,7 +2159,7 @@ async function main() {
     language: "pt-BR",
     shortsLimitPassed: finalDuration <= 180,
     shotDurationCeilingPassed: shotPlan.maximumShotDurationSeconds <= 4,
-    status: finalDuration <= 180 && storyCoverageGate.status === "passed" && cinematicNarrationPlan.passed && narrationLanguageGate.status === "passed" && issueTransitionPlan.passed && audienceContextPlan.passed && temporalHookPlan.passed && retentionRewriteGate.status === "passed" && phraseVoicePlan.passed && narratorDirectorPlan.passed && narrationEmotionArcPlan.passed && sceneEmotionVoicePlan.passed && referenceStyleScore.status === "passed" && visualDriftAutoFixPlan.hardSwapCount === 0 && dialogueAwarenessPlan.passed && narration.prosodyGate.status === "passed" && narrationScreenAlignment.status === "passed" && combatFramingPlan.passed && curiosityPlan.passed && payoffReport.status === "passed" && narrationQa.passed && frameFlashQa.passed && narrationVisualSync.timelineDriftSeconds <= 0.01 && Math.abs(captionCursor - narrationDuration) <= 0.02 && narrationZoomPlan.unsafeAggressiveZoomCount === 0 && shotPlan.maximumShotDurationSeconds <= 4 && shotPlan.mainStoryIsMonotonic && repeatedVisualShots.length === 0 && materializedVisualAudit.passed ? "completed" : "failed",
+    status: finalDuration <= 180 && storyCoverageGate.status === "passed" && cinematicNarrationPlan.passed && narrationLanguageGate.status === "passed" && issueTransitionPlan.passed && audienceContextPlan.passed && temporalHookPlan.passed && retentionRewriteGate.status === "passed" && phraseVoicePlan.passed && narratorDirectorPlan.passed && narrationEmotionArcPlan.passed && sceneEmotionVoicePlan.passed && referenceStyleScore.status === "passed" && visualDriftAutoFixPlan.hardSwapCount === 0 && dialogueAwarenessPlan.passed && narration.prosodyGate.status === "passed" && narrationScreenAlignment.status === "passed" && combatFramingPlan.passed && curiosityPlan.passed && payoffReport.status === "passed" && narrationQa.passed && narrationFailureGate.status === "passed" && frameFlashQa.passed && narrationVisualSync.timelineDriftSeconds <= 0.01 && Math.abs(captionCursor - narrationDuration) <= 0.02 && narrationZoomPlan.unsafeAggressiveZoomCount === 0 && shotPlan.maximumShotDurationSeconds <= 4 && shotPlan.mainStoryIsMonotonic && repeatedVisualShots.length === 0 && materializedVisualAudit.passed ? "completed" : "failed",
   };
   await writeFile(join(outputDir, "report.json"), JSON.stringify(report, null, 2), "utf8");
   console.log(JSON.stringify(report, null, 2));
