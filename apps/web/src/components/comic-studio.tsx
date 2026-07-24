@@ -1009,6 +1009,122 @@ function OneClickAssistedPanel() {
     </section>
   );
 }
+
+function ComicPatchWorkflowPanel() {
+  const [retryPlanPath, setRetryPlanPath] = useState("tmp/comic-post-render-qa/comic-post-render-retry-plan.json");
+  const [panelCatalogPath, setPanelCatalogPath] = useState("tmp/comic-panel-catalog.json");
+  const [outputDir, setOutputDir] = useState("tmp/comic-assisted-patch-workflow");
+  const [patchSourcesPath, setPatchSourcesPath] = useState("tmp/comic-assisted-patch-workflow/patch-sources-draft.json");
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const manifestPath = `${outputDir.replace(/[\\/]$/u, "")}/scene-patch-manifest.json`;
+  const workflowCommand = `npm run comic:assisted-patch-workflow -- --retry-plan "${retryPlanPath}" --panel-catalog "${panelCatalogPath}" --output-dir "${outputDir}" --approved-request`;
+  const planExecutionCommand = `npm run comic:approved-patch-execution -- --manifest "${manifestPath}" --patch-sources "${patchSourcesPath}" --output-dir "${outputDir}"`;
+  const executeCommand = `npm run comic:approved-patch-execution -- --manifest "${manifestPath}" --patch-sources "${patchSourcesPath}" --output-dir "${outputDir}" --mode execute --approved --fail-on-missing-source --fail-on-missing-patches`;
+
+  async function copyCommand(id: string, command: string) {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(id);
+      window.setTimeout(() => setCopied(null), 1800);
+    } catch {
+      setCopied(null);
+    }
+  }
+
+  return (
+    <section className="rounded-[2rem] border border-sky-300/20 bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.14),transparent_32%),rgba(255,255,255,0.035)] p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-sky-100/60">Correção pós-render</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Patch assistido de cenas ruins, sem refazer o vídeo inteiro</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-mist/68">
+            Use depois do QA pós-render detectar cortes repetidos, zoom errado, legenda desalinhada ou cena que não combina com a narração. O fluxo gera sugestões de painéis, exige aprovação manual e só então cria patches para montar um MP4 corrigido.
+          </p>
+        </div>
+        <span className="rounded-full border border-sky-200/25 bg-sky-200/10 px-4 py-2 text-xs font-semibold text-sky-100">
+          scene-only / original intacto
+        </span>
+      </div>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Retry plan do QA</span>
+          <input
+            value={retryPlanPath}
+            onChange={(event) => setRetryPlanPath(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-sky-200/70"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Catálogo local de painéis</span>
+          <input
+            value={panelCatalogPath}
+            onChange={(event) => setPanelCatalogPath(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-sky-200/70"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Pasta de saída</span>
+          <input
+            value={outputDir}
+            onChange={(event) => setOutputDir(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-sky-200/70"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Patch sources aprovado</span>
+          <input
+            value={patchSourcesPath}
+            onChange={(event) => setPatchSourcesPath(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-sky-200/70"
+          />
+        </label>
+      </div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <p className="text-xs uppercase tracking-[0.24em] text-sky-100/50">1. Encontrar patches</p>
+          <p className="mt-2 text-sm leading-6 text-mist/68">Cria pedido de correção, slots de cena e sugestões de painéis/crops locais.</p>
+          <code className="mt-4 block break-words rounded-xl bg-black/40 p-3 text-xs leading-5 text-sky-100/80">{workflowCommand}</code>
+          <button type="button" onClick={() => copyCommand("workflow", workflowCommand)} className="mt-3 rounded-full border border-sky-200/35 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-200/10">
+            {copied === "workflow" ? "Copiado" : "Copiar comando"}
+          </button>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <p className="text-xs uppercase tracking-[0.24em] text-sky-100/50">2. Revisar aprovação</p>
+          <p className="mt-2 text-sm leading-6 text-mist/68">Abra o `patch-sources-draft.json`, confira se o painel sugerido está certo e troque `approved` para `true` só nas fontes corretas.</p>
+          <ul className="mt-4 space-y-2 text-xs text-mist/60">
+            <li>• fonte deve ser local/autorizada</li>
+            <li>• não voltar páginas sem necessidade narrativa</li>
+            <li>• foco deve bater com narração e legenda</li>
+          </ul>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <p className="text-xs uppercase tracking-[0.24em] text-sky-100/50">3. Gerar MP4 corrigido</p>
+          <p className="mt-2 text-sm leading-6 text-mist/68">Depois da aprovação, gera os patch clips e monta `output-patched.mp4` sem sobrescrever o vídeo original.</p>
+          <code className="mt-4 block break-words rounded-xl bg-black/40 p-3 text-xs leading-5 text-sky-100/80">{executeCommand}</code>
+          <button type="button" onClick={() => copyCommand("execute", executeCommand)} className="mt-3 rounded-full border border-sky-200/35 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-200/10">
+            {copied === "execute" ? "Copiado" : "Copiar execução"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Validação antes de executar</p>
+            <p className="mt-2 text-sm text-mist/68">Use este comando para checar se todas as fontes estão aprovadas antes de gerar os patches.</p>
+          </div>
+          <button type="button" onClick={() => copyCommand("plan-exec", planExecutionCommand)} className="rounded-full bg-sky-200 px-4 py-2 text-xs font-semibold text-black">
+            {copied === "plan-exec" ? "Comando copiado" : "Copiar validação"}
+          </button>
+        </div>
+        <code className="mt-4 block break-words rounded-xl bg-black/40 p-3 text-xs leading-5 text-sky-100/75">{planExecutionCommand}</code>
+      </div>
+    </section>
+  );
+}
 export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
   const [assetDirectory, setAssetDirectory] = useState("storage/assets/comics/justice-league-vs-godzilla-vs-kong/issue-01");
   const [channelId, setChannelId] = useState(channels[0]?.id ?? "");
@@ -1164,6 +1280,8 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
       <AutoBibleBuilderPanel channels={channels} />
 
       <OneClickAssistedPanel />
+
+      <ComicPatchWorkflowPanel />
 
       <section className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-6">
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_0.4fr_0.4fr_0.4fr]">
