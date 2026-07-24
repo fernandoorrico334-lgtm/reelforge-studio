@@ -151,7 +151,8 @@
                     "benchmark:tts-providers":  "node scripts/benchmark-tts-providers.mjs",
                     "smoke:comic-auto-bible-create-projects":  "node scripts/smoke-comic-auto-bible-create-projects.mjs",
                     "smoke:comic-narration-panel-matcher":  "node scripts/smoke-comic-narration-panel-matcher.mjs",
-                    "smoke:comic-god-mode-gate":  "node scripts/smoke-comic-god-mode-gate.mjs"
+                    "smoke:comic-god-mode-gate":  "node scripts/smoke-comic-god-mode-gate.mjs",
+                    "smoke:comic-post-render-director":  "node scripts/smoke-comic-post-render-director.mjs"
                 },
     "prisma":  {
                    "seed":  "node prisma/seed.mjs"
