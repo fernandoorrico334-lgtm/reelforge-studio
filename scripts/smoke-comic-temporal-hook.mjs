@@ -26,6 +26,20 @@ const rejected = buildComicTemporalHookPlan({
   contextAnchors: [{ entity: "Fortaleza", explanationTerms: ["base secreta"] }],
 });
 if (rejected.passed || !rejected.unexplainedContextAnchors.includes("Fortaleza")) throw new Error("The context gate accepted an unexplained location.");
+const repaired = buildComicTemporalHookPlan({
+  hookNarration: "Lex tinha um plano enorme que so faria sentido depois de muita explicacao.",
+  setupNarration: "Lex invadiu a Fortaleza.",
+  visualPromiseTerms: ["Batman", "Coringa"],
+  contextAnchors: [{ entity: "Fortaleza", explanationTerms: ["base secreta"] }],
+  coldOpenDurationSeconds: 5,
+  autoRepair: true,
+});
+if (!repaired.passed) throw new Error("Auto-repair did not resolve temporal hook warnings: " + repaired.warnings.join(","));
+if (!repaired.repairApplied) throw new Error("Auto-repair should mark repairApplied=true.");
+if (!repaired.repairWarningsResolved.includes("cold_open_narration_does_not_match_visual_promise")) throw new Error("Auto-repair did not resolve visual promise mismatch.");
+if (!repaired.repairWarningsResolved.includes("post_rewind_entity_without_audience_context")) throw new Error("Auto-repair did not resolve missing audience context.");
+if (!repaired.hookNarration.includes("Batman") || !repaired.hookNarration.includes("Coringa")) throw new Error("Auto-repair hook does not reflect visual promise terms.");
+if (!repaired.setupNarration.includes("base secreta")) throw new Error("Auto-repair setup did not explain the context anchor.");
 console.log(JSON.stringify({
   directorId: plan.directorId,
   combinedNarration: plan.combinedNarration,
@@ -35,5 +49,7 @@ console.log(JSON.stringify({
   hookPromiseAligned: plan.hookPromiseAligned,
   temporalContextExplicit: plan.temporalContextExplicit,
   contextAnchorsExplained: plan.contextAnchorsExplained,
+  autoRepairApplied: repaired.repairApplied,
+  autoRepairResolved: repaired.repairWarningsResolved,
   status: "completed",
 }, null, 2));

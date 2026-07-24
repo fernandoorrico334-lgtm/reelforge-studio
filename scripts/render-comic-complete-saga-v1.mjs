@@ -1,4 +1,4 @@
-﻿import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
@@ -73,7 +73,7 @@ const sfxAssets = {
   whoosh: join(root, "storage/assets/sfx/FILM-20260704T151810Z-3-001/FILM/MOV/FILMSTRIP_SHAPE_10.mp4"),
 };
 
-const temporalHookPlan = buildComicTemporalHookPlan(sagaConfig?.temporalHook ?? {
+const temporalHookPlan = buildComicTemporalHookPlan({ ...(sagaConfig?.temporalHook ?? {
   hookNarration: "Superman deu de cara com Godzila.",
   setupNarration: "ele estava prestes a pedir Lois em casamento. Enquanto isso, Lex invadia a Fortaleza da SolidÃ£o, a base secreta do herÃ³i. O que ele queria roubar ali?",
   visualPromiseTerms: ["Superman", "Godzila"],
@@ -84,7 +84,7 @@ const temporalHookPlan = buildComicTemporalHookPlan(sagaConfig?.temporalHook ?? 
   rewindLabel: "Doze horas antes",
   coldOpenDurationSeconds: 2.4,
   hookHeadline: "Superman deu de cara com Godzilla",
-});
+}), autoRepair: true });
 if (!temporalHookPlan.passed) throw new Error("Temporal hook rejected: " + temporalHookPlan.warnings.join(", "));
 
 const issueRanges = sagaConfig?.issueRanges ?? [
@@ -1876,6 +1876,8 @@ async function main() {
     sfxCueCount: sfxPlan.cueCount,
     stereoWidth: sfxPlan.stereoWidth,
     temporalHookDirectorId: temporalHookPlan.directorId,
+    temporalHookRepairApplied: temporalHookPlan.repairApplied,
+    temporalHookRepairWarningsResolved: temporalHookPlan.repairWarningsResolved,
     temporalHookPromiseAligned: temporalHookPlan.hookPromiseAligned,
     temporalContextExplicit: temporalHookPlan.temporalContextExplicit,
     temporalContextAnchorsExplained: temporalHookPlan.contextAnchorsExplained,
