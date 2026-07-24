@@ -168,7 +168,10 @@
                     "smoke:comic-assisted-patch-workflow":  "node scripts/smoke-comic-assisted-patch-workflow.mjs",
                     "smoke:comic-approved-patch-execution":  "node scripts/smoke-comic-approved-patch-execution.mjs",
                     "comic:god-mode-patch-cycle":  "node scripts/comic-god-mode-patch-cycle.mjs",
-                    "smoke:comic-god-mode-patch-cycle":  "node scripts/smoke-comic-god-mode-patch-cycle.mjs"
+                    "smoke:comic-god-mode-patch-cycle":  "node scripts/smoke-comic-god-mode-patch-cycle.mjs",
+                    "comic:ollama-narration-rewrite":  "node scripts/comic-ollama-narration-rewrite.mjs",
+                    "comic:ollama-command":  "node scripts/comic-ollama-command-runner.mjs",
+                    "smoke:comic-ollama-command":  "node scripts/smoke-comic-ollama-command.mjs"
                 },
     "prisma":  {
                    "seed":  "node prisma/seed.mjs"
