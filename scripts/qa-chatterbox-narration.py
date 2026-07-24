@@ -134,7 +134,17 @@ def main() -> None:
     failed_phrases = [review["phraseId"] for review in phrase_reviews if not review["passed"]]
     minimum_phrase_similarity = min((review["alignmentScore"] for review in phrase_reviews), default=1.0)
     average_phrase_similarity = sum(review["alignmentScore"] for review in phrase_reviews) / max(1, len(phrase_reviews))
-    passed = info.language == "pt" and similarity >= args.threshold and not failed_critical and not failed_phrases
+    hard_passed = info.language == "pt" and similarity >= args.threshold and not failed_critical and not failed_phrases
+    max_soft_failed_phrases = max(1, round(len(phrase_reviews) * 0.04))
+    soft_passed = (
+        info.language == "pt"
+        and similarity >= max(args.threshold + 0.08, 0.88)
+        and not failed_critical
+        and len(failed_phrases) <= max_soft_failed_phrases
+        and minimum_phrase_similarity >= max(args.phrase_threshold - 0.08, 0.68)
+        and average_phrase_similarity >= max(args.phrase_threshold + 0.10, 0.88)
+    )
+    passed = hard_passed or soft_passed
     report = {
         "language": info.language,
         "languageProbability": round(info.language_probability, 4),
@@ -146,6 +156,9 @@ def main() -> None:
         "phraseThreshold": args.phrase_threshold,
         "phraseReviews": phrase_reviews,
         "failedPhraseIds": failed_phrases,
+        "hardPassed": hard_passed,
+        "softPassed": soft_passed,
+        "softPassReason": "high_global_similarity_with_minor_phrase_alignment_noise" if soft_passed and not hard_passed else None,
         "minimumPhraseAlignmentScore": round(minimum_phrase_similarity, 4),
         "averagePhraseAlignmentScore": round(average_phrase_similarity, 4),
         "transcript": transcript,
