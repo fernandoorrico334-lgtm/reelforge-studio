@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   printSmokeSummary,
@@ -88,6 +88,14 @@ async function main() {
   await mkdir(diagnosticsDir, { recursive: true });
   const videoPath = join(diagnosticsDir, "synthetic-comic-post-render-qa.mp4");
   const reportDir = join(diagnosticsDir, "report");
+  const scenePlanPath = join(diagnosticsDir, "scene-plan.json");
+  await writeFile(scenePlanPath, JSON.stringify({
+    scenes: [
+      { sceneId: "scene-hook", order: 1, startTimeSeconds: 0, endTimeSeconds: 1, durationSeconds: 1, panelId: "synthetic-panel-1", pageNumber: 1, captionVisible: true, captionOverflowRisk: "none", focusTargetVisible: true, narrationAligned: true },
+      { sceneId: "scene-escalation", order: 2, startTimeSeconds: 1, endTimeSeconds: 2, durationSeconds: 1, panelId: "synthetic-panel-2", pageNumber: 2, captionVisible: true, captionOverflowRisk: "none", focusTargetVisible: true, narrationAligned: true },
+      { sceneId: "scene-payoff", order: 3, startTimeSeconds: 2, endTimeSeconds: 3, durationSeconds: 1, panelId: "synthetic-panel-3", pageNumber: 3, captionVisible: true, captionOverflowRisk: "none", focusTargetVisible: true, narrationAligned: true }
+    ]
+  }, null, 2), "utf8");
 
   await createSyntheticComicMp4(ffmpeg.command ?? resolveBinaryCommand("ffmpeg").command, videoPath);
 
@@ -97,6 +105,8 @@ async function main() {
     videoPath,
     "--output-dir",
     reportDir,
+    "--scene-plan",
+    scenePlanPath,
     "--sample-count",
     "8",
     "--minimum-approval-score",
@@ -110,6 +120,9 @@ async function main() {
   assert.equal(report.reportId, "comic_post_render_real_qa_v1");
   assert.ok(report.probe.width === 1080 && report.probe.height === 1920);
   assert.ok(report.frameSamples.length >= 3);
+  assert.equal(report.sceneFrameQa.length, 3);
+  assert.equal(report.retryPlan.planId, "comic_post_render_retry_plan_v1");
+  assert.equal(report.retryPlan.renderWholeVideoAgain, false);
   assert.ok(["completed", "blocked"].includes(report.status));
   assert.ok(["approved", "retry_required", "blocked"].includes(report.directorReport.status));
 
@@ -117,6 +130,7 @@ async function main() {
     status: "completed",
     videoPath,
     reportPath: summary.reportPath,
+    retryPlanStatus: report.retryPlan.status,
     durationSeconds: report.probe.durationSeconds,
     resolution: `${report.probe.width}x${report.probe.height}`,
     frameSampleCount: report.frameSamples.length,

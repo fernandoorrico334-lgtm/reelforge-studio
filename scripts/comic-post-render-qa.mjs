@@ -40,13 +40,13 @@ function printHelp() {
 node scripts/comic-post-render-qa.mjs --input <video.mp4> --output-dir <dir> [options]
 
 Options:
-  --scene-plan <json>              Optional scene timing/QA hints.
+  --scene-plan <json>              Optional scene timing/QA hints. When present, frames are sampled inside each scene.
   --sample-count <number>          Frame samples to extract. Default: 12.
   --minimum-approval-score <num>   Director approval target. Default: 88.
   --fail-on-blocked                Exit 1 when the director blocks the video.
 
 Scene plan JSON can be either an array or { "scenes": [...] } with fields:
-  sceneId, order, startTimeSeconds, durationSeconds, pageNumber, panelId,
+  sceneId, order, startTimeSeconds, endTimeSeconds, durationSeconds, pageNumber, panelId,
   captionVisible, captionOverflowRisk, focusTargetVisible, narrationAligned.
 `);
 }
@@ -133,14 +133,56 @@ async function hashFile(path) {
   };
 }
 
-async function extractFrameSamples({ ffmpegCommand, inputPath, outputDir, durationSeconds, sampleCount }) {
+function normalizeSceneTiming(scene, index) {
+  const startTimeSeconds = Number(scene.startTimeSeconds ?? scene.startSeconds ?? scene.start ?? 0);
+  const explicitEnd = scene.endTimeSeconds ?? scene.endSeconds ?? scene.end;
+  const duration = Number(scene.durationSeconds ?? scene.duration ?? (explicitEnd !== undefined ? Number(explicitEnd) - startTimeSeconds : 3));
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 3;
+  return {
+    sceneId: String(scene.sceneId ?? scene.id ?? `scene-${index + 1}`),
+    order: Number(scene.order ?? index + 1),
+    startTimeSeconds: Number.isFinite(startTimeSeconds) ? Math.max(0, startTimeSeconds) : 0,
+    durationSeconds: safeDuration,
+    endTimeSeconds: Number.isFinite(Number(explicitEnd)) ? Number(explicitEnd) : (Number.isFinite(startTimeSeconds) ? Math.max(0, startTimeSeconds) : 0) + safeDuration
+  };
+}
+
+function frameSampleSpecs({ durationSeconds, sampleCount, scenePlan }) {
+  if (Array.isArray(scenePlan) && scenePlan.length) {
+    const specs = [];
+    for (let index = 0; index < scenePlan.length; index += 1) {
+      const timing = normalizeSceneTiming(scenePlan[index], index);
+      const sceneDuration = Math.max(0.12, timing.endTimeSeconds - timing.startTimeSeconds || timing.durationSeconds);
+      const offsets = sceneDuration < 0.8 ? [0.5] : [0.18, 0.5, 0.82];
+      for (const offset of offsets) {
+        specs.push({
+          timeSeconds: Math.max(0.05, timing.startTimeSeconds + sceneDuration * offset),
+          sceneId: timing.sceneId,
+          sceneOrder: timing.order,
+          sampleRole: offset < 0.3 ? "scene_open" : offset > 0.7 ? "scene_close" : "scene_mid"
+        });
+      }
+    }
+    return specs.slice(0, 180);
+  }
+
+  return sampleTimes(durationSeconds, sampleCount).map((timeSeconds, index) => ({
+    timeSeconds,
+    sceneId: null,
+    sceneOrder: null,
+    sampleRole: index === 0 ? "global_open" : index === sampleCount - 1 ? "global_close" : "global_mid"
+  }));
+}
+
+async function extractFrameSamples({ ffmpegCommand, inputPath, outputDir, durationSeconds, sampleCount, scenePlan }) {
   const framesDir = join(outputDir, "frames");
   await mkdir(framesDir, { recursive: true });
-  const times = sampleTimes(durationSeconds, sampleCount);
+  const specs = frameSampleSpecs({ durationSeconds, sampleCount, scenePlan });
   const frames = [];
 
-  for (let index = 0; index < times.length; index += 1) {
-    const time = times[index];
+  for (let index = 0; index < specs.length; index += 1) {
+    const spec = specs[index];
+    const time = Math.min(Math.max(0.05, spec.timeSeconds), Math.max(0.05, durationSeconds - 0.05));
     const outputPath = join(framesDir, `frame-${String(index + 1).padStart(3, "0")}.jpg`);
     await runCommand(ffmpegCommand, [
       "-y",
@@ -159,6 +201,9 @@ async function extractFrameSamples({ ffmpegCommand, inputPath, outputDir, durati
       index: index + 1,
       timeSeconds: Number(time.toFixed(3)),
       outputPath,
+      sceneId: spec.sceneId,
+      sceneOrder: spec.sceneOrder,
+      sampleRole: spec.sampleRole,
       sha256: file.hash,
       sizeBytes: file.sizeBytes
     });
@@ -248,18 +293,17 @@ function buildSceneFrameQa({ scenePlan, frames, probe, repeatStats, blackDetect 
 
   if (Array.isArray(scenePlan) && scenePlan.length) {
     return scenePlan.map((scene, index) => {
-      const start = Number(scene.startTimeSeconds ?? scene.start ?? 0);
-      const duration = Number(scene.durationSeconds ?? scene.duration ?? 3);
-      const sceneFrames = frames.filter((frame) => frame.timeSeconds >= start && frame.timeSeconds <= start + duration);
+      const timing = normalizeSceneTiming(scene, index);
+      const sceneFrames = frames.filter((frame) => frame.sceneId === timing.sceneId || frame.timeSeconds >= timing.startTimeSeconds && frame.timeSeconds <= timing.endTimeSeconds);
       const firstFrame = sceneFrames[0] ?? frames[Math.min(index, frames.length - 1)] ?? null;
       const previousFrame = index > 0 ? frames[Math.min(index - 1, frames.length - 1)] ?? null : null;
       const sameAsPrevious = Boolean(firstFrame && previousFrame && firstFrame.sha256 === previousFrame.sha256);
       return {
-        sceneId: String(scene.sceneId ?? scene.id ?? `scene-${index + 1}`),
-        order: Number(scene.order ?? index + 1),
+        sceneId: timing.sceneId,
+        order: timing.order,
         panelId: scene.panelId ?? null,
         pageNumber: scene.pageNumber ?? null,
-        durationSeconds: Number.isFinite(duration) ? duration : 3,
+        durationSeconds: timing.durationSeconds,
         frameSampleCount: sceneFrames.length || 1,
         visualHash: firstFrame?.sha256 ?? null,
         previousVisualHash: previousFrame?.sha256 ?? null,
@@ -272,6 +316,7 @@ function buildSceneFrameQa({ scenePlan, frames, probe, repeatStats, blackDetect 
         notes: [
           ...(scene.notes ?? []),
           blackDetect.measured ? "blackdetect measured" : "blackdetect unavailable",
+          `time_range:${timing.startTimeSeconds.toFixed(3)}-${timing.endTimeSeconds.toFixed(3)}`,
           "caption/focus/alignment can be supplied by scene plan for stronger QA"
         ]
       };
@@ -306,6 +351,106 @@ function buildSceneFrameQa({ scenePlan, frames, probe, repeatStats, blackDetect 
   });
 }
 
+
+function buildSceneTimingMap(scenePlan) {
+  const map = new Map();
+  if (!Array.isArray(scenePlan)) return map;
+  scenePlan.forEach((scene, index) => {
+    const timing = normalizeSceneTiming(scene, index);
+    map.set(timing.sceneId, timing);
+  });
+  return map;
+}
+
+function actionLabel(action) {
+  const labels = {
+    keep: "manter",
+    swap_panel: "trocar painel",
+    retarget_crop: "recalcular zoom/crop",
+    rerender_caption: "refazer legenda",
+    resync_narration: "ressincronizar narracao",
+    regenerate_narration_take: "regenerar take de narracao",
+    shorten_hold: "encurtar permanencia da cena",
+    manual_review: "revisao manual"
+  };
+  return labels[action] ?? action;
+}
+
+function buildRetryPlan({ directorReport, scenes, frames, scenePlan, inputPath }) {
+  const timingMap = buildSceneTimingMap(scenePlan);
+  const sceneMap = new Map(scenes.map((scene) => [scene.sceneId, scene]));
+  const actionsByScene = new Map();
+
+  for (const action of directorReport.retryActions) {
+    const list = actionsByScene.get(action.sceneId) ?? [];
+    list.push(action);
+    actionsByScene.set(action.sceneId, list);
+  }
+
+  const sceneRetries = [...actionsByScene.entries()].map(([sceneId, actions]) => {
+    const scene = sceneMap.get(sceneId) ?? null;
+    const timing = timingMap.get(sceneId) ?? null;
+    const evidenceFrames = frames
+      .filter((frame) => frame.sceneId === sceneId || timing && frame.timeSeconds >= timing.startTimeSeconds && frame.timeSeconds <= timing.endTimeSeconds)
+      .slice(0, 5)
+      .map((frame) => ({
+        timeSeconds: frame.timeSeconds,
+        sampleRole: frame.sampleRole,
+        outputPath: frame.outputPath,
+        sha256: frame.sha256,
+        sizeBytes: frame.sizeBytes
+      }));
+    const fallbackStart = scene?.order ? Math.max(0, (scene.order - 1) * (scene.durationSeconds || 3)) : 0;
+    const startTimeSeconds = timing?.startTimeSeconds ?? fallbackStart;
+    const durationSeconds = timing?.durationSeconds ?? scene?.durationSeconds ?? 3;
+    const endTimeSeconds = timing?.endTimeSeconds ?? startTimeSeconds + durationSeconds;
+    const severity = actions.some((action) => action.severity === "high")
+      ? "high"
+      : actions.some((action) => action.severity === "medium") ? "medium" : "low";
+
+    return {
+      sceneId,
+      order: scene?.order ?? actions[0]?.order ?? 0,
+      timeRange: {
+        startTimeSeconds: Number(startTimeSeconds.toFixed(3)),
+        endTimeSeconds: Number(endTimeSeconds.toFixed(3)),
+        durationSeconds: Number(Math.max(0, endTimeSeconds - startTimeSeconds).toFixed(3))
+      },
+      severity,
+      actions: actions.map((action) => ({
+        action: action.action,
+        label: actionLabel(action.action),
+        severity: action.severity,
+        reason: action.reason,
+        suggestedFix: action.suggestedFix
+      })),
+      evidenceFrames,
+      directorInstruction: actions.some((action) => action.action === "swap_panel")
+        ? "Refazer somente esta cena com outro painel aprovado, mantendo a ordem cronologica."
+        : actions.some((action) => action.action === "retarget_crop")
+          ? "Refazer somente esta cena com crop mais aberto/inteligente, sem cortar rosto, balao ou acao principal."
+          : actions.some((action) => action.action === "resync_narration")
+            ? "Ajustar timing da cena para a fala bater com a evidencia visual."
+            : "Refazer somente os elementos marcados, sem renderizar o episodio inteiro."
+    };
+  }).sort((a, b) => a.order - b.order);
+
+  return {
+    planId: "comic_post_render_retry_plan_v1",
+    sourceVideoPath: inputPath,
+    status: sceneRetries.length ? "retry_required" : "clean",
+    retrySceneCount: sceneRetries.length,
+    highSeveritySceneCount: sceneRetries.filter((scene) => scene.severity === "high").length,
+    renderWholeVideoAgain: false,
+    recommendedMode: sceneRetries.length ? "rerender_marked_scenes_only" : "no_retry_needed",
+    sceneRetries,
+    globalNotes: [
+      "Este plano nao altera assets nem apaga renders: ele marca trechos para revisao/correcao.",
+      "Quando integrado ao render worker, use timeRange para recortar/refazer somente a cena marcada.",
+      "Se a acao for swap_panel, nunca voltar paginas: escolher alternativa da mesma pagina ou pagina posterior."
+    ]
+  };
+}
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -337,16 +482,17 @@ async function main() {
   }
 
   const probe = await probeVideo(ffprobe.command ?? resolveBinaryCommand("ffprobe").command, inputPath);
+  const scenePlan = await readScenePlan(args.scenePlan);
   const frames = await extractFrameSamples({
     ffmpegCommand: ffmpeg.command ?? resolveBinaryCommand("ffmpeg").command,
     inputPath,
     outputDir,
     durationSeconds: probe.durationSeconds,
-    sampleCount: args.sampleCount
+    sampleCount: args.sampleCount,
+    scenePlan
   });
   const repeatStats = repeatedFrameStats(frames);
   const blackDetect = await detectBlackFrames(ffmpeg.command ?? resolveBinaryCommand("ffmpeg").command, inputPath);
-  const scenePlan = await readScenePlan(args.scenePlan);
   const scenes = buildSceneFrameQa({ scenePlan, frames, probe, repeatStats, blackDetect });
 
   const beast = await import(pathToFileURL(join(projectRoot, "packages/media-beast/dist/index.js")).href);
@@ -381,6 +527,8 @@ async function main() {
 
   const reportPath = join(outputDir, "comic-post-render-director-report.json");
   await writeFile(reportPath, JSON.stringify(report, null, 2), "utf8");
+  const retryPlanPath = join(outputDir, "comic-post-render-retry-plan.json");
+  await writeFile(retryPlanPath, JSON.stringify(retryPlan, null, 2), "utf8");
 
   console.log(JSON.stringify({
     status: report.status,
