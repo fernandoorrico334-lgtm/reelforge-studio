@@ -815,6 +815,12 @@ function AutoBibleBuilderPanel({ channels }: { channels: StudioChannel[] }) {
                   <Link key={project.projectId} href={`/projects/${project.projectId}`} className="rounded-2xl border border-white/10 bg-black/25 p-4 hover:border-emerald-200/50">
                     <p className="text-sm font-semibold text-white">{project.title}</p>
                     <p className="mt-2 text-xs text-mist/60">Episodio {project.episodeNumber} - {project.scenesCreated} cenas - score {project.productionGate.score}/100</p>
+                    {project.godModeGate ? (
+                      <div className={`mt-3 rounded-xl border p-3 text-xs ${project.godModeGate.status === "god_ready" ? "border-emerald-300/25 bg-emerald-300/[0.07] text-emerald-50" : project.godModeGate.status === "blocked" ? "border-rose-300/25 bg-rose-300/[0.07] text-rose-50" : "border-amber-300/25 bg-amber-300/[0.07] text-amber-50"}`}>
+                        <p className="font-semibold">God Mode Gate: {project.godModeGate.status} - {project.godModeGate.score}/100</p>
+                        <p className="mt-1">{project.godModeGate.directorNotes.slice(0, 2).join(" ")}</p>
+                      </div>
+                    ) : null}
                     {project.panelMatchSummary ? (
                       <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-mist/68">
                         <p className="font-semibold text-cyan-100">Painel x narra??o: {project.panelMatchSummary.matchedCount}/{project.panelMatchSummary.beatCount} cenas - score m?dio {project.panelMatchSummary.averageScore}</p>

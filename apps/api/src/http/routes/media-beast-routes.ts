@@ -13,6 +13,7 @@ import {
   buildComicNarrativeBible,
   buildComicNarrativeEpisodePlan,
   evaluateComicOneClickProductionGate,
+  evaluateComicEpisodeGodModeGate,
   buildComicNarrationPanelMatchPlan,
   loadLocalComicPanelIndex,
   buildComicAutoBibleFromSagaMap,
@@ -1275,6 +1276,12 @@ export async function handleMediaBeastRoute(
             })
           : null;
         const panelMatchByEventId = new Map((panelMatchPlan?.matches ?? []).map((match) => [match.eventId, match]));
+        const godModeGate = evaluateComicEpisodeGodModeGate({
+          episode,
+          productionGate,
+          panelMatchPlan,
+          minimumScore: 90
+        });
         const baseDuration = Math.max(2.2, Math.min(4, episode.estimatedDurationSeconds / Math.max(1, beats.length)));
         const scenes = [];
         const scenePanelMatches = [];
@@ -1380,6 +1387,7 @@ export async function handleMediaBeastRoute(
           scenesCreated: scenes.length,
           durationTarget: project.durationTarget,
           productionGate,
+          godModeGate,
           sourcePages: episode.pageReferences,
           panelMatchSummary: panelMatchPlan ? {
             matcherId: panelMatchPlan.matcherId,

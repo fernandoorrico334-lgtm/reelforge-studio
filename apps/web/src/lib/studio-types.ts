@@ -3739,6 +3739,16 @@ export interface ComicAutoBibleCreateProjectsResponse {
       blockers: string[];
       warnings: string[];
     };
+    godModeGate?: {
+      gateId: string;
+      status: "god_ready" | "needs_director_review" | "blocked" | string;
+      score: number;
+      renderCandidateAllowed: boolean;
+      blockers: string[];
+      warnings: string[];
+      directorNotes: string[];
+      checks: Array<{ id: string; label: string; status: string; score: number; detail: string }>;
+    };
     sourcePages: Array<{ issueNumber: number; pageNumbers: number[] }>;
     panelMatchSummary: null | {
       matcherId: string;
