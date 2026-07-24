@@ -28,11 +28,13 @@ const selected = selectComicNarrationTake({
   performance,
   targetExpressiveRangeDb: direction.targetExpressiveRangeDb,
   takes: [
-    { takeId: "flat", path: "flat.wav", durationSeconds: 2.1, expressiveRangeDb: 1.2, energyVariation: 0.1 },
-    { takeId: "human", path: "human.wav", durationSeconds: 2.2, expressiveRangeDb: direction.targetExpressiveRangeDb, energyVariation: 0.42 },
+    { takeId: "flat", path: "flat.wav", durationSeconds: 2.1, expressiveRangeDb: 1.2, energyVariation: 0.1, activeRmsDb: -22, peakDb: -6 },
+    { takeId: "quiet-human", path: "quiet-human.wav", durationSeconds: 2.2, expressiveRangeDb: direction.targetExpressiveRangeDb, energyVariation: 0.42, activeRmsDb: -34, peakDb: -20 },
+    { takeId: "human", path: "human.wav", durationSeconds: 2.2, expressiveRangeDb: direction.targetExpressiveRangeDb, energyVariation: 0.42, activeRmsDb: -22, peakDb: -6 },
   ],
 });
 if (selected.selectedTakeId !== "human") throw new Error("Flat narration take was not rejected.");
+if (!selected.presencePassed) throw new Error("Selected narration take did not pass the voice presence gate.");
 
 const cues = actingPlan.directions.map((item, index) => ({ cueId: `cue-${index + 1}`, sourceBeatIndex: item.sourceBeatIndex, text: item.displayText, focusTarget: item.expectedVisualTerms[0] ?? null, startSeconds: index * 2, endSeconds: index * 2 + 2 }));
 const alignment = evaluateComicNarrationScreenAlignment({ actingPlan, cues });

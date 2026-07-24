@@ -99,10 +99,11 @@ function payoffExpectationFor(direction: ComicNarrationActingDirection, mode: Co
   return null;
 }
 
-function emotionIntensity(direction: ComicNarrationActingDirection) {
+function emotionIntensity(direction: ComicNarrationActingDirection, performanceEnergy = 0.5) {
   const base = direction.targetExpressiveRangeDb / 20;
+  const narrativeEnergyBoost = Math.max(0, Math.min(1, performanceEnergy)) * 0.18;
   const contourBoost = direction.endingContour === "impact" ? 0.12 : direction.endingContour === "suspend" ? 0.08 : 0;
-  return round(Math.max(0.35, Math.min(1, base + contourBoost)));
+  return round(Math.max(0.35, Math.min(1, base + narrativeEnergyBoost + contourBoost)));
 }
 
 export function buildComicNarratorDirectorPlan(input: {
@@ -115,7 +116,7 @@ export function buildComicNarratorDirectorPlan(input: {
   const baseCues = input.actingPlan.directions.map((direction) => {
     const performance = performanceByPhrase.get(direction.phraseId);
     const mode = modeFor(direction);
-    const intensity = emotionIntensity(direction);
+    const intensity = emotionIntensity(direction, performance?.energy);
     const pronunciation = applyComicTtsPronunciation(direction.actingText);
     return {
       phraseId: direction.phraseId,

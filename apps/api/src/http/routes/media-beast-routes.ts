@@ -10,6 +10,12 @@ import {
   mediaBeastNiches,
   mediaBeastProviderIds,
   buildComicIngestionPlan,
+  buildComicNarrativeBible,
+  buildComicNarrativeEpisodePlan,
+  evaluateComicOneClickProductionGate,
+  buildComicNarrationPanelMatchPlan,
+  loadLocalComicPanelIndex,
+  buildComicAutoBibleFromSagaMap,
   buildComicBatchProjectBridgePayload,
   buildComicArcProjectsFromMinerV2,
   buildComicSagaNarrativeMap,
@@ -34,6 +40,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { basename, extname, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { AssetRepository } from "../../modules/assets/application/asset-repository.js";
 import type { ChannelRepository } from "../../modules/channels/application/channel-repository.js";
 import type { ProjectRepository } from "../../modules/projects/application/project-repository.js";
@@ -209,6 +216,55 @@ function readPanelReplacementsByArc(value: unknown): Record<string, Record<strin
   }
   return result;
 }
+
+type ComicAutoBibleIssuePanelIndex = {
+  issueNumber: number;
+  assetDirectory: string;
+  index: NonNullable<Awaited<ReturnType<typeof loadLocalComicPanelIndex>>>;
+};
+
+async function loadComicAutoBibleIssuePanelIndexes(value: unknown): Promise<{
+  issueIndexes: ComicAutoBibleIssuePanelIndex[];
+  warnings: string[];
+}> {
+  const rawIssues = Array.isArray(value) ? value : [];
+  const issueIndexes: ComicAutoBibleIssuePanelIndex[] = [];
+  const warnings: string[] = [];
+
+  for (const [index, rawIssue] of rawIssues.entries()) {
+    if (!rawIssue || typeof rawIssue !== "object") {
+      warnings.push(`issues[${index}] ignored: expected object.`);
+      continue;
+    }
+
+    const issuePayload = rawIssue as Record<string, unknown>;
+    const assetDirectory = readOptionalString(issuePayload.assetDirectory);
+    if (!assetDirectory) {
+      warnings.push(`issues[${index}] ignored: missing assetDirectory.`);
+      continue;
+    }
+
+    const issueNumberRaw = issuePayload.issueNumber === undefined || issuePayload.issueNumber === null ? index + 1 : Number(issuePayload.issueNumber);
+    if (!Number.isInteger(issueNumberRaw) || issueNumberRaw <= 0) {
+      warnings.push(`issues[${index}] ignored: invalid issueNumber.`);
+      continue;
+    }
+
+    const panelIndex = await loadLocalComicPanelIndex(assetDirectory);
+    if (!panelIndex) {
+      warnings.push(`Issue ${issueNumberRaw} has no local panel index at ${assetDirectory}. Run Auto Bible ingestion/indexing first.`);
+      continue;
+    }
+
+    issueIndexes.push({
+      issueNumber: issueNumberRaw,
+      assetDirectory,
+      index: panelIndex
+    });
+  }
+
+  return { issueIndexes, warnings };
+}
 function readProviderIds(value: unknown): MediaBeastProviderId[] {
   return readStringArray(value, "providerIds").map((providerId) => {
     if (!mediaBeastProviderIds.includes(providerId as MediaBeastProviderId)) {
@@ -219,6 +275,62 @@ function readProviderIds(value: unknown): MediaBeastProviderId[] {
   });
 }
 
+function resolveWorkspaceConfigPath(value: unknown, fallback: string, fieldName: string) {
+  const resolved = resolve(readOptionalString(value) ?? fallback);
+  const workspaceRoot = resolve(".");
+  const isInsideWorkspace = resolved === workspaceRoot || resolved.startsWith(`${workspaceRoot}${sep}`);
+  if (!isInsideWorkspace) {
+    throw new ValidationError(`${fieldName} must point to a file inside the ReelForge workspace.`);
+  }
+  return resolved;
+}
+
+function readEpisodeSelectionSpec(value: unknown) {
+  const spec = readOptionalString(value) ?? "all";
+  if (spec === "all") return spec;
+  const valid = spec.split(",").every((part) => /^\d+$/.test(part.trim()));
+  if (!valid) {
+    throw new ValidationError("episodes must be 'all' or a comma-separated list like 1,2,3.");
+  }
+  return spec;
+}
+
+function selectComicAssistedEpisodeIndexes(spec: string, episodeCount: number) {
+  if (spec === "all") return Array.from({ length: episodeCount }, (_, index) => index);
+  const indexes = spec
+    .split(",")
+    .map((part) => Number.parseInt(part.trim(), 10))
+    .filter((episodeNumber) => Number.isInteger(episodeNumber) && episodeNumber >= 1 && episodeNumber <= episodeCount)
+    .map((episodeNumber) => episodeNumber - 1);
+  return [...new Set(indexes)].sort((left, right) => left - right);
+}
+
+function quoteCommandArg(value: string) {
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+function buildComicAssistedRenderCommand(input: {
+  episodeNumber: number;
+  bibleConfig: string;
+  runtimeConfig: string;
+  maxDurationSeconds: number;
+  targetWordsPerMinute: number;
+  narrationProvider: string;
+  narrationSessionMode: string;
+}) {
+  return [
+    "npm run comic:one-click-assisted --",
+    "--mode render",
+    "--approved",
+    `--episodes ${input.episodeNumber}`,
+    `--bible-config ${quoteCommandArg(input.bibleConfig)}`,
+    `--runtime-config ${quoteCommandArg(input.runtimeConfig)}`,
+    `--max-duration ${input.maxDurationSeconds}`,
+    `--wpm ${input.targetWordsPerMinute}`,
+    `--provider ${quoteCommandArg(input.narrationProvider)}`,
+    `--session-mode ${quoteCommandArg(input.narrationSessionMode)}`
+  ].join(" ");
+}
 function readCandidate(value: unknown): MediaBeastCandidate {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ValidationError("candidate object is required.");
@@ -789,6 +901,122 @@ export async function handleMediaBeastRoute(
       return true;
     }
 
+    if (pathname === "/media-beast/comic-one-click-assisted/plan") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const title = readOptionalString(payload.title) ?? "Comic One-Click Assisted";
+      const episodesSpec = readEpisodeSelectionSpec(payload.episodes);
+      const maxDurationSeconds = Math.min(readPositiveInteger(payload.maxDurationSeconds, 180), 180);
+      const targetWordsPerMinute = Math.min(readPositiveInteger(payload.targetWordsPerMinute, 160), 190);
+      const narrationProvider = readOptionalString(payload.narrationProvider) ?? "voicebox-qwen";
+      const narrationSessionMode = readOptionalString(payload.narrationSessionMode) ?? "single";
+      if (!["single", "act", "phrase"].includes(narrationSessionMode)) {
+        throw new ValidationError("narrationSessionMode must be single, act, or phrase.");
+      }
+
+      const bibleConfig = resolveWorkspaceConfigPath(
+        payload.bibleConfig,
+        "scripts/comic-saga-configs/batman-white-knight-narrative-bible.mjs",
+        "bibleConfig"
+      );
+      const runtimeConfig = resolveWorkspaceConfigPath(
+        payload.runtimeConfig,
+        "scripts/comic-saga-configs/batman-white-knight-series-runtime.mjs",
+        "runtimeConfig"
+      );
+      const bibleModule = await import(pathToFileURL(bibleConfig).href) as {
+        narrativeBibleInput?: Parameters<typeof buildComicNarrativeBible>[0];
+        episodeDefinitions?: Parameters<typeof buildComicNarrativeEpisodePlan>[0]["episodes"];
+      };
+      if (!bibleModule.narrativeBibleInput || !bibleModule.episodeDefinitions) {
+        throw new ValidationError("bibleConfig must export narrativeBibleInput and episodeDefinitions.");
+      }
+
+      const bible = buildComicNarrativeBible(bibleModule.narrativeBibleInput);
+      const planner = buildComicNarrativeEpisodePlan({
+        bible,
+        episodes: bibleModule.episodeDefinitions,
+        maximumEpisodeDurationSeconds: maxDurationSeconds,
+        targetWordsPerMinute
+      });
+      const selectedIndexes = selectComicAssistedEpisodeIndexes(episodesSpec, planner.episodeCount);
+      if (selectedIndexes.length === 0) {
+        throw new ValidationError(`No valid episodes selected. Use all or values between 1 and ${planner.episodeCount}.`);
+      }
+
+      const selectedEpisodes = selectedIndexes.map((episodeIndex) => {
+        const episode = planner.episodes[episodeIndex];
+        if (!episode) {
+          throw new ValidationError(`Episode ${episodeIndex + 1} was not found in the assisted plan.`);
+        }
+        const episodeNumber = episodeIndex + 1;
+        const productionGate = evaluateComicOneClickProductionGate({
+          episode,
+          minimumDurationSeconds: 30,
+          maximumDurationSeconds: maxDurationSeconds,
+          minimumScoreToRender: 86
+        });
+        return {
+          episodeNumber,
+          episodeId: episode.episodeId,
+          title: episode.title,
+          issueNumbers: episode.issueNumbers,
+          pageReferences: episode.pageReferences,
+          eventCount: episode.eventIds.length,
+          estimatedDurationSeconds: episode.estimatedDurationSeconds,
+          wordCount: episode.wordCount,
+          criticalFactCount: episode.criticalFactIds.length,
+          narrationPreview: episode.narration.slice(0, 700),
+          gateStatus: episode.gate.status,
+          blockers: episode.gate.blockers,
+          warnings: episode.gate.warnings,
+          status: productionGate.renderAllowed ? "render_ready" : episode.gate.status === "passed" ? "ready_for_review" : "blocked",
+          productionGate,
+          renderAllowed: productionGate.renderAllowed,
+          renderCommand: buildComicAssistedRenderCommand({
+            episodeNumber,
+            bibleConfig,
+            runtimeConfig,
+            maxDurationSeconds,
+            targetWordsPerMinute,
+            narrationProvider,
+            narrationSessionMode
+          })
+        };
+      });
+      sendJson(response, 200, {
+        status: planner.status === "passed" ? "ready_for_review" : "needs_attention",
+        mode: "plan",
+        generatedAt: new Date().toISOString(),
+        title,
+        bibleConfig,
+        runtimeConfig,
+        bibleStatus: bible.gate.status,
+        plannerStatus: planner.status,
+        plannerBlockers: planner.blockers,
+        plannerWarnings: planner.warnings,
+        episodeCount: planner.episodeCount,
+        selectedEpisodeCount: selectedEpisodes.length,
+        maxDurationSeconds,
+        targetWordsPerMinute,
+        narrationProvider,
+        narrationSessionMode,
+        humanApprovalRequired: true,
+        selectedEpisodes,
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoRenderCount: 0,
+          note: "Assisted one-click only prepares reviewed episode plans and render commands. It never renders or imports new media automatically."
+        },
+        nextAction: "Review each episode, then run the render command for the approved episode only."
+      });
+      return true;
+    }
     if (pathname === "/media-beast/comic-shorts-factory/plan") {
       if (request.method !== "POST") {
         sendMethodNotAllowed(response, ["POST"]);
@@ -832,6 +1060,361 @@ export async function handleMediaBeastRoute(
       return true;
     }
 
+    if (pathname === "/media-beast/comic-auto-bible/from-issues") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const title = readOptionalString(payload.title) ?? "Saga de HQ importada";
+      const rawIssues = Array.isArray(payload.issues) ? payload.issues : [];
+      if (rawIssues.length === 0) {
+        throw new ValidationError("issues must include at least one local comic issue.");
+      }
+
+      const modeRaw = readOptionalString(payload.mode) ?? "full_story_series";
+      const allowedModes = ["full_story_series", "best_story_short", "curiosity_batch"] as const;
+      if (!allowedModes.includes(modeRaw as (typeof allowedModes)[number])) {
+        throw new ValidationError("mode must be full_story_series, best_story_short or curiosity_batch.");
+      }
+      const maxOpportunities = Math.min(readPositiveInteger(payload.maxOpportunities, 64), 160);
+      const minScoreRaw = payload.minScore === undefined || payload.minScore === null ? 0 : Number(payload.minScore);
+      if (!Number.isFinite(minScoreRaw) || minScoreRaw < 0 || minScoreRaw > 100) {
+        throw new ValidationError("minScore must be between 0 and 100.");
+      }
+      const forceRebuildIndex = readBoolean(payload.forceRebuildIndex, false);
+      const ocrEnabled = readBoolean(payload.ocrEnabled, false);
+
+      const issues = [];
+      const ingestionReports = [];
+      for (const [index, rawIssue] of rawIssues.entries()) {
+        if (!rawIssue || typeof rawIssue !== "object") {
+          throw new ValidationError("Each issue must be an object.");
+        }
+        const issuePayload = rawIssue as Record<string, unknown>;
+        const assetDirectory = readString(issuePayload.assetDirectory, `issues[${index}].assetDirectory`);
+        const sourcePath = readOptionalString(issuePayload.sourcePath);
+        const issueTitle = readOptionalString(issuePayload.title) ?? (sourcePath ? basename(sourcePath, extname(sourcePath)) : `Issue ${index + 1}`);
+        const issueNumberRaw = issuePayload.issueNumber === undefined || issuePayload.issueNumber === null ? index + 1 : Number(issuePayload.issueNumber);
+        if (!Number.isInteger(issueNumberRaw) || issueNumberRaw <= 0) {
+          throw new ValidationError(`issues[${index}].issueNumber must be a positive integer.`);
+        }
+
+        const ingested = sourcePath
+          ? await ingestLocalComicSource({
+              sourcePath,
+              assetDirectory,
+              buildIndex: true,
+              forceRebuildIndex,
+              ocrEnabled
+            })
+          : null;
+        const report = await mineComicStoryVaultFromDirectory({
+          assetDirectory: ingested?.assetDirectory ?? assetDirectory,
+          maxOpportunities,
+          minScore: minScoreRaw
+        });
+        if (ingested) {
+          ingestionReports.push({
+            issueNumber: issueNumberRaw,
+            sourcePath,
+            assetDirectory: ingested.assetDirectory,
+            pageCount: ingested.pages.length,
+            indexPath: ingested.indexPath
+          });
+        }
+        issues.push({
+          issueId: readOptionalString(issuePayload.issueId) ?? `issue-${String(issueNumberRaw).padStart(2, "0")}`,
+          issueNumber: issueNumberRaw,
+          title: issueTitle,
+          ...(sourcePath !== undefined ? { sourcePath } : {}),
+          report
+        });
+      }
+
+      const sagaMap = buildComicSagaNarrativeMap({ title, issues });
+      const autoBible = buildComicAutoBibleFromSagaMap({
+        sagaMap,
+        mode: modeRaw as (typeof allowedModes)[number],
+        targetEventCount: Math.min(readPositiveInteger(payload.targetEventCount, 24), 80),
+        maximumEpisodeDurationSeconds: Math.min(readPositiveInteger(payload.maximumEpisodeDurationSeconds, 180), 180),
+        targetWordsPerMinute: Math.min(readPositiveInteger(payload.targetWordsPerMinute, 160), 190)
+      });
+
+      const { mode: autoBibleMode, ...autoBiblePayload } = autoBible;
+
+      sendJson(response, 200, {
+        status: autoBible.qualityGates.canAttemptAutomatedRender ? "ready_for_review" : "needs_attention",
+        mode: "comic_auto_bible_from_issues_v1",
+        ...autoBiblePayload,
+        sagaMapSummary: {
+          issueCount: sagaMap.sagaOverview.issueCount,
+          totalPages: sagaMap.sagaOverview.totalPages,
+          timelineEventCount: sagaMap.timeline.length,
+          recommendedShortCount: sagaMap.recommendedShorts.length,
+          confidence: sagaMap.whatSystemSees.confidence,
+          blockers: sagaMap.qualityGates.blockers,
+          warnings: []
+        },
+        ingestionReports,
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoRenderCount: 0,
+          autoImportedAssetCount: 0,
+          note: "Auto Bible reads only local/user-provided comics, builds a narrative contract and returns episode candidates for manual approval. It never renders, downloads or imports final assets automatically."
+        }
+      });
+      return true;
+    }
+    if (pathname === "/media-beast/comic-auto-bible/create-projects") {
+      if (request.method !== "POST") {
+        sendMethodNotAllowed(response, ["POST"]);
+        return true;
+      }
+
+      const payload = await readJsonBody<Record<string, unknown>>(request);
+      const channelId = readString(payload.channelId, "channelId");
+      const titlePrefix = readOptionalString(payload.titlePrefix) ?? "HQ Story";
+      const maximumEpisodeDurationSeconds = Math.min(readPositiveInteger(payload.maximumEpisodeDurationSeconds, 180), 180);
+      const targetWordsPerMinute = Math.min(readPositiveInteger(payload.targetWordsPerMinute, 160), 190);
+      const maxProjects = Math.min(readPositiveInteger(payload.maxProjects, 6), 20);
+      const approvedEpisodeIds = readOptionalStringArray(payload.approvedEpisodeIds, "approvedEpisodeIds");
+      const biblePayload = payload.narrativeBibleInput;
+      const episodePayload = payload.episodeDefinitions;
+      if (!biblePayload || typeof biblePayload !== "object" || Array.isArray(biblePayload)) {
+        throw new ValidationError("narrativeBibleInput is required.");
+      }
+      if (!Array.isArray(episodePayload) || episodePayload.length === 0) {
+        throw new ValidationError("episodeDefinitions must include at least one episode.");
+      }
+
+      const { issueIndexes, warnings: panelIndexWarnings } = await loadComicAutoBibleIssuePanelIndexes(payload.issues);
+      const bible = buildComicNarrativeBible(biblePayload as Parameters<typeof buildComicNarrativeBible>[0]);
+      const planner = buildComicNarrativeEpisodePlan({
+        bible,
+        episodes: episodePayload as Parameters<typeof buildComicNarrativeEpisodePlan>[0]["episodes"],
+        maximumEpisodeDurationSeconds,
+        targetWordsPerMinute
+      });
+      const approvedSet = approvedEpisodeIds ? new Set(approvedEpisodeIds) : null;
+      const selectedEpisodes = planner.episodes
+        .map((episode) => ({
+          episode,
+          productionGate: evaluateComicOneClickProductionGate({
+            episode,
+            minimumDurationSeconds: 30,
+            maximumDurationSeconds: maximumEpisodeDurationSeconds,
+            minimumScoreToRender: 86
+          })
+        }))
+        .filter((entry) => !approvedSet || approvedSet.has(entry.episode.episodeId))
+        .slice(0, maxProjects);
+
+      if (selectedEpisodes.length === 0) {
+        throw new ValidationError(`No auto-bible episodes were selected for project creation. plannerEpisodeCount=${planner.episodeCount}; blockers=${planner.blockers.slice(0, 5).join(";")}`);
+      }
+
+      const createdProjects = [];
+      for (const { episode, productionGate } of selectedEpisodes) {
+        const project = await createVideoProject(
+          dependencies.projectRepository,
+          dependencies.channelRepository,
+          dependencies.assetRepository,
+          {
+            title: `${titlePrefix} - ${episode.title}`,
+            status: "SCENE_PLANNING",
+            channelId,
+            script: episode.narration,
+            durationTarget: Math.min(maximumEpisodeDurationSeconds, Math.max(30, Math.ceil(episode.estimatedDurationSeconds))),
+            format: "9:16",
+            templateId: "cinematic_story",
+            editingReferencePresetId: "comic_viral_antman_style",
+            editingStyleSummary: null,
+            defaultCaptionStyle: "comic_pop",
+            backgroundMusicAssetId: null,
+            musicPresetId: "cinematic_epic",
+            voiceoverAssetId: null,
+            audioMood: "cinematic",
+            musicVolume: 0.28,
+            voiceVolume: 1,
+            sfxVolume: 0.8,
+            enableAudioDucking: true,
+            duckingLevel: 0.35
+          }
+        );
+
+        const beats = episode.narrationBeats.length ? episode.narrationBeats : [{
+          eventId: episode.episodeId,
+          narrationText: episode.narration,
+          sourcePages: episode.pageReferences.flatMap((reference) => reference.pageNumbers),
+          visualTargets: []
+        }];
+        const issueNumberByPage = new Map<number, number>();
+        for (const reference of episode.pageReferences) {
+          for (const pageNumber of reference.pageNumbers) {
+            issueNumberByPage.set(pageNumber, reference.issueNumber);
+          }
+        }
+        const panelMatchPlan = issueIndexes.length > 0
+          ? buildComicNarrationPanelMatchPlan({
+              beats: beats.map((beat, index) => {
+                const issueNumber = beat.sourcePages.map((pageNumber) => issueNumberByPage.get(pageNumber)).find((value) => value !== undefined);
+                return {
+                  beatId: `${episode.episodeId}:beat-${index + 1}`,
+                  eventId: beat.eventId,
+                  order: index + 1,
+                  narrationText: beat.narrationText,
+                  sourcePages: beat.sourcePages,
+                  visualTargets: beat.visualTargets,
+                  ...(issueNumber !== undefined ? { issueNumber } : {})
+                };
+              }),
+              issueIndexes
+            })
+          : null;
+        const panelMatchByEventId = new Map((panelMatchPlan?.matches ?? []).map((match) => [match.eventId, match]));
+        const baseDuration = Math.max(2.2, Math.min(4, episode.estimatedDurationSeconds / Math.max(1, beats.length)));
+        const scenes = [];
+        const scenePanelMatches = [];
+        for (const [index, beat] of beats.entries()) {
+          const sourcePages = [...new Set(beat.sourcePages)].sort((left, right) => left - right);
+          const visualTargets = [...new Set(beat.visualTargets ?? [])].slice(0, 8);
+          const captionText = beat.narrationText.split(/[.!?]/).map((item) => item.trim()).filter(Boolean)[0] ?? beat.narrationText;
+          const panelMatch = panelMatchByEventId.get(beat.eventId) ?? null;
+          const selectedPanelPath = panelMatch?.selectedPanelImagePath ?? null;
+          const sceneDuration = Math.round(Math.min(4, Math.max(2.2, panelMatch?.zoomInstruction.holdSeconds ?? baseDuration)) * 10) / 10;
+          const scene = await createProjectScene(
+            dependencies.projectRepository,
+            dependencies.assetRepository,
+            project.id,
+            {
+              order: index + 1,
+              title: `Evento ${index + 1}: ${visualTargets[0] ?? panelMatch?.selectedPanelId ?? beat.eventId}`,
+              narrationText: beat.narrationText,
+              captionText,
+              duration: sceneDuration,
+              emotion: index === 0 ? "MYSTERIOUS" : index === beats.length - 1 ? "EPIC" : "TENSE",
+              assetId: null,
+              generatedAssetId: null,
+              generatedNarrationAssetId: null,
+              characterProfileId: null,
+              sfxAssetId: null,
+              sfxStartTime: 0,
+              sfxVolume: 0.75,
+              visualPreset: index === 0 ? "mystery" : "epic",
+              visualSourceMode: "fallback_generated",
+              visualPrompt: [
+                panelMatch?.selectedPanelId
+                  ? `Usar painel sugerido ${panelMatch.selectedPanelId}${selectedPanelPath ? ` em ${selectedPanelPath}` : ""}.`
+                  : `Selecionar painel autorizado da HQ para ${beat.eventId}.`,
+                `Paginas sugeridas: ${sourcePages.join(", ") || "revisar biblia"}.`,
+                `Alvos visuais: ${visualTargets.join(", ") || "personagem/acao principal da fala"}.`,
+                panelMatch ? `Matcher: ${panelMatch.confidence} score ${panelMatch.score}; foco ${panelMatch.zoomInstruction.mode}; movimento ${panelMatch.zoomInstruction.preferredMotion}.` : "Matcher sem painel confiavel; revisar manualmente.",
+                "Usar crop vertical 9:16 sem cortar balao, rosto ou golpe importante.",
+                "A imagem deve condizer com a frase narrada nesta cena."
+              ].join(" "),
+              negativePrompt: "corte fora do contexto, personagem errado, balao cortado, rosto cortado, repeticao visual",
+              visualRecipe: JSON.stringify({
+                source: "comic_auto_bible_create_projects_v1",
+                sagaId: bible.sagaId,
+                episodeId: episode.episodeId,
+                episodeNumber: episode.episodeNumber,
+                eventId: beat.eventId,
+                sourcePages,
+                visualTargets,
+                panelMatch: panelMatch ? {
+                  matcherId: panelMatchPlan?.matcherId,
+                  selectedPanelId: panelMatch.selectedPanelId,
+                  selectedPanelImagePath: panelMatch.selectedPanelImagePath,
+                  sourcePagePath: panelMatch.sourcePagePath,
+                  issueNumber: panelMatch.issueNumber,
+                  pageNumber: panelMatch.pageNumber,
+                  panelNumber: panelMatch.panelNumber,
+                  readingOrder: panelMatch.readingOrder,
+                  normalizedCrop: panelMatch.normalizedCrop,
+                  score: panelMatch.score,
+                  confidence: panelMatch.confidence,
+                  reasons: panelMatch.reasons,
+                  warnings: panelMatch.warnings,
+                  zoomInstruction: panelMatch.zoomInstruction,
+                  alternatives: panelMatch.alternatives
+                } : null,
+                requiresPanelApproval: true,
+                maxShotDurationSeconds: 4,
+                candidateFirst: true
+              }),
+              generationStatus: null,
+              generationProvider: null,
+              generationSeed: null,
+              transition: index === 0 ? "page_rip" : "page_push",
+              captionStyle: "comic_pop",
+              captionPosition: "lower-third",
+              captionEmphasisWords: visualTargets.slice(0, 4),
+              energyLevel: index === 0 ? 8 : index === beats.length - 1 ? 9 : 7,
+              narrationStatus: "draft",
+              narrationProvider: "f5-tts-local",
+              narrationVoicePackId: "story_epic_ptbr"
+            }
+          );
+          scenes.push(scene);
+          scenePanelMatches.push({
+            sceneId: scene.id,
+            sceneOrder: scene.order,
+            eventId: beat.eventId,
+            selectedPanelId: panelMatch?.selectedPanelId ?? null,
+            selectedPanelImagePath: panelMatch?.selectedPanelImagePath ?? null,
+            pageNumber: panelMatch?.pageNumber ?? null,
+            score: panelMatch?.score ?? 0,
+            confidence: panelMatch?.confidence ?? "missing",
+            warnings: panelMatch?.warnings ?? ["Sem painel sugerido."]
+          });
+        }
+
+        createdProjects.push({
+          projectId: project.id,
+          title: project.title,
+          episodeId: episode.episodeId,
+          episodeNumber: episode.episodeNumber,
+          scenesCreated: scenes.length,
+          durationTarget: project.durationTarget,
+          productionGate,
+          sourcePages: episode.pageReferences,
+          panelMatchSummary: panelMatchPlan ? {
+            matcherId: panelMatchPlan.matcherId,
+            beatCount: panelMatchPlan.beatCount,
+            matchedCount: panelMatchPlan.matchedCount,
+            highConfidenceCount: panelMatchPlan.highConfidenceCount,
+            repeatedPanelCount: panelMatchPlan.repeatedPanelCount,
+            averageScore: panelMatchPlan.averageScore,
+            warnings: panelMatchPlan.warnings
+          } : null,
+          panelMatches: scenePanelMatches,
+          narrationPreview: episode.narration.slice(0, 500),
+          nextAction: "Open the project, approve/replace panel visuals, generate narration, then render manually."
+        });
+      }
+
+      sendJson(response, 201, {
+        status: "created",
+        mode: "comic_auto_bible_project_series_v1",
+        createdCount: createdProjects.length,
+        requestedCount: approvedSet ? approvedSet.size : planner.episodeCount,
+        bibleStatus: bible.gate.status,
+        plannerStatus: planner.status,
+        createdProjects,
+        panelIndexWarnings,
+        riskPolicyGate: {
+          candidateFirst: true,
+          requiresManualApproval: true,
+          autoRenderCount: 0,
+          autoImportedAssetCount: 0,
+          note: "Auto Bible Project Series creates editable VideoProjects only. It does not render, import panels, download media, or bypass manual approval."
+        }
+      });
+      return true;
+    }
     if (pathname === "/media-beast/comic-studio/saga-narrative-map") {
       if (request.method !== "POST") {
         sendMethodNotAllowed(response, ["POST"]);
@@ -1519,6 +2102,18 @@ export async function handleMediaBeastRoute(
     return true;
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

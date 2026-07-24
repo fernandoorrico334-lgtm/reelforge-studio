@@ -8,6 +8,10 @@ export type ComicVisualNarrationContractReview = {
   visualTerms: string[];
   matchedTerms: string[];
   coverage: number;
+  evidenceConfidence: number;
+  evidenceSources: string[];
+  requestedTargets: string[];
+  verifiedTargets: string[];
   status: "passed" | "warning" | "rejected";
   recommendation: string;
 };
@@ -24,7 +28,7 @@ export type ComicVisualNarrationContractGate = {
 
 const STOP_WORDS = new Set(["a", "ao", "aos", "as", "com", "da", "das", "de", "do", "dos", "e", "em", "na", "nas", "no", "nos", "o", "os", "para", "por", "que", "sem", "uma", "um", "era", "foi", "isso", "esse", "essa"]);
 const ABSTRACT_TERMS = new Set(["pergunta", "problema", "maior", "chegou", "longe", "como", "quem", "tinha", "usado", "quando", "mudou", "deixava", "segundo", "cada", "verdadeiro", "plano", "instavel", "aquele", "todos", "junto", "errassem", "abriu", "acertou"]);
-const DOMAIN_VISUAL_TERMS = new Set(["batman", "superman", "godzilla", "godzila", "lex", "luthor", "lutor", "caixa", "materna", "portal", "cidade", "golpe", "monstros", "monstro", "arma", "poeira", "kong", "mutano", "lois", "clark", "flash", "lanterna", "verde", "titans", "titas"]);
+const DOMAIN_VISUAL_TERMS = new Set(["batman", "superman", "godzilla", "godzila", "lex", "luthor", "lutor", "caixa", "materna", "portal", "cidade", "golpe", "monstros", "monstro", "arma", "poeira", "kong", "mutano", "lois", "clark", "flash", "lanterna", "verde", "titans", "titas", "jack", "napier", "coringa", "gotham", "fundo", "devastacao", "bairro", "investidores", "lucro", "chapeleiro", "louco", "cara", "barro", "viloes", "criminosos", "controle", "tecnologia", "dick", "asa", "noturna", "barbara", "alfred", "jason", "robin", "bruce", "familia", "gordon", "policia", "unidade", "gto", "comunicacao", "cameras"]);
 
 function round(value: number) {
   return Math.round(value * 1000) / 1000;
@@ -43,7 +47,7 @@ function visualFocusTerms(text: string) {
 }
 
 function expectedFocusTerms(cue: ComicNarratorDirectorCue) {
-  const emphasis = (cue.emphasisWords ?? []).map(normalize).filter((term) => DOMAIN_VISUAL_TERMS.has(term) || !ABSTRACT_TERMS.has(term));
+  const emphasis = (cue.emphasisWords ?? []).map(normalize).filter((term) => DOMAIN_VISUAL_TERMS.has(term));
   const spoken = termsFrom(cue.spokenText).filter((term) => DOMAIN_VISUAL_TERMS.has(term));
   return [...new Set([...emphasis, ...spoken])].slice(0, 5);
 }
@@ -55,17 +59,37 @@ export function evaluateComicVisualNarrationContract(input: {
     text?: string;
     focusTarget?: string | null;
     verifiedFocusTargets?: string[] | null;
+    evidenceTerms?: string[];
+    evidenceConfidence?: number;
+    evidenceSource?: "detector" | "editorial_audit" | "ocr" | "metadata" | null;
     evidenceWarnings?: string[];
   }>;
 }): ComicVisualNarrationContractGate {
-  const reviews = input.cues.map((cue): ComicVisualNarrationContractReview => {
-    const visuals = input.visuals.filter((visual) => visual.sourceBeatIndex === cue.sourceBeatIndex);
-    const visualTerms = termsFrom(visuals.map((visual) => `${visual.text ?? ""} ${visual.focusTarget ?? ""} ${(visual.verifiedFocusTargets ?? []).join(" ")}`).join(" "));
+  const reviews = input.cues.map((cue, cueIndex): ComicVisualNarrationContractReview => {
+    const alignedVisual = input.visuals[cueIndex];
+    const visuals = alignedVisual?.sourceBeatIndex === cue.sourceBeatIndex
+      ? [alignedVisual]
+      : input.visuals.filter((visual) => visual.sourceBeatIndex === cue.sourceBeatIndex);
+    // Narration text and requested focus targets are intentions, not visual proof.
+    // Only detector/editorial evidence and explicitly verified targets may satisfy the contract.
+    const visualTerms = termsFrom(visuals.map((visual) => `${(visual.evidenceTerms ?? []).join(" ")} ${(visual.verifiedFocusTargets ?? []).join(" ")}`).join(" "));
     const expectedTerms = expectedFocusTerms(cue);
-    const matchedTerms = expectedTerms.filter((term) => visualTerms.some((visualTerm) => visualTerm.includes(term) || term.includes(visualTerm)));
+    const matchedTerms = expectedTerms.filter((term) => visualTerms.includes(term));
     const coverage = expectedTerms.length === 0 ? 1 : round(matchedTerms.length / expectedTerms.length);
     const isAbstractBridge = expectedTerms.length <= 2 && /\b(?:pergunta|problema|questao|agora|outra|maior|entao)\b/i.test(cue.spokenText);
-    const status = expectedTerms.length === 0 || isAbstractBridge || coverage >= 0.45 ? "passed" : coverage >= 0.25 ? "warning" : "rejected";
+    const evidenceConfidence = round(Math.max(0, ...visuals.map((visual) => visual.evidenceConfidence ?? 0)));
+    const evidenceSources = [...new Set(visuals.map((visual) => visual.evidenceSource).filter((source): source is NonNullable<typeof source> => Boolean(source)))];
+    const requestedTargets = [...new Set(visuals.map((visual) => visual.focusTarget).filter((target): target is string => Boolean(target)))];
+    const verifiedTargets = [...new Set(visuals.flatMap((visual) => visual.verifiedFocusTargets ?? []))];
+    const hasConcreteEvidence = visualTerms.length > 0 && evidenceSources.length > 0 && evidenceConfidence >= 0.65;
+    const hasUnverifiedNamedTarget = requestedTargets.length > 0 && verifiedTargets.length === 0;
+    const status = expectedTerms.length === 0 || isAbstractBridge
+      ? "passed"
+      : hasConcreteEvidence && !hasUnverifiedNamedTarget && coverage >= 0.5
+        ? "passed"
+        : hasConcreteEvidence && coverage >= 0.25
+          ? "warning"
+          : "rejected";
     return {
       phraseId: cue.phraseId,
       sourceBeatIndex: cue.sourceBeatIndex,
@@ -74,6 +98,10 @@ export function evaluateComicVisualNarrationContract(input: {
       visualTerms,
       matchedTerms,
       coverage,
+      evidenceConfidence,
+      evidenceSources,
+      requestedTargets,
+      verifiedTargets,
       status,
       recommendation: status === "passed" ? "visual_proves_narration" : "trocar painel/crop: a fala promete termos que nao aparecem claramente na tela",
     };

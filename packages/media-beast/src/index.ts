@@ -76,6 +76,8 @@ export * from "./pipeline/comic-reader-safe-panel-assets.js";
 export * from "./pipeline/comic-issue-narrative-map.js";
 export * from "./pipeline/comic-project-reader-safe-materializer.js";
 export * from "./pipeline/comic-narrative-continuity-hard-gate.js";
+export * from "./pipeline/comic-narrative-bible-engine.js";
+export * from "./pipeline/comic-narrative-episode-planner.js";
 export * from "./pipeline/local-comic-ingestion.js";
 export * from "./pipeline/comics-scene-evidence-audit.js";
 export * from "./pipeline/comics-crop-visual-evidence.js";
@@ -172,6 +174,7 @@ export * from "./pipeline/comic-narration-emotion-arc-director.js";
 export * from "./pipeline/comic-reference-style-score.js";
 export * from "./pipeline/comic-dialogue-awareness-director.js";
 export * from "./pipeline/comic-narration-visual-drift-auto-fixer.js";
+export * from "./pipeline/comic-comfy-visual-enrichment-director.js";
 export * from "./pipeline/comic-scene-emotion-voice-renderer.js";
 export * from "./pipeline/comic-oral-performance-rewriter.js";
 export * from "./pipeline/comic-pronunciation-dictionary.js";
@@ -182,5 +185,19 @@ export * from "./pipeline/comic-temporal-hook-director.js";
 export * from "./pipeline/comic-audience-context-director.js";
 export * from "./pipeline/comic-issue-transition-director.js";
 export * from "./pipeline/comic-premium-flow-policy.js";
+export * from "./pipeline/voicebox-qwen-types.js";
+export * from "./pipeline/voicebox-qwen-provider.js";
+export * from "./pipeline/prosody-instruction-compiler.js";
+export * from "./pipeline/voice-reference-store.js";
+export * from "./pipeline/narration-synthesis-blocks.js";
+export * from "./pipeline/narration-multi-take.js";
+export * from "./pipeline/narration-sequence-judge.js";
+export * from "./pipeline/pronunciation-memory.js";
+export * from "./pipeline/tts-provider-benchmark.js";
 
 
+export * from "./pipeline/comic-one-click-production-gate.js";
+
+export * from "./pipeline/comic-auto-bible-builder.js";
+
+export * from "./pipeline/comic-narration-panel-matcher.js";

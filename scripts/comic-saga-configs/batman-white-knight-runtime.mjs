@@ -1,0 +1,63 @@
+import base from "./batman-white-knight-issues-01-08.mjs";
+
+const lines = [
+  "Quando Batman perseguia o Coringa por Gotham, o herói perdia o controle; se a cidade perdesse a confiança nele, quem protegeria todos?",
+  "Depois da perseguição, o Coringa virou Jack Napier; mas sua arma era uma pergunta: quem pagava pela destruição de Batman?",
+  "Por isso Jack fez Gotham olhar para os escombros; se Batman parecia necessário, por que tanta gente ainda sangrava?",
+  "Com discurso calmo, Jack entrou em tribunais e câmeras; o risco era Batman virar acusado diante de Gotham.",
+  "Harley viu algo real tentando nascer em Jack; mas e se o Coringa ainda estivesse ali dentro?",
+  "Com Jack virando símbolo de ordem, Gordon e a polícia cobraram responsabilidade; o risco era Batman perder seus aliados.",
+  "Quando Jack moveu Gotham como tabuleiro, antigos vilões viraram parte do plano; o perigo era ele controlar monstros demais.",
+  "Mas quanto mais Jack parecia vencer, mais outra violência aparecia; alguém queria usar a nova ordem contra Gotham.",
+  "Então segredos de família, tecnologia antiga e rancores voltaram; a guerra era maior que Batman contra Jack.",
+  "Quando Bruce tentou provar seu valor, cada pista mostrou o custo da cruzada: salvar também podia ferir.",
+  "Por isso Jack ofereceu uma polícia com tecnologia de Batman, mas sem Batman; o risco era perder o comando da missão.",
+  "Enquanto Harley segurava a parte humana de Jack, o perigo era cada crise puxar o velho Coringa de volta.",
+  "Quando a cidade parecia escolher Jack, a Neo Coringa surgiu; ela queria devolver Gotham ao caos.",
+  "Com os vilões soltos, a campanha de Jack virou armadilha; se o controle falhasse, Gotham cairia junto?",
+  "Por isso Batman precisou confiar no inimigo; se Jack ainda existia, ele entendia o plano melhor que todos.",
+  "Quando Gotham virou campo de guerra, polícia, aliados e criminosos se chocaram; qualquer lado podia salvar ou destruir a cidade.",
+  "Mas Bruce viu o espelho mais duro: se Jack tivesse razão, Batman não podia ficar acima da cidade.",
+  "Enquanto Jack lutava por dentro, cada escolha para salvar Gotham chamava o Coringa de volta.",
+  "Quando a crise final chegou, a Neo Coringa apertou o gatilho; ruas e túneis viraram armadilhas contra Batman.",
+  "Por isso Batman, Jack, Harley, Gordon e antigos inimigos agiram juntos; não para brigar, mas para impedir Gotham de morrer.",
+  "Quando cada salvamento cobrava preço, Jack entendeu: salvar Gotham talvez custasse a pessoa que ele queria ser.",
+  "Na batalha final, Batman precisava salvar Gotham, e Jack precisava provar que não era só o Coringa usando outro nome.",
+  "Quando tudo apontava para o caos, Jack escolheu Gotham; mas essa escolha significava encarar o próprio fim.",
+  "Depois da vitória, Batman aceitou a verdade: proteger Gotham também significava responder pelo que fez em nome dela.",
+  "Quando tudo acabou, o risco deixou uma verdade: nem Coringa nem Batman podiam ficar acima das pessoas.",
+];
+
+export default {
+  ...base,
+  outputSlug: "batman-white-knight-issues-01-08-runtime",
+  narrationReferenceDnaId: "thwip_storytelling_v1",
+  audienceContextConcepts: base.audienceContextConcepts.map((concept) => ({ ...concept, audienceFamiliar: true })),
+  ttsPronunciations: [
+    [/\bBatman\b/gi, "Batman"],
+    [/\bGotham\b/gi, "Gotham"],
+    [/\bJack Napier\b/gi, "Jack Napier"],
+    [/\bJack\b/gi, "Jack"],
+    [/\bHarley\b/gi, "Harley"],
+    [/\bGordon\b/gi, "Gordon"],
+    [/\bBruce\b/gi, "Bruce"],
+    [/\bNeo Coringa\b/gi, "Neo Coringa"],
+  ],
+  curiosityQuestions: [
+    { questionId: "joker-hero-or-trap", question: "Jack Napier era um herói real ou a armadilha final do Coringa?", type: "what", openedAtBeatId: "saga-beat-1", partialAnswerBeatIds: ["saga-beat-4", "saga-beat-8"], payoffBeatId: "saga-beat-12", payoff: "Jack parecia real, mas cada crise puxava o velho Coringa de volta.", evidenceBeatIds: ["saga-beat-1", "saga-beat-5", "saga-beat-12"], isMacroQuestion: true, truthConfidence: 94 },
+    { questionId: "save-gotham-with-enemy", question: "Batman conseguiria salvar Gotham confiando no próprio inimigo?", type: "can", openedAtBeatId: "saga-beat-13", partialAnswerBeatIds: ["saga-beat-15", "saga-beat-20", "saga-beat-22"], payoffBeatId: "saga-beat-25", payoff: "Gotham sobreviveu quando Batman aceitou limites e Jack escolheu a cidade.", evidenceBeatIds: ["saga-beat-13", "saga-beat-20", "saga-beat-25"], truthConfidence: 95 },
+  ],
+  issueTransitionEvidence: [
+    { fromIssueNumber: 1, toIssueNumber: 2, previousConflictTerms: ["Jack"], causalBridgeTerms: ["Com"], newConflictTerms: ["Batman"] },
+    { fromIssueNumber: 2, toIssueNumber: 3, previousConflictTerms: ["Jack"], causalBridgeTerms: ["Quando"], newConflictTerms: ["tabuleiro"] },
+    { fromIssueNumber: 3, toIssueNumber: 4, previousConflictTerms: ["Bruce"], causalBridgeTerms: ["Quando"], newConflictTerms: ["cruzada"] },
+    { fromIssueNumber: 4, toIssueNumber: 5, previousConflictTerms: ["Jack"], causalBridgeTerms: ["Quando"], newConflictTerms: ["Neo Coringa"] },
+    { fromIssueNumber: 5, toIssueNumber: 6, previousConflictTerms: ["Gotham"], causalBridgeTerms: ["Quando"], newConflictTerms: ["campo de guerra"] },
+    { fromIssueNumber: 6, toIssueNumber: 7, previousConflictTerms: ["Batman"], causalBridgeTerms: ["Quando"], newConflictTerms: ["Neo Coringa"] },
+    { fromIssueNumber: 7, toIssueNumber: 8, previousConflictTerms: ["Batman"], causalBridgeTerms: ["Na batalha"], newConflictTerms: ["Gotham"] },
+  ],
+  cinematicNarration: base.cinematicNarration.map((entry, index) => ({
+    ...entry,
+    cinematicLine: lines[index] ?? entry.cinematicLine,
+  })),
+};

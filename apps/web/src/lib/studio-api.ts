@@ -125,6 +125,10 @@ import type {
   ComicStudioCreateProjectsResponse,
   ComicStudioCreateArcProjectsResponse,
   ComicStudioFactoryPlanResponse,
+  ComicOneClickAssistedPlanResponse,
+  ComicAutoBibleFromIssuesResponse,
+  ComicAutoBibleCreateProjectsResponse,
+  ComicAutoBibleIssueInput,
   MediaBeastCatalogResponse,
   EditorialShortPackResponse,
   VideoRemixPlanResponse,
@@ -2508,6 +2512,63 @@ export async function runOneClickProductionRequest(
 }
 
 
+export async function runComicAutoBibleFromIssuesRequest(payload: {
+  title?: string;
+  issues: ComicAutoBibleIssueInput[];
+  mode?: "full_story_series" | "best_story_short" | "curiosity_batch";
+  targetEventCount?: number;
+  maximumEpisodeDurationSeconds?: number;
+  targetWordsPerMinute?: number;
+  maxOpportunities?: number;
+  minScore?: number;
+  forceRebuildIndex?: boolean;
+  ocrEnabled?: boolean;
+}) {
+  return requestJson<ComicAutoBibleFromIssuesResponse>(
+    "/media-beast/comic-auto-bible/from-issues",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+export async function runComicAutoBibleCreateProjectsRequest(payload: {
+  channelId: string;
+  titlePrefix?: string;
+  issues?: ComicAutoBibleIssueInput[];
+  narrativeBibleInput: ComicAutoBibleFromIssuesResponse["narrativeBibleInput"];
+  episodeDefinitions: ComicAutoBibleFromIssuesResponse["episodeDefinitions"];
+  approvedEpisodeIds?: string[];
+  maxProjects?: number;
+  maximumEpisodeDurationSeconds?: number;
+  targetWordsPerMinute?: number;
+}) {
+  return requestJson<ComicAutoBibleCreateProjectsResponse>(
+    "/media-beast/comic-auto-bible/create-projects",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
+export async function runComicOneClickAssistedPlanRequest(payload: {
+  title?: string;
+  episodes?: string;
+  bibleConfig?: string;
+  runtimeConfig?: string;
+  maxDurationSeconds?: number;
+  targetWordsPerMinute?: number;
+  narrationProvider?: string;
+  narrationSessionMode?: "single" | "act" | "phrase";
+}) {
+  return requestJson<ComicOneClickAssistedPlanResponse>(
+    "/media-beast/comic-one-click-assisted/plan",
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+}
 export async function runComicStudioPlanRequest(payload: {
   assetDirectory: string;
   targetCount?: number;
@@ -3585,5 +3646,7 @@ export function getRenderThumbnailUrl(renderJobId: string) {
     `/media/renders/${encodeURIComponent(renderJobId)}/thumbnail`
   );
 }
+
+
 
 

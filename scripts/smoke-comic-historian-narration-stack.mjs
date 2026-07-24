@@ -79,10 +79,10 @@ const emotionArcPlan = buildComicNarrationEmotionArcPlan({ cues: narratorPlan.cu
 const visualContract = evaluateComicVisualNarrationContract({
   cues: narratorPlan.cues,
   visuals: [
-    { sourceBeatIndex: 0, text: "Superman encara Godzilla no meio da cidade", focusTarget: "Superman Godzilla cidade" },
-    { sourceBeatIndex: 1, text: "Batman observa Lex Luthor, a Caixa Materna e o portal instavel", focusTarget: "Batman Lex Luthor Caixa Materna portal" },
-    { sourceBeatIndex: 2, text: "golpe acerta Godzilla e a cidade cai ao fundo", focusTarget: "golpe Godzilla cidade caminho" },
-    { sourceBeatIndex: 3, text: "poeira baixa e os monstros viram arma", focusTarget: "monstros arma" },
+    { sourceBeatIndex: 0, focusTarget: "Superman Godzilla cidade", verifiedFocusTargets: ["Superman", "Godzilla", "cidade"], evidenceTerms: ["Superman", "Godzilla", "cidade"], evidenceConfidence: 0.96, evidenceSource: "editorial_audit" },
+    { sourceBeatIndex: 1, focusTarget: "Batman Lex Luthor Caixa Materna portal", verifiedFocusTargets: ["Batman", "Lex Luthor", "Caixa Materna", "portal"], evidenceTerms: ["Batman", "Lex Luthor", "Caixa Materna", "portal"], evidenceConfidence: 0.95, evidenceSource: "editorial_audit" },
+    { sourceBeatIndex: 2, focusTarget: "golpe Godzilla cidade caminho", verifiedFocusTargets: ["golpe", "Godzilla", "cidade", "caminho"], evidenceTerms: ["golpe", "Godzilla", "cidade", "caminho"], evidenceConfidence: 0.93, evidenceSource: "editorial_audit" },
+    { sourceBeatIndex: 3, focusTarget: "monstros arma", verifiedFocusTargets: ["monstros", "arma"], evidenceTerms: ["monstros", "arma"], evidenceConfidence: 0.91, evidenceSource: "editorial_audit" },
   ],
 });
 

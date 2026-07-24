@@ -82,14 +82,36 @@ export function buildComicMicroPausePlan(input: {
     };
   });
 
+  for (let pass = 0; pass < 4; pass += 1) {
+    let repaired = false;
+    for (let index = 2; index < cues.length; index += 1) {
+      const cue = cues[index]!;
+      const previous = cues[index - 1]!;
+      const beforePrevious = cues[index - 2]!;
+      const repeated = Math.abs(cue.pauseAfterMs - previous.pauseAfterMs) < 70 && Math.abs(previous.pauseAfterMs - beforePrevious.pauseAfterMs) < 70;
+      if (!repeated) continue;
+      const direction = index % 3 === 0 ? 145 : index % 3 === 1 ? -115 : 95;
+      cue.pauseAfterMs = clamp(cue.pauseAfterMs + direction + pass * 25, 120, input.referenceDna.pauseProfile.longPauseMs[1]);
+      repaired = true;
+    }
+    if (!repaired) break;
+  }
+
   for (let index = 2; index < cues.length; index += 1) {
     const cue = cues[index]!;
     const previous = cues[index - 1]!;
     const beforePrevious = cues[index - 2]!;
     const repeated = Math.abs(cue.pauseAfterMs - previous.pauseAfterMs) < 70 && Math.abs(previous.pauseAfterMs - beforePrevious.pauseAfterMs) < 70;
-    if (repeated) {
-      cue.pauseAfterMs = clamp(cue.pauseAfterMs + (index % 2 === 0 ? 115 : -85), 120, input.referenceDna.pauseProfile.longPauseMs[1]);
-    }
+    if (!repeated) continue;
+    const candidatePauses = [
+      input.referenceDna.pauseProfile.mediumPauseMs[0] + (index % 4) * 37,
+      input.referenceDna.pauseProfile.shortPauseMs[1] + 110 + (index % 3) * 29,
+      input.referenceDna.pauseProfile.longPauseMs[0] - 90 + (index % 2) * 60,
+    ];
+    const replacement = candidatePauses.find((candidate) =>
+      Math.abs(candidate - previous.pauseAfterMs) >= 70 && Math.abs(previous.pauseAfterMs - beforePrevious.pauseAfterMs) >= 70
+    ) ?? candidatePauses.find((candidate) => Math.abs(candidate - previous.pauseAfterMs) >= 70) ?? input.referenceDna.pauseProfile.mediumPauseMs[1];
+    cue.pauseAfterMs = clamp(replacement, 120, input.referenceDna.pauseProfile.longPauseMs[1]);
   }
 
   const repeatedPauseRunCount = cues.slice(2).filter((cue, index) => {

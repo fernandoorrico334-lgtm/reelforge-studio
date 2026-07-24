@@ -29,6 +29,12 @@ function splitMicrophrases(text: string) {
 
 function emotionFor(text: string, role: string, phraseIndex: number): ComicVoiceEmotion {
   if (text.includes("?")) return "intrigue";
+  if (/\b(?:assume o nome|se torna|revela)\b/i.test(text)) return "reveal";
+  if (/\b(?:captur|congel|gelo|arma tecnol)\w*/i.test(text)) return "impact";
+  if (/\b(?:inesperad|recupera a lucidez|se apresenta como|come.a a enxergar|percebe que|a verdade apareceu)\b/i.test(text)) return "reveal";
+  if (/\b(?:espancamento|viol.ncia|cruza um limite|agride|enfia comprimidos)\b/i.test(text)) return "impact";
+  if (/\b(?:perde o controle|perder o controle|efeito acabasse|antes que fosse tarde)\b/i.test(text)) return "urgency";
+  if (/\b(?:dependia|escondida|reca.da|medo|perigo|acusad|julgamento)\b/i.test(text)) return "suspense";
   if (/\b(?:nunca existiu|revelou|percebeu|descobriu|confirmaram|admitiu|era tarde|a verdade|o problema|ningu[eé]m sabia|sem imaginar)\b/i.test(text)) return "reveal";
   if (/\b(?:golpe|colidiram|atacou|ataque|tiros?|explod|guerra|destrui|energia at[oô]mica|portal|revolta|caiu|queda|enfrentaram)\b/i.test(text)) return "impact";
   if (/\b(?:corria|correram|avan[cç]ava|cada segundo|antes que|precisava|[uú]ltima|escapar|fuga|combust[ií]vel|tempestade|cercados?)\b/i.test(text)) return "urgency";

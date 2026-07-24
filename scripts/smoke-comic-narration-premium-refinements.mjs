@@ -38,13 +38,20 @@ const voicePlan = buildComicSceneEmotionVoicePlan({ narratorCues: narratorPlan.c
 const visualContract = evaluateComicVisualNarrationContract({
   cues: narratorPlan.cues,
   visuals: [
-    { sourceBeatIndex: 0, text: "Superman encara Godzilla, monstro no meio da cidade", focusTarget: "Superman Godzilla monstro cidade" },
-    { sourceBeatIndex: 1, text: "Batman observa Lex Luthor no caos e percebe detalhe", focusTarget: "Batman Lex Luthor caos detalhe" },
-    { sourceBeatIndex: 2, text: "Caixa Materna abre portal e golpe atravessa a cidade", focusTarget: "Caixa Materna portal golpe cidade" },
-    { sourceBeatIndex: 3, text: "portal aberto antes do proximo ataque", focusTarget: "portal ataque" },
+    { sourceBeatIndex: 0, focusTarget: "Superman Godzilla monstro cidade", verifiedFocusTargets: ["Superman", "Godzilla", "monstro", "cidade"], evidenceTerms: ["Superman", "Godzilla", "monstro", "cidade"], evidenceConfidence: 0.96, evidenceSource: "editorial_audit" },
+    { sourceBeatIndex: 1, focusTarget: "Batman Lex Luthor caos detalhe", verifiedFocusTargets: ["Batman", "Lex Luthor", "caos", "detalhe"], evidenceTerms: ["Batman", "Lex Luthor", "caos", "detalhe"], evidenceConfidence: 0.94, evidenceSource: "editorial_audit" },
+    { sourceBeatIndex: 2, focusTarget: "Caixa Materna portal golpe cidade", verifiedFocusTargets: ["Caixa Materna", "portal", "golpe", "cidade"], evidenceTerms: ["Caixa Materna", "portal", "golpe", "cidade"], evidenceConfidence: 0.97, evidenceSource: "editorial_audit" },
+    { sourceBeatIndex: 3, focusTarget: "portal ataque", verifiedFocusTargets: ["portal", "ataque"], evidenceTerms: ["portal", "ataque"], evidenceConfidence: 0.91, evidenceSource: "editorial_audit" },
   ],
 });
 const driftFixPlan = buildComicNarrationVisualDriftAutoFixPlan({ visualContractGate: visualContract });
+const unverifiedContract = evaluateComicVisualNarrationContract({
+  cues: narratorPlan.cues,
+  visuals: [
+    { sourceBeatIndex: 0, text: "Superman encara Godzilla", focusTarget: "Superman Godzilla" },
+  ],
+});
+
 const dialoguePlan = buildComicDialogueAwarenessPlan({
   cues: [
     { cueId: "cue-1", sourceBeatIndex: 0, hasDialogue: false, durationSeconds: 2.4, text: beats[0].narrationLine },
@@ -65,6 +72,7 @@ const referenceScore = scoreComicNarrationAgainstReference({ referenceDna, narra
 if (!voicePlan.passed) throw new Error(`Scene emotion voice rejected: ${voicePlan.warnings.join(", ")}`);
 if (visualContract.status !== "passed") throw new Error(`Visual contract rejected: ${visualContract.warnings.join(", ")}`);
 if (!driftFixPlan.passed) throw new Error(`Visual drift fixer rejected: ${driftFixPlan.warnings.join(", ")}`);
+if (unverifiedContract.status !== "rejected") throw new Error("Narration text must never count as visual evidence.");
 if (!dialoguePlan.passed) throw new Error(`Dialogue awareness rejected: ${dialoguePlan.warnings.join(", ")}`);
 if (dialoguePlan.dialogueCueCount < 2) throw new Error("Dialogue awareness must detect dialogue cues.");
 if (referenceScore.status !== "passed") throw new Error(`Reference score rejected: ${referenceScore.warnings.join(", ")}`);

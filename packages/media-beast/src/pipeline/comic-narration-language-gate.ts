@@ -11,7 +11,7 @@ export type ComicNarrationLanguageGateResult = {
   issueCount: number;
 };
 
-const BROKEN_PT_BR = /\b(?:Questao|Tres|Entao|televisao|ninguem|violencia|seguranca|nao|mudanca|salvacao|herois|fabricas|producao|Artico|instalacao|vigilancia|exploracao|sacrificio|necessario|porem|resistencia|versao|unica|ameaca|saida|aviao|combustivel|satelites|comunicacao|conclusao|metodos|forcado)\b/i;
+const BROKEN_PT_BR = /\b(?:Questao|Tres|Entao|televisao|ninguem|violencia|seguranca|nao|mudanca|salvacao|herois|fabricas|producao|Artico|instalacao|vigilancia|exploracao|sacrificio|necessario|porem|resistencia|versao|unica|ameaca|saida|aviao|combustivel|satelites|comunicacao|conclusao|metodos|forcado|heroi|perseguicao|destruicao|cameras|simbolo|policia|viloes|alguem|familia|tambem|missao|razao|tuneis|preco|proprio|vitoria|unico|so)\b/i;
 const INTERROGATIVE_OPENING = /^(?:mas\s+)?(?:por que|quem|como|quando|onde|qual|quais|o que|ser[aá] que|conseguiriam?)\b/i;
 const PHONETIC_LEAK = /\b(?:B[eé]t-?m[eé]n|B[eé]tman|[ÓO]liver Cu[ií]n|Br[uú]ss U[eê]in)\b/i;
 
@@ -36,3 +36,5 @@ export function evaluateComicNarrationLanguage(input: {
   const issueCount = reviews.reduce((sum, review) => sum + review.issues.length, 0);
   return { gateId: "comic_narration_language_gate_v1", status: issueCount === 0 ? "passed" : "rejected", reviews, issueCount };
 }
+
+

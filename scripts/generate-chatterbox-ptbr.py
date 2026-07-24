@@ -48,7 +48,7 @@ def main() -> None:
         wav = model.generate(
             item["spokenText"],
             language_id="pt",
-            audio_prompt_path=args.reference_audio,
+            audio_prompt_path=item.get("referenceAudio", args.reference_audio),
             exaggeration=float(item.get("exaggeration", 0.58)),
             cfg_weight=float(item.get("cfgWeight", 0.35)),
             temperature=float(item.get("temperature", 0.62)),
@@ -64,6 +64,7 @@ def main() -> None:
                 "sampleCount": int(audio.shape[0]),
                 "durationSeconds": round(float(audio.shape[0]) / model.sr, 3),
                 "seed": seed,
+                "referenceAudio": item.get("referenceAudio", args.reference_audio),
             }
         )
 

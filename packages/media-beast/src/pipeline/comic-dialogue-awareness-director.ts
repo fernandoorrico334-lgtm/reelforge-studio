@@ -30,7 +30,7 @@ export function buildComicDialogueAwarenessPlan(input: {
     const relatedShots = input.shots.filter((shot) => shot.beatIndex === cue.sourceBeatIndex);
     const balloonCount = relatedShots.filter((shot) => shot.dialogueBalloonId).length;
     const hasDialogue = cue.hasDialogue || balloonCount > 0 || /[“"].+[”"]|\b(?:disse|perguntou|respondeu|gritou|falou)\b/i.test(cue.text);
-    const lowAssociation = hasDialogue && relatedShots.some((shot) => shot.semanticAssociationConfidence < 55);
+    const lowAssociation = hasDialogue && balloonCount > 0 && relatedShots.some((shot) => shot.dialogueBalloonId && shot.semanticAssociationConfidence < 55);
     const recommendedHoldSeconds = hasDialogue ? round(Math.min(2.4, Math.max(1.1, cue.durationSeconds * 0.38 + balloonCount * 0.18))) : 0.8;
     return {
       cueId: cue.cueId,

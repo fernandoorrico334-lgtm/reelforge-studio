@@ -1,4 +1,4 @@
-﻿export type DataSource = "api" | "mock";
+export type DataSource = "api" | "mock";
 
 export const assetTypes = [
   "IMAGE",
@@ -3558,6 +3558,7 @@ export interface ComicStudioFactoryPlanResponse {
     warnings: string[];
   };
   arcStudio?: ComicStudioArcStudioSummary | null;
+  panelIndexWarnings?: string[];
   riskPolicyGate: {
     candidateFirst: boolean;
     requiresManualApproval: boolean;
@@ -3566,6 +3567,211 @@ export interface ComicStudioFactoryPlanResponse {
   };
 }
 
+export interface ComicOneClickAssistedEpisode {
+  episodeNumber: number;
+  episodeId: string;
+  title: string;
+  issueNumbers: number[];
+  pageReferences: Array<{ issueNumber: number; pageNumbers: number[] }>;
+  eventCount: number;
+  estimatedDurationSeconds: number;
+  wordCount: number;
+  criticalFactCount: number;
+  narrationPreview: string;
+  gateStatus: "passed" | "blocked" | string;
+  blockers: string[];
+  warnings: string[];
+  status: "ready_for_review" | "blocked" | string;
+  renderCommand: string;
+}
+
+export interface ComicOneClickAssistedPlanResponse {
+  status: "ready_for_review" | "needs_attention" | string;
+  mode: "plan";
+  generatedAt: string;
+  title: string;
+  bibleConfig: string;
+  runtimeConfig: string;
+  bibleStatus: string;
+  plannerStatus: string;
+  plannerBlockers: string[];
+  plannerWarnings: string[];
+  episodeCount: number;
+  selectedEpisodeCount: number;
+  maxDurationSeconds: number;
+  targetWordsPerMinute: number;
+  narrationProvider: string;
+  narrationSessionMode: string;
+  humanApprovalRequired: boolean;
+  selectedEpisodes: ComicOneClickAssistedEpisode[];
+  riskPolicyGate: {
+    candidateFirst: boolean;
+    requiresManualApproval: boolean;
+    autoRenderCount: number;
+    note: string;
+  };
+  nextAction: string;
+}
+export type ComicAutoBibleMode = "full_story_series" | "best_story_short" | "curiosity_batch";
+
+export interface ComicAutoBibleIssueInput {
+  issueNumber?: number;
+  issueId?: string;
+  title?: string;
+  assetDirectory: string;
+  sourcePath?: string;
+}
+
+export interface ComicAutoBibleProductionGateSummary {
+  episodeId: string;
+  episodeNumber: number;
+  title: string;
+  score: number;
+  renderAllowed: boolean;
+  status: string;
+  blockers: string[];
+  warnings: string[];
+}
+
+export interface ComicAutoBibleFromIssuesResponse {
+  status: "ready_for_review" | "needs_attention" | string;
+  mode: "comic_auto_bible_from_issues_v1" | string;
+  builderId: string;
+  generatedAt: string;
+  sagaTitle: string;
+  narrativeBibleInput: {
+    title: string;
+    premise: string;
+    centralQuestion: string;
+    events: Array<{
+      eventId: string;
+      sequence: number;
+      title: string;
+      issueNumber: number;
+      pageNumbers: number[];
+      narrationText: string;
+      actors: string[];
+      visualTargets: string[];
+    }>;
+  };
+  episodeDefinitions: Array<{
+    episodeId: string;
+    title: string;
+    eventIds: string[];
+    hook: string;
+    context: string;
+    payoff: string;
+    nextEpisodeHook: string;
+  }>;
+  productionGates: ComicAutoBibleProductionGateSummary[];
+  outputContract: {
+    canFeedOneClickProduction: boolean;
+    recommendedNextStep: string;
+    minimumDurationSeconds: number;
+    maximumDurationSeconds: number;
+    targetWordsPerMinute: number;
+  };
+  whatItUnderstands: {
+    premise: string;
+    centralQuestion: string;
+    beginning: string;
+    middle: string;
+    ending: string;
+    strongestCharacters: string[];
+    strongestThemes: string[];
+    generatedEventCount: number;
+    generatedEpisodeCount: number;
+  };
+  qualityGates: {
+    hasEvents: boolean;
+    hasEpisodes: boolean;
+    biblePassed: boolean;
+    episodePlannerPassed: boolean;
+    productionReadyEpisodes: number;
+    canAttemptAutomatedRender: boolean;
+    blockers: string[];
+    warnings: string[];
+  };
+  sagaMapSummary: {
+    issueCount: number;
+    totalPages: number;
+    timelineEventCount: number;
+    recommendedShortCount: number;
+    confidence: number;
+    blockers: string[];
+    warnings: string[];
+  };
+  ingestionReports: Array<{
+    issueNumber: number;
+    sourcePath: string;
+    assetDirectory: string;
+    pageCount: number;
+    indexPath: string;
+  }>;
+  riskPolicyGate: {
+    candidateFirst: boolean;
+    requiresManualApproval: boolean;
+    autoRenderCount: number;
+    autoImportedAssetCount: number;
+    note: string;
+  };
+  candidateFirst: true;
+  requiresManualApproval: true;
+}
+export interface ComicAutoBibleCreateProjectsResponse {
+  status: "created" | string;
+  mode: "comic_auto_bible_project_series_v1" | string;
+  createdCount: number;
+  requestedCount: number;
+  bibleStatus: string;
+  plannerStatus: string;
+  createdProjects: Array<{
+    projectId: string;
+    title: string;
+    episodeId: string;
+    episodeNumber: number;
+    scenesCreated: number;
+    durationTarget: number | null;
+    productionGate: {
+      status: string;
+      score: number;
+      renderAllowed: boolean;
+      blockers: string[];
+      warnings: string[];
+    };
+    sourcePages: Array<{ issueNumber: number; pageNumbers: number[] }>;
+    panelMatchSummary: null | {
+      matcherId: string;
+      beatCount: number;
+      matchedCount: number;
+      highConfidenceCount: number;
+      repeatedPanelCount: number;
+      averageScore: number;
+      warnings: string[];
+    };
+    panelMatches: Array<{
+      sceneId: string;
+      sceneOrder: number;
+      eventId: string;
+      selectedPanelId: string | null;
+      selectedPanelImagePath: string | null;
+      pageNumber: number | null;
+      score: number;
+      confidence: string;
+      warnings: string[];
+    }>;
+    narrationPreview: string;
+    nextAction: string;
+  }>;
+  panelIndexWarnings?: string[];
+  riskPolicyGate: {
+    candidateFirst: boolean;
+    requiresManualApproval: boolean;
+    autoRenderCount: number;
+    autoImportedAssetCount: number;
+    note: string;
+  };
+}
 export interface ComicStudioCreateProjectsResponse {
   status: "created";
   createdCount: number;
@@ -4175,6 +4381,8 @@ export interface DashboardSnapshot {
     renders: DataSource;
   };
 }
+
+
 
 
 

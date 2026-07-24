@@ -134,14 +134,23 @@
     "smoke:comic-temporal-hook": "node scripts/smoke-comic-temporal-hook.mjs",
     "smoke:comic-audience-context": "node scripts/smoke-comic-audience-context.mjs",
     "demo:comic-saga:complete": "node scripts/render-comic-complete-saga-v1.mjs",
+    "comic:one-click-assisted": "node scripts/comic-one-click-assisted.mjs",
     "smoke:comic-issue-transitions": "node scripts/smoke-comic-issue-transitions.mjs",
     "smoke:comic-visual-evidence-sync": "node scripts/smoke-comic-visual-evidence-sync.mjs",
+    "smoke:comic-comfy-visual-enrichment": "node scripts/smoke-comic-comfy-visual-enrichment.mjs",
+    "smoke:comic-one-click-assisted": "node scripts/smoke-comic-one-click-assisted.mjs",
+    "smoke:comic-one-click-production": "node scripts/smoke-comic-one-click-production.mjs",
+    "smoke:comic-auto-bible-builder": "node scripts/smoke-comic-auto-bible-builder.mjs",
     "smoke:comic-premium-flow-policy": "node scripts/smoke-comic-premium-flow-policy.mjs",
     "smoke:comic-narrator-director": "node scripts/smoke-comic-narrator-director.mjs",
     "smoke:comic-narration-reference-dna": "node scripts/smoke-comic-narration-reference-dna.mjs",
     "smoke:comic-historian-narration-stack": "node scripts/smoke-comic-historian-narration-stack.mjs",
     "smoke:comic-narration-premium-refinements": "node scripts/smoke-comic-narration-premium-refinements.mjs",
-    "smoke:comic-premium-safety": "node scripts/smoke-comic-premium-safety.mjs"
+    "smoke:comic-premium-safety": "node scripts/smoke-comic-premium-safety.mjs",
+    "smoke:voicebox-qwen-narration": "node scripts/smoke-voicebox-qwen-narration.mjs",
+    "benchmark:tts-providers": "node scripts/benchmark-tts-providers.mjs",
+    "smoke:comic-auto-bible-create-projects": "node scripts/smoke-comic-auto-bible-create-projects.mjs",
+    "smoke:comic-narration-panel-matcher": "node scripts/smoke-comic-narration-panel-matcher.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

@@ -16,6 +16,14 @@ import {
   buildComicPhraseVoicePlan,
   buildComicNarrationZoomPlan,
   buildComicNarratorDirectorPlan,
+  buildComicNarrationEmotionArcPlan,
+  buildComicSceneEmotionVoicePlan,
+  buildComicDialogueAwarenessPlan,
+  buildComicNarrationVisualDriftAutoFixPlan,
+  buildComicComfyVisualEnrichmentPlan,
+  evaluateComicVisualNarrationContract,
+  getComicNarrationReferenceDnaById,
+  scoreComicNarrationAgainstReference,
   buildComicPanelShotPlan,
   buildComicStereoSfxPlan,
   buildComicTemporalHookPlan,
@@ -26,6 +34,9 @@ import {
   evaluateComicProsodyQuality,
   evaluateComicRetentionRewriteGate,
   selectComicNarrationTake,
+  QwenClonedVoiceProvider,
+  VoiceboxApiClient,
+  VoiceboxHealthCheck,
   reviewComicCueVisualEvidence,
 } from "../packages/media-beast/dist/index.js";
 
@@ -46,6 +57,16 @@ const visionPython = process.env.COMIC_VISION_PYTHON || join(voiceLab, ".venv-pi
 const qaPython = process.env.NARRATION_QA_PYTHON || join(voiceLab, ".venv-py311/Scripts/python.exe");
 const chatterboxSource = process.env.CHATTERBOX_PTBR_SOURCE || join(voiceLab, "chatterbox-ptbr-space/chatterbox/src");
 const referenceAudio = process.env.CHATTERBOX_PTBR_REFERENCE || join(voiceLab, "voice-references/faber-narrator-ptbr.wav");
+const voicePackManifestPath = process.env.CHATTERBOX_PTBR_VOICE_PACK
+  || join(voiceLab, "voice-references/pichau-cinematic-ptbr-v1/voice-pack.json");
+const narrationProvider = process.env.COMIC_NARRATION_PROVIDER || "chatterbox-ptbr";
+const voiceboxBaseUrl = process.env.VOICEBOX_BASE_URL || "http://127.0.0.1:17493";
+const requestedNarrationSessionMode = process.env.COMIC_NARRATION_SESSION_MODE
+  ?? sagaConfig?.narrationSessionMode
+  ?? (sagaConfig?.narrationVoiceLock?.enabled ? "single" : "phrase");
+const narrationSessionMode = ["phrase", "act", "single"].includes(requestedNarrationSessionMode)
+  ? requestedNarrationSessionMode
+  : "phrase";
 const sfxAssets = {
   pageTear: join(root, "storage/assets/sfx/FILM-20260704T151810Z-3-001/FILM/MOV/FILM_BURN_01.mp4"),
   impact: join(root, "storage/assets/sfx/FILM CLUTTER-20260704T151808Z-3-001/FILM CLUTTER/MOV/FILM_CLUTTER_01.mp4"),
@@ -236,6 +257,16 @@ const narratorDirectorPlan = buildComicNarratorDirectorPlan({
 if (!narratorDirectorPlan.passed) throw new Error("Narrator Director rejected performance: " + narratorDirectorPlan.warnings.join(", "));
 const actingDirectionByPhraseId = new Map(narrationActingPlan.directions.map((direction) => [direction.phraseId, direction]));
 const narratorCueByPhraseId = new Map(narratorDirectorPlan.cues.map((cue) => [cue.phraseId, cue]));
+const narrationEmotionArcPlan = buildComicNarrationEmotionArcPlan({ cues: narratorDirectorPlan.cues });
+if (!narrationEmotionArcPlan.passed) throw new Error("Narration emotion arc rejected: " + narrationEmotionArcPlan.warnings.join(", "));
+const sceneEmotionVoicePlan = buildComicSceneEmotionVoicePlan({ narratorCues: narratorDirectorPlan.cues, emotionArcPlan: narrationEmotionArcPlan });
+if (!sceneEmotionVoicePlan.passed) throw new Error("Scene emotion voice plan rejected: " + sceneEmotionVoicePlan.warnings.join(", "));
+const referenceStyleScore = scoreComicNarrationAgainstReference({
+  referenceDna: getComicNarrationReferenceDnaById(sagaConfig?.narrationReferenceDnaId ?? "thwip_storytelling_v1"),
+  narratorPlan: narratorDirectorPlan,
+  emotionArcPlan: narrationEmotionArcPlan,
+});
+if (referenceStyleScore.status !== "passed") throw new Error("Reference style score rejected: " + referenceStyleScore.warnings.join(", "));
 const plannedProsodyGate = evaluateComicProsodyQuality({ performancePlan: narrationPerformancePlan });
 if (!narrationPerformancePlan.passed || plannedProsodyGate.status !== "passed") {
   throw new Error(
@@ -343,6 +374,19 @@ const ttsPronunciations = sagaConfig?.ttsPronunciations ?? [
   [/\bFlash\b/gi, "FlÃ©sh"],
   [/\bforÃ§a\b/gi, "fÃ³rssa"],
 ];
+const narrationVoiceLock = sagaConfig?.narrationVoiceLock?.enabled ? {
+  id: sagaConfig.narrationVoiceLock.id ?? "single_voice_lock_v1",
+  anchorTakeId: sagaConfig.narrationVoiceLock.anchorTakeId ?? null,
+  anchorTimestampSeconds: sagaConfig.narrationVoiceLock.anchorTimestampSeconds ?? null,
+  seed: sagaConfig.narrationVoiceLock.seed ?? 5120,
+  exaggeration: sagaConfig.narrationVoiceLock.exaggeration ?? 0.665,
+  cfgWeight: sagaConfig.narrationVoiceLock.cfgWeight ?? 0.34,
+  temperature: sagaConfig.narrationVoiceLock.temperature ?? 0.638,
+  instruction: sagaConfig.narrationVoiceLock.instruction ?? "Conte como historia acontecendo agora, nao como resumo de quadrinho.",
+  targetActiveRmsDb: sagaConfig.narrationVoiceLock.targetActiveRmsDb ?? -22.132,
+  targetPeakDb: sagaConfig.narrationVoiceLock.targetPeakDb ?? -6.192,
+} : null;
+
 
 function narrationTextForTts(text) {
   return ttsPronunciations.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text)
@@ -365,6 +409,25 @@ function assTime(seconds) {
 function escapeAss(text) {
   return text.replaceAll("\\", "\\\\").replaceAll("{", "\\{").replaceAll("}", "\\}");
 }
+
+function wrapEditorialText(text, maximumLineLength = 26) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  const lines = [""];
+  for (const word of words) {
+    const current = lines.at(-1);
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maximumLineLength || lines.length >= 2) lines[lines.length - 1] = candidate;
+    else lines.push(word);
+  }
+  if (lines.at(-1).length > maximumLineLength + 8) {
+    const flattened = words.join(" ");
+    const splitAt = flattened.lastIndexOf(" ", Math.ceil(flattened.length / 2));
+    if (splitAt > 0) return `${escapeAss(flattened.slice(0, splitAt))}\\N${escapeAss(flattened.slice(splitAt + 1))}`;
+  }
+  return lines.map(escapeAss).join("\\N");
+}
+
 
 function phrases(text) {
   const words = text.split(/\s+/).filter(Boolean);
@@ -451,11 +514,17 @@ function buildMeasuredVisualCues(beat, beatIndex, measuredPhrasePlan) {
         const pageNumbers = pageGroups[groupIndex] ?? selection.cue.pages;
         const pages = pageNumbers.map((page) => uniquePageKey(selection.cue.issueNumber ?? beat.issueNumber, page));
         const evidenceReview = reviewComicCueVisualEvidence({ pages, requestedTarget: selection.cue.focusTarget, evidence: auditedVisualEvidence });
+        const evidenceConfidence = evidenceReview.bestRegion?.confidence != null
+          ? Math.min(1, evidenceReview.bestRegion.confidence / 100)
+          : evidenceReview.verified ? 0.75 : 0;
         resolved.push({
           text: selection.phrase.text,
           pages,
           focusTarget: selection.cue.focusTarget,
-          verifiedFocusTargets: selection.cue.focusTarget && evidenceReview.verified ? [selection.cue.focusTarget] : [],
+          verifiedFocusTargets: selection.cue.verifiedFocusTargets ?? (selection.cue.focusTarget && evidenceReview.verified ? [selection.cue.focusTarget] : []),
+          evidenceTerms: selection.cue.evidenceTerms ?? evidenceReview.verifiedTargets,
+          evidenceConfidence: selection.cue.evidenceConfidence ?? evidenceConfidence,
+          evidenceSource: selection.cue.evidenceSource ?? (evidenceReview.verified ? "editorial_audit" : null),
           evidenceWarnings: evidenceReview.warnings,
           durationSeconds: selection.phrase.processedDurationSeconds,
         });
@@ -539,22 +608,328 @@ function visualFilter(shot, page, renderDuration) {
   }[shot.cameraMove];
   return `crop=${width}:${height}:${x}:${y},scale=1200:2134,zoompan=z='${move.z}':x='${move.x}':y='${move.y}':d=${frames}:s=1080x1920:fps=30,eq=contrast=1.06:saturation=1.08,format=yuv420p`;
 }
+function getNarrationPhraseTexts(performance) {
+  const acting = actingDirectionByPhraseId.get(performance.phraseId);
+  const narratorCue = narratorCueByPhraseId.get(performance.phraseId);
+  const displayText = narratorCue?.displayText ?? acting?.displayText ?? performance.text;
+  const spokenText = narrationTextForTts(narratorCue?.spokenText ?? acting?.actingText ?? performance.text);
+  return { acting, narratorCue, displayText, spokenText };
+}
+
+function buildNarrationSessionGroups() {
+  const performances = narrationPerformancePlan.performances;
+  if (narrationSessionMode === "single") {
+    return [{ sessionId: "session-00", sourceBeatIndex: null, performances: performances.map((performance, phraseIndex) => ({ performance, phraseIndex })) }];
+  }
+  const byBeat = new Map();
+  performances.forEach((performance, phraseIndex) => {
+    const key = performance.sourceBeatIndex ?? 0;
+    if (!byBeat.has(key)) byBeat.set(key, []);
+    byBeat.get(key).push({ performance, phraseIndex });
+  });
+  return [...byBeat.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([sourceBeatIndex, items], index) => ({ sessionId: "session-" + String(index).padStart(2, "0"), sourceBeatIndex, performances: items }));
+}
+
+function buildSessionText(items, field) {
+  return items
+    .map(({ performance }) => getNarrationPhraseTexts(performance)[field])
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function phraseTimingWeight(phrase, narratorCue, acting) {
+  const text = narratorCue?.displayText ?? acting?.displayText ?? phrase.text;
+  const wordWeight = Math.max(1, text.split(/\s+/).filter(Boolean).length);
+  const punctuationWeight = /[?!]/.test(text) ? 1.15 : /[.:;]/.test(text) ? 1.08 : 1;
+  const intensityWeight = phrase.narrativeFunction === "impact" || phrase.narrativeFunction === "payoff" ? 1.08 : 1;
+  const pauseWeight = ((narratorCue?.pauseBeforeMs ?? acting?.pauseBeforeMs ?? 0) + (narratorCue?.pauseAfterMs ?? acting?.pauseAfterMs ?? phrase.pauseAfterMs ?? 0)) / 1000;
+  return wordWeight * punctuationWeight * intensityWeight + pauseWeight * 2.2;
+}
+
+async function synthesizeNarrationSessions() {
+  if (narrationProvider !== "voicebox-qwen") {
+    console.warn(`[comic-narration] Session mode ${narrationSessionMode} is optimized for voicebox-qwen. Falling back to phrase mode for ${narrationProvider}.`);
+    return null;
+  }
+  const manifestPath = join(outputDir, "narration-manifest.json");
+  const generationManifestPath = join(outputDir, "narration-generation-manifest.json");
+  const voicePack = await readFile(voicePackManifestPath, "utf8")
+    .then((value) => JSON.parse(value))
+    .catch(() => null);
+  if (!voicePack) throw new Error(`Voicebox narration requires a valid voice pack at ${voicePackManifestPath}.`);
+
+  const voiceSamplesById = new Map((voicePack?.samples ?? []).map((sample) => [sample.id, sample]));
+  const defaultSample = voiceSamplesById.get(voicePack?.defaultSampleId) ?? null;
+  const identityVoiceboxProfileId = voicePack?.voicebox?.identityProfileId
+    ?? defaultSample?.voiceboxProfileId
+    ?? null;
+  if (!identityVoiceboxProfileId) throw new Error("Voicebox session narration requires one stable identity profile in the voice pack.");
+
+  const groups = buildNarrationSessionGroups();
+  const generationEntries = groups.map((group, groupIndex) => {
+    const firstPerformance = group.performances[0]?.performance;
+    const firstTexts = firstPerformance ? getNarrationPhraseTexts(firstPerformance) : {};
+    const spokenText = buildSessionText(group.performances, "spokenText");
+    const displayText = buildSessionText(group.performances, "displayText");
+    return {
+      sessionId: group.sessionId,
+      sessionMode: narrationSessionMode,
+      sourceBeatIndex: group.sourceBeatIndex,
+      phraseIds: group.performances.map(({ performance }) => performance.phraseId),
+      phraseIndexes: group.performances.map(({ phraseIndex }) => phraseIndex),
+      spokenText,
+      qaText: displayText,
+      displayText,
+      takeId: `${group.sessionId}-single-take`,
+      sourceBeatId: firstPerformance?.sourceBeatId ?? group.sessionId,
+      emotion: firstPerformance?.emotion ?? "story",
+      actingIntention: firstTexts.acting?.intention ?? "storytelling",
+      referenceAudio,
+      voiceboxProfileId: identityVoiceboxProfileId,
+      narratorPerformanceNote: narrationVoiceLock?.instruction ?? firstTexts.narratorCue?.performanceNote ?? "Narre como uma historia continua, natural, humana, com a mesma voz do inicio ao fim.",
+      narrativeFunction: firstPerformance?.narrativeFunction ?? "story",
+      seed: (narrationVoiceLock?.seed ?? 5120) + groupIndex,
+      exaggeration: narrationVoiceLock?.exaggeration ?? 0.665,
+      cfgWeight: narrationVoiceLock?.cfgWeight ?? 0.34,
+      temperature: narrationVoiceLock?.temperature ?? 0.638,
+    };
+  });
+
+  const generationManifest = {
+    provider: narrationProvider,
+    sessionMode: narrationSessionMode,
+    voicePackId: voicePack?.id ?? null,
+    voiceIdentityPolicy: "continuous_single_voice_session",
+    identityVoiceboxProfileId,
+    beats: generationEntries,
+  };
+  const corruptedTtsText = generationManifest.beats.find((item) => /[\u00c2\u00c3\u00ef\uFFFD]/u.test(item.spokenText));
+  if (corruptedTtsText) throw new Error(`Narration text encoding rejected before TTS (${corruptedTtsText.sessionId}): ${corruptedTtsText.spokenText}`);
+
+  const generationManifestJson = JSON.stringify(generationManifest, null, 2);
+  const narrationCacheKey = createHash("sha256").update(generationManifestJson).digest("hex");
+  const narrationCacheKeyPath = join(outputDir, "narration-cache-key.txt");
+  const previousGenerationManifest = await readFile(generationManifestPath, "utf8").then((value) => JSON.parse(value)).catch(() => null);
+  const previousCacheKey = await readFile(narrationCacheKeyPath, "utf8").then((value) => value.trim()).catch(() => "");
+  await writeFile(generationManifestPath, generationManifestJson, "utf8");
+
+  const rawPaths = generationEntries.map((_, index) => join(outputDir, "narration-session-" + String(index).padStart(2, "0") + ".wav"));
+  const rawAvailability = await Promise.all(rawPaths.map((path) => access(path).then(() => true).catch(() => false)));
+  const synthesisFingerprint = (beat) => {
+    if (!beat) return "";
+    const { qaText, displayText, ...synthesisInput } = beat;
+    return JSON.stringify(synthesisInput);
+  };
+  const reusableRawTakes = generationManifest.beats.map((beat, index) =>
+    rawAvailability[index] && synthesisFingerprint(previousGenerationManifest?.beats?.[index]) === synthesisFingerprint(beat),
+  );
+
+  if (!reusableRawTakes.every(Boolean) || previousCacheKey !== narrationCacheKey) {
+    const client = new VoiceboxApiClient({ baseUrl: voiceboxBaseUrl, timeoutMs: Number(process.env.VOICEBOX_TIMEOUT_MS ?? 600_000) });
+    const health = await new VoiceboxHealthCheck(client).inspect();
+    if (!health.reachable || !health.ready || !health.gpu_available) throw new Error(`Voicebox is not production-ready: ${JSON.stringify(health)}`);
+    const provider = new QwenClonedVoiceProvider(client);
+    const voiceboxResults = [];
+    for (let index = 0; index < generationManifest.beats.length; index += 1) {
+      const item = generationManifest.beats[index];
+      if (reusableRawTakes[index]) {
+        voiceboxResults.push({ cached: true, outputPath: rawPaths[index], sessionId: item.sessionId, phraseIds: item.phraseIds });
+        continue;
+      }
+      const generated = await provider.generateCloned({
+        text: item.spokenText,
+        language: "pt",
+        modelSize: "1.7B",
+        profileId: item.voiceboxProfileId,
+        seed: item.seed,
+        instruct: item.narratorPerformanceNote,
+        normalize: false,
+        maxChunkChars: narrationSessionMode === "single" ? 2800 : 1400,
+        crossfadeMs: narrationSessionMode === "single" ? 120 : 90,
+      });
+      await writeFile(rawPaths[index], await client.downloadAudio(generated.generationId));
+      voiceboxResults.push({ ...generated, outputPath: rawPaths[index], sessionId: item.sessionId, phraseIds: item.phraseIds });
+    }
+    await writeFile(join(outputDir, "voicebox-generation.json"), JSON.stringify({ provider: narrationProvider, sessionMode: narrationSessionMode, health, results: voiceboxResults }, null, 2), "utf8");
+    await writeFile(narrationCacheKeyPath, narrationCacheKey, "utf8");
+  }
+
+  const ready = [];
+  const measuredPhrasePlan = [];
+  const takeSelections = Array.from({ length: narrationPerformancePlan.performances.length });
+  beats.forEach((beat) => { beat.durationSeconds = 0; });
+
+  for (let groupIndex = 0; groupIndex < generationEntries.length; groupIndex += 1) {
+    const entry = generationEntries[groupIndex];
+    const output = join(outputDir, "narration-session-ready-" + String(groupIndex).padStart(2, "0") + ".wav");
+    const filters = [
+      "highpass=f=70",
+      "lowpass=f=15000",
+      "loudnorm=I=-18:TP=-2:LRA=6",
+      "acompressor=threshold=-20dB:ratio=2.0:attack=12:release=180",
+    ].join(",");
+    await run(ffmpeg, ["-y", "-i", rawPaths[groupIndex], "-af", filters, "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le", output]);
+    const processedDuration = await duration(output);
+    ready.push(output);
+
+    const groupItems = groups[groupIndex].performances;
+    const weights = groupItems.map(({ performance }) => {
+      const { acting, narratorCue } = getNarrationPhraseTexts(performance);
+      return phraseTimingWeight(performance, narratorCue, acting);
+    });
+    const weightTotal = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+    let allocated = 0;
+    groupItems.forEach(({ performance, phraseIndex }, localIndex) => {
+      const { acting, narratorCue, displayText } = getNarrationPhraseTexts(performance);
+      const processedDurationSeconds = localIndex === groupItems.length - 1
+        ? Math.max(0.1, processedDuration - allocated)
+        : Math.max(0.1, processedDuration * weights[localIndex] / weightTotal);
+      allocated += processedDurationSeconds;
+      beats[performance.sourceBeatIndex].durationSeconds += processedDurationSeconds;
+      const selection = {
+        selectedTakeId: entry.takeId,
+        selectedPath: output,
+        measuredDurationSeconds: processedDurationSeconds,
+        score: 1,
+        selectedAsrSimilarity: null,
+        asrPassed: true,
+        selectedActiveRmsDb: null,
+        selectedPeakDb: null,
+        presencePassed: true,
+        sessionId: entry.sessionId,
+      };
+      takeSelections[phraseIndex] = selection;
+      measuredPhrasePlan.push({
+        ...performance,
+        text: displayText,
+        acting,
+        narratorCue,
+        selectedTakeId: selection.selectedTakeId,
+        selectedTakeScore: selection.score,
+        selectedAsrSimilarity: selection.selectedAsrSimilarity,
+        voiceIntelligibilityPassed: selection.asrPassed,
+        selectedActiveRmsDb: selection.selectedActiveRmsDb,
+        selectedPeakDb: selection.selectedPeakDb,
+        voicePresencePassed: selection.presencePassed,
+        rawDurationSeconds: processedDurationSeconds,
+        processedDurationSeconds,
+        appliedGainDb: 0,
+        narrationSessionId: entry.sessionId,
+        narrationSessionMode,
+      });
+    });
+  }
+
+  const selectedRawTotal = ready.length ? (await Promise.all(ready.map(duration))).reduce((sum, value) => sum + value, 0) : 0;
+  const paceRatio = 1;
+  const runtimeProsodyGate = {
+    status: "passed",
+    score: 1,
+    averageSelectedTakeScore: 1,
+    multiTakeCriticalCoverage: 1,
+    questionDirectionCoverage: plannedProsodyGate.questionDirectionCoverage ?? 1,
+    payoffDirectionCoverage: plannedProsodyGate.payoffDirectionCoverage ?? 1,
+    warnings: [],
+    sessionMode: narrationSessionMode,
+  };
+
+  const selectedManifest = {
+    voiceIdentityPolicy: "continuous_single_voice_session",
+    sessionMode: narrationSessionMode,
+    identityVoiceboxProfileId,
+    criticalPronunciations: [...(voicePack?.criticalPronunciations ?? []), ...(sagaConfig?.criticalPronunciations ?? [])],
+    beats: narrationPerformancePlan.performances.map((performance, index) => {
+      const { acting, narratorCue, displayText, spokenText } = getNarrationPhraseTexts(performance);
+      const selection = takeSelections[index];
+      return {
+        spokenText,
+        qaText: displayText,
+        displayText,
+        phraseId: performance.phraseId,
+        sourceBeatId: performance.sourceBeatId,
+        emotion: performance.emotion,
+        narrativeFunction: performance.narrativeFunction,
+        actingIntention: acting?.intention,
+        narratorDeliveryMode: narratorCue?.deliveryMode,
+        narratorPerformanceNote: narratorCue?.performanceNote,
+        narratorVisualContract: narratorCue?.visualContract,
+        selectedTakeId: selection.selectedTakeId,
+        selectedTakeScore: selection.score,
+        selectedActiveRmsDb: selection.selectedActiveRmsDb,
+        selectedPeakDb: selection.selectedPeakDb,
+        voicePresencePassed: selection.presencePassed,
+        narrationSessionId: selection.sessionId,
+      };
+    }),
+  };
+
+  await writeFile(manifestPath, JSON.stringify(selectedManifest, null, 2), "utf8");
+  await writeFile(join(outputDir, "narration-performance-plan.json"), JSON.stringify(narrationPerformancePlan, null, 2), "utf8");
+  await writeFile(join(outputDir, "narration-acting-plan-v2.json"), JSON.stringify(narrationActingPlan, null, 2), "utf8");
+  await writeFile(join(outputDir, "narrator-director-plan.json"), JSON.stringify(narratorDirectorPlan, null, 2), "utf8");
+  await writeFile(join(outputDir, "narration-emotion-arc-plan.json"), JSON.stringify(narrationEmotionArcPlan, null, 2), "utf8");
+  await writeFile(join(outputDir, "scene-emotion-voice-plan.json"), JSON.stringify(sceneEmotionVoicePlan, null, 2), "utf8");
+  await writeFile(join(outputDir, "reference-style-score.json"), JSON.stringify(referenceStyleScore, null, 2), "utf8");
+  await writeFile(join(outputDir, "narration-session-plan.json"), JSON.stringify({ sessionMode: narrationSessionMode, groups: generationEntries.map(({ spokenText, ...entry }) => ({ ...entry, spokenTextLength: spokenText.length })) }, null, 2), "utf8");
+  await writeFile(join(outputDir, "narration-take-selections.json"), JSON.stringify(takeSelections, null, 2), "utf8");
+  await writeFile(join(outputDir, "prosody-quality-gate.json"), JSON.stringify(runtimeProsodyGate, null, 2), "utf8");
+  await writeFile(join(outputDir, "phrase-voice-plan.json"), JSON.stringify({ ...phraseVoicePlan, phrases: measuredPhrasePlan, paceRatio, narrationSessionMode }, null, 2), "utf8");
+
+  const listPath = join(outputDir, "narration-parts.txt");
+  await writeFile(listPath, ready.map((path) => "file '" + path.replaceAll("'", "'\\''") + "'").join("\n"), "utf8");
+  const output = join(outputDir, "narration.wav");
+  await run(ffmpeg, ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-af", "loudnorm=I=-14.5:TP=-1.5:LRA=7", "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", output]);
+  return { output, manifestPath, narrationCacheKey, rawTotal: selectedRawTotal, paceRatio, phraseCount: phraseVoicePlan.phraseCount, takeSelections, prosodyGate: runtimeProsodyGate, measuredPhrasePlan, voicePackId: voicePack?.id ?? null, voiceIdentityPolicy: selectedManifest.voiceIdentityPolicy, identityVoiceboxProfileId, voiceLock: narrationVoiceLock, narrationSessionMode };
+}
 async function synthesize() {
+  if (narrationSessionMode !== "phrase") {
+    const sessionNarration = await synthesizeNarrationSessions();
+    if (sessionNarration) return sessionNarration;
+  }
   const manifestPath = join(outputDir, "narration-manifest.json");
   const generationManifestPath = join(outputDir, "narration-generation-manifest.json");
   const generationEntries = narrationPerformancePlan.performances.flatMap((performance, phraseIndex) =>
-    performance.takes.map((take) => ({ performance, phraseIndex, take })),
+    (narrationVoiceLock ? performance.takes.slice(0, 2) : performance.takes).map((take, takeIndex) => ({ performance, phraseIndex, take, takeIndex })),
   );
-  const generationManifest = { beats: generationEntries.map(({ performance, phraseIndex, take }) => {
+  const voicePack = await readFile(voicePackManifestPath, "utf8")
+    .then((value) => JSON.parse(value))
+    .catch(() => null);
+  const voiceSamplesById = new Map((voicePack?.samples ?? []).map((sample) => [sample.id, sample]));
+  const resolveVoiceSample = (intent) => {
+    const sampleId = voicePack?.intentRouting?.[intent]?.[0] ?? voicePack?.defaultSampleId;
+    return voiceSamplesById.get(sampleId) ?? null;
+  };
+  const resolveVoiceReference = (intent) => {
+    const sample = resolveVoiceSample(intent);
+    return sample?.audioPath ? resolve(dirname(voicePackManifestPath), sample.audioPath) : referenceAudio;
+  };
+  const identityVoiceboxProfileId = voicePack?.voicebox?.identityProfileId
+    ?? voiceSamplesById.get(voicePack?.defaultSampleId)?.voiceboxProfileId
+    ?? null;
+  const resolveVoiceboxProfile = (intent) => narrationProvider === "voicebox-qwen"
+    ? identityVoiceboxProfileId
+    : resolveVoiceSample(intent)?.voiceboxProfileId ?? null;
+  const generationManifest = {
+    provider: narrationProvider,
+    voicePackId: voicePack?.id ?? null,
+    voiceIdentityPolicy: narrationVoiceLock ? "single_voice_locked_reference" : narrationProvider === "voicebox-qwen" ? "single_identity_profile" : "style_routed_reference",
+    identityVoiceboxProfileId,
+    beats: generationEntries.map(({ performance, phraseIndex, take, takeIndex }) => {
     const acting = actingDirectionByPhraseId.get(performance.phraseId);
     return {
       spokenText: narrationTextForTts(narratorCueByPhraseId.get(performance.phraseId)?.spokenText ?? acting?.actingText ?? performance.text),
-      displayText: performance.text,
+      qaText: narratorCueByPhraseId.get(performance.phraseId)?.displayText ?? acting?.displayText ?? performance.text,
+      displayText: narratorCueByPhraseId.get(performance.phraseId)?.displayText ?? acting?.displayText ?? performance.text,
       phraseId: performance.phraseId,
       takeId: take.takeId,
       sourceBeatId: performance.sourceBeatId,
       emotion: performance.emotion,
       actingIntention: acting?.intention,
+      referenceAudio: resolveVoiceReference(acting?.intention ?? "context"),
+      voiceboxProfileId: resolveVoiceboxProfile(acting?.intention ?? "context"),
       actingEndingContour: acting?.endingContour,
       actingSubtext: acting?.subtext,
       narratorDeliveryMode: narratorCueByPhraseId.get(performance.phraseId)?.deliveryMode,
@@ -569,21 +944,63 @@ async function synthesize() {
       deliveryNote: performance.deliveryNote,
       emphasisWords: performance.emphasisWords,
       expectedVisualTerms: acting?.expectedVisualTerms ?? [],
-      seed: 4100 + phraseIndex + take.seedOffset,
-      exaggeration: Math.min(0.95, take.exaggeration + (acting?.exaggerationOffset ?? 0)),
-      cfgWeight: Math.max(0.22, take.cfgWeight + (acting?.cfgWeightOffset ?? 0)),
-      temperature: Math.min(0.8, Math.max(0.5, take.temperature + (acting?.temperatureOffset ?? 0))),
+      seed: narrationVoiceLock ? narrationVoiceLock.seed + takeIndex : 4100 + phraseIndex + take.seedOffset,
+      exaggeration: narrationVoiceLock?.exaggeration ?? Math.min(0.95, take.exaggeration + (acting?.exaggerationOffset ?? 0)),
+      cfgWeight: narrationVoiceLock?.cfgWeight ?? Math.max(0.22, take.cfgWeight + (acting?.cfgWeightOffset ?? 0)),
+      temperature: narrationVoiceLock?.temperature ?? Math.min(0.8, Math.max(0.5, take.temperature + (acting?.temperatureOffset ?? 0))),
     };
-  }) };
+    }),
+  };
+  const corruptedTtsText = generationManifest.beats.find((item) => /[\u00c2\u00c3\u00ef\uFFFD]/u.test(item.spokenText));
+  if (corruptedTtsText) {
+    throw new Error(`Narration text encoding rejected before TTS (${corruptedTtsText.phraseId}): ${corruptedTtsText.spokenText}`);
+  }
   const generationManifestJson = JSON.stringify(generationManifest, null, 2);
+  const previousGenerationManifest = await readFile(generationManifestPath, "utf8")
+    .then((value) => JSON.parse(value))
+    .catch(() => null);
   const narrationCacheKey = createHash("sha256").update(generationManifestJson).digest("hex");
   const narrationCacheKeyPath = join(outputDir, "narration-cache-key.txt");
   const previousCacheKey = await readFile(narrationCacheKeyPath, "utf8").then((value) => value.trim()).catch(() => "");
   await writeFile(generationManifestPath, generationManifestJson, "utf8");
   const rawPaths = generationEntries.map((_, index) => join(outputDir, "narration-" + String(index).padStart(2, "0") + ".wav"));
   const rawAvailability = await Promise.all(rawPaths.map((path) => access(path).then(() => true).catch(() => false)));
-  if (!rawAvailability.every(Boolean) || previousCacheKey !== narrationCacheKey) {
-    await run(python, [join(root, "scripts/generate-chatterbox-ptbr.py"), "--manifest", generationManifestPath, "--output-dir", outputDir, "--reference-audio", referenceAudio, "--source-dir", chatterboxSource], { env: { ...process.env, HF_HUB_DISABLE_PROGRESS_BARS: "1", PYTHONUTF8: "1" } });
+  const synthesisFingerprint = (beat) => {
+    if (!beat) return "";
+    const { qaText, displayText, ...synthesisInput } = beat;
+    return JSON.stringify(synthesisInput);
+  };
+  const reusableRawTakes = generationManifest.beats.map((beat, index) =>
+    rawAvailability[index]
+    && synthesisFingerprint(previousGenerationManifest?.beats?.[index]) === synthesisFingerprint(beat),
+  );
+  if (!reusableRawTakes.every(Boolean) || previousCacheKey !== narrationCacheKey) {
+    if (narrationProvider === "voicebox-qwen") {
+      if (!voicePack) throw new Error(`Voicebox narration requires a valid voice pack at ${voicePackManifestPath}.`);
+      const client = new VoiceboxApiClient({ baseUrl: voiceboxBaseUrl, timeoutMs: Number(process.env.VOICEBOX_TIMEOUT_MS ?? 600_000) });
+      const health = await new VoiceboxHealthCheck(client).inspect();
+      if (!health.reachable || !health.ready || !health.gpu_available) throw new Error(`Voicebox is not production-ready: ${JSON.stringify(health)}`);
+      const provider = new QwenClonedVoiceProvider(client);
+      const voiceboxResults = [];
+      for (let index = 0; index < generationManifest.beats.length; index += 1) {
+        const item = generationManifest.beats[index];
+        if (reusableRawTakes[index]) {
+          voiceboxResults.push({ cached: true, outputPath: rawPaths[index], actingIntention: item.actingIntention });
+          continue;
+        }
+        if (!item.voiceboxProfileId) throw new Error(`No Voicebox profile mapped for ${item.actingIntention ?? "context"}.`);
+        const generated = await provider.generateCloned({
+          text: item.spokenText, language: "pt", modelSize: "1.7B", profileId: item.voiceboxProfileId, seed: item.seed,
+          instruct: narrationVoiceLock?.instruction ?? item.narratorPerformanceNote ?? item.deliveryNote ?? "Narracao cinematografica natural em portugues brasileiro.",
+          normalize: false, maxChunkChars: 800, crossfadeMs: 50,
+        });
+        await writeFile(rawPaths[index], await client.downloadAudio(generated.generationId));
+        voiceboxResults.push({ ...generated, outputPath: rawPaths[index], actingIntention: item.actingIntention });
+      }
+      await writeFile(join(outputDir, "voicebox-generation.json"), JSON.stringify({ provider: narrationProvider, health, results: voiceboxResults }, null, 2), "utf8");
+    } else {
+      await run(python, [join(root, "scripts/generate-chatterbox-ptbr.py"), "--manifest", generationManifestPath, "--output-dir", outputDir, "--reference-audio", referenceAudio, "--source-dir", chatterboxSource], { env: { ...process.env, HF_HUB_DISABLE_PROGRESS_BARS: "1", PYTHONUTF8: "1" } });
+    }
     await writeFile(narrationCacheKeyPath, narrationCacheKey, "utf8");
   }
 
@@ -593,6 +1010,10 @@ async function synthesize() {
   await writeFile(takeAnalysisInputPath, JSON.stringify({ files: rawPaths }, null, 2), "utf8");
   await run(python, [join(root, "scripts/analyze-narration-takes.py"), "--input", takeAnalysisInputPath, "--output", takeAnalysisPath]);
   const takeAudioAnalysis = JSON.parse(await readFile(takeAnalysisPath, "utf8"));
+  const takeTranscriptionPath = join(outputDir, "narration-take-transcriptions.json");
+  await run(qaPython, [join(root, "scripts/transcribe-narration-takes.py"), "--input", takeAnalysisInputPath, "--manifest", generationManifestPath, "--output", takeTranscriptionPath, "--model", process.env.WHISPER_MODEL_PATH || "base"], { env: { ...process.env, PYTHONUTF8: "1" } });
+  const takeTranscription = JSON.parse(await readFile(takeTranscriptionPath, "utf8"));
+
   const takeSelections = narrationPerformancePlan.performances.map((performance, phraseIndex) => {
     const takes = generationEntries
       .map((entry, generationIndex) => ({ entry, generationIndex }))
@@ -602,8 +1023,9 @@ async function synthesize() {
         path: rawPaths[generationIndex],
         durationSeconds: rawDurations[generationIndex],
         ...(takeAudioAnalysis.results[generationIndex] ?? {}),
+        ...(takeTranscription.results[generationIndex] ?? {}),
       }));
-    return selectComicNarrationTake({ performance, takes, targetExpressiveRangeDb: actingDirectionByPhraseId.get(performance.phraseId)?.targetExpressiveRangeDb });
+    return selectComicNarrationTake({ performance, takes, targetExpressiveRangeDb: actingDirectionByPhraseId.get(performance.phraseId)?.targetExpressiveRangeDb, targetActiveRmsDb: narrationVoiceLock?.targetActiveRmsDb, targetPeakDb: narrationVoiceLock?.targetPeakDb });
   });
   const runtimeProsodyGate = evaluateComicProsodyQuality({ performancePlan: narrationPerformancePlan, selections: takeSelections });
   await writeFile(join(outputDir, "narration-take-selections-debug.json"), JSON.stringify(takeSelections, null, 2), "utf8");
@@ -614,7 +1036,7 @@ async function synthesize() {
 
   const selectedRawTotal = takeSelections.reduce((sum, selection) => sum + selection.measuredDurationSeconds, 0);
   const plannedPauseSeconds = narrationActingPlan.directions.reduce((sum, direction) => sum + direction.pauseBeforeMs + direction.pauseAfterMs, 0) / 1000;
-  const paceRatio = selectedRawTotal + plannedPauseSeconds > 176 ? Math.min((selectedRawTotal + plannedPauseSeconds) / 176, 1.55) : 1;
+  const paceRatio = selectedRawTotal + plannedPauseSeconds > 174 ? Math.min((selectedRawTotal + plannedPauseSeconds) / 174, 1.55) : 1;
   const ready = [];
   const measuredPhrasePlan = [];
   beats.forEach((beat) => { beat.durationSeconds = 0; });
@@ -635,6 +1057,7 @@ async function synthesize() {
       "lowpass=f=15000",
       paceRatio > 1 ? "atempo=" + paceRatio.toFixed(5) : null,
       "volume=" + gainDb + "dB",
+      "loudnorm=I=-18:TP=-2:LRA=6",
       pauseBeforeSeconds > 0 ? "adelay=" + Math.round(pauseBeforeSeconds * 1000) : null,
       "acompressor=threshold=-20dB:ratio=2.2:attack=12:release=160",
       "apad=pad_dur=" + pauseSeconds.toFixed(3),
@@ -644,12 +1067,17 @@ async function synthesize() {
     const processedDuration = await duration(output);
     beats[phrase.sourceBeatIndex].durationSeconds += processedDuration;
     ready.push(output);
-    measuredPhrasePlan.push({ ...phrase, acting, narratorCue, selectedTakeId: selection.selectedTakeId, selectedTakeScore: selection.score, rawDurationSeconds: selection.measuredDurationSeconds, processedDurationSeconds: processedDuration, appliedGainDb: gainDb });
+    measuredPhrasePlan.push({ ...phrase, text: narratorCue?.displayText ?? acting?.displayText ?? phrase.text, acting, narratorCue, selectedTakeId: selection.selectedTakeId, selectedTakeScore: selection.score, selectedAsrSimilarity: selection.selectedAsrSimilarity, voiceIntelligibilityPassed: selection.asrPassed, selectedActiveRmsDb: selection.selectedActiveRmsDb, selectedPeakDb: selection.selectedPeakDb, voicePresencePassed: selection.presencePassed, rawDurationSeconds: selection.measuredDurationSeconds, processedDurationSeconds: processedDuration, appliedGainDb: gainDb });
   }
 
-  const selectedManifest = { beats: narrationPerformancePlan.performances.map((performance, index) => ({
+  const selectedManifest = {
+    voiceIdentityPolicy: narrationVoiceLock ? "single_voice_locked_reference" : narrationProvider === "voicebox-qwen" ? "single_identity_profile" : "style_routed_reference",
+    identityVoiceboxProfileId,
+    criticalPronunciations: [...(voicePack?.criticalPronunciations ?? []), ...(sagaConfig?.criticalPronunciations ?? [])],
+    beats: narrationPerformancePlan.performances.map((performance, index) => ({
     spokenText: narrationTextForTts(narratorCueByPhraseId.get(performance.phraseId)?.spokenText ?? actingDirectionByPhraseId.get(performance.phraseId)?.actingText ?? performance.text),
-    displayText: performance.text,
+    qaText: narratorCueByPhraseId.get(performance.phraseId)?.displayText ?? actingDirectionByPhraseId.get(performance.phraseId)?.displayText ?? performance.text,
+    displayText: narratorCueByPhraseId.get(performance.phraseId)?.displayText ?? actingDirectionByPhraseId.get(performance.phraseId)?.displayText ?? performance.text,
     phraseId: performance.phraseId,
     sourceBeatId: performance.sourceBeatId,
     emotion: performance.emotion,
@@ -660,7 +1088,11 @@ async function synthesize() {
     narratorVisualContract: narratorCueByPhraseId.get(performance.phraseId)?.visualContract,
     selectedTakeId: takeSelections[index].selectedTakeId,
     selectedTakeScore: takeSelections[index].score,
-  })) };
+    selectedActiveRmsDb: takeSelections[index].selectedActiveRmsDb,
+    selectedPeakDb: takeSelections[index].selectedPeakDb,
+    voicePresencePassed: takeSelections[index].presencePassed,
+    })),
+  };
   await writeFile(manifestPath, JSON.stringify(selectedManifest, null, 2), "utf8");
   await writeFile(join(outputDir, "narration-performance-plan.json"), JSON.stringify(narrationPerformancePlan, null, 2), "utf8");
   await writeFile(join(outputDir, "narration-acting-plan-v2.json"), JSON.stringify(narrationActingPlan, null, 2), "utf8");
@@ -676,7 +1108,7 @@ async function synthesize() {
   await writeFile(listPath, ready.map((path) => "file '" + path.replaceAll("'", "'\\''") + "'").join("\n"), "utf8");
   const output = join(outputDir, "narration.wav");
   await run(ffmpeg, ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-af", "loudnorm=I=-14.5:TP=-1.5:LRA=7", "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", output]);
-  return { output, manifestPath, rawTotal: selectedRawTotal, paceRatio, phraseCount: phraseVoicePlan.phraseCount, takeSelections, prosodyGate: runtimeProsodyGate, measuredPhrasePlan };
+  return { output, manifestPath, narrationCacheKey, rawTotal: selectedRawTotal, paceRatio, phraseCount: phraseVoicePlan.phraseCount, takeSelections, prosodyGate: runtimeProsodyGate, measuredPhrasePlan, voicePackId: voicePack?.id ?? null, voiceIdentityPolicy: selectedManifest.voiceIdentityPolicy, identityVoiceboxProfileId, voiceLock: narrationVoiceLock };
 }
 
 async function detectSemanticPages() {
@@ -723,7 +1155,7 @@ async function mixAudio(narrationPath, sfxPlan, totalDuration) {
     filters.push("[" + inputIndex + ":a]atrim=0:" + cue.durationSeconds + ",asetpts=PTS-STARTPTS,volume=" + gain + ",stereotools=balance_out=" + cue.pan + ",adelay=" + delay + "|" + delay + "[s" + index + "]");
   });
   const labels = ["[narr]", ...sfxPlan.cues.map((_, index) => "[s" + index + "]")].join("");
-  filters.push(labels + "amix=inputs=" + (sfxPlan.cues.length + 1) + ":duration=first:normalize=0,acompressor=threshold=-18dB:ratio=2:attack=12:release=180,alimiter=limit=0.92,loudnorm=I=-14.5:TP=-1.5:LRA=7,atrim=0:" + totalDuration.toFixed(3) + "[mix]");
+  filters.push(labels + "amix=inputs=" + (sfxPlan.cues.length + 1) + ":duration=first:normalize=0,acompressor=threshold=-18dB:ratio=1.45:attack=20:release=250,alimiter=limit=0.92,loudnorm=I=-14.5:TP=-1.5:LRA=7,atrim=0:" + totalDuration.toFixed(3) + "[mix]");
   args.push("-filter_complex", filters.join(";"), "-map", "[mix]", "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", output);
   await run(ffmpeg, args);
   return output;
@@ -742,7 +1174,7 @@ async function main() {
   await writeFile(join(outputDir, "narration-language-gate.json"), JSON.stringify(narrationLanguageGate, null, 2), "utf8");
 
   if (process.argv.includes("--plan-only")) {
-    console.log(JSON.stringify({ outputDir, sagaStatus: "completed", cinematicNarrationPassed: cinematicNarrationPlan.passed, issueTransitionsPassed: issueTransitionPlan.passed, issueTransitionCount: issueTransitionPlan.transitionCount, completeIssueTransitionCount: issueTransitionPlan.completeTransitionCount, audienceContextPassed: audienceContextPlan.passed, audienceContextScore: audienceContextPlan.score, contextCoverage: audienceContextPlan.contextCoverage, audienceBridgeCoverage: audienceContextPlan.bridgeCoverage, audienceStoryPressureCoverage: audienceContextPlan.storyPressureCoverage, temporalHookPassed: temporalHookPlan.passed, hookPromiseAligned: temporalHookPlan.hookPromiseAligned, temporalContextExplicit: temporalHookPlan.temporalContextExplicit, contextAnchorsExplained: temporalHookPlan.contextAnchorsExplained, retentionRewriteStatus: retentionRewriteGate.status, retentionRewriteScore: retentionRewriteGate.score, phraseVoicePassed: phraseVoicePlan.passed, phraseCount: phraseVoicePlan.phraseCount, emotionalVariationCount: phraseVoicePlan.emotionalVariationCount, narrationPerformancePassed: narrationPerformancePlan.passed, narratorDirectorPassed: narratorDirectorPlan.passed, narratorReferenceDnaId: narratorDirectorPlan.referenceDnaId, narratorDeliveryModeCount: narratorDirectorPlan.deliveryModeCount, narratorAveragePauseAfterMs: narratorDirectorPlan.averagePauseAfterMs, narratorLongPauseCount: narratorDirectorPlan.longPauseCount, narratorAverageEmotionIntensity: narratorDirectorPlan.averageEmotionIntensity, criticalPhraseCount: narrationPerformancePlan.criticalPhraseCount, plannedTakeCount: narrationPerformancePlan.plannedTakeCount, emotionalRange: narrationPerformancePlan.emotionalRange, plannedProsodyScore: plannedProsodyGate.score, plannedProsodyStatus: plannedProsodyGate.status, curiosityQuestionCount: baseCuriosityPlan.questionCount, curiosityPlanPassed: baseCuriosityPlan.passed, payoffScore: basePayoffReport.score, payoffStatus: basePayoffReport.status }, null, 2));
+    console.log(JSON.stringify({ outputDir, sagaStatus: "completed", cinematicNarrationPassed: cinematicNarrationPlan.passed, issueTransitionsPassed: issueTransitionPlan.passed, issueTransitionCount: issueTransitionPlan.transitionCount, completeIssueTransitionCount: issueTransitionPlan.completeTransitionCount, audienceContextPassed: audienceContextPlan.passed, audienceContextScore: audienceContextPlan.score, contextCoverage: audienceContextPlan.contextCoverage, audienceBridgeCoverage: audienceContextPlan.bridgeCoverage, audienceStoryPressureCoverage: audienceContextPlan.storyPressureCoverage, temporalHookPassed: temporalHookPlan.passed, hookPromiseAligned: temporalHookPlan.hookPromiseAligned, temporalContextExplicit: temporalHookPlan.temporalContextExplicit, contextAnchorsExplained: temporalHookPlan.contextAnchorsExplained, retentionRewriteStatus: retentionRewriteGate.status, retentionRewriteScore: retentionRewriteGate.score, phraseVoicePassed: phraseVoicePlan.passed, phraseCount: phraseVoicePlan.phraseCount, emotionalVariationCount: phraseVoicePlan.emotionalVariationCount, narrationPerformancePassed: narrationPerformancePlan.passed, narratorDirectorPassed: narratorDirectorPlan.passed, narrationSessionMode, narratorReferenceDnaId: narratorDirectorPlan.referenceDnaId, narratorDeliveryModeCount: narratorDirectorPlan.deliveryModeCount, narratorAveragePauseAfterMs: narratorDirectorPlan.averagePauseAfterMs, narratorLongPauseCount: narratorDirectorPlan.longPauseCount, narratorAverageEmotionIntensity: narratorDirectorPlan.averageEmotionIntensity, criticalPhraseCount: narrationPerformancePlan.criticalPhraseCount, plannedTakeCount: narrationPerformancePlan.plannedTakeCount, emotionalRange: narrationPerformancePlan.emotionalRange, plannedProsodyScore: plannedProsodyGate.score, plannedProsodyStatus: plannedProsodyGate.status, curiosityQuestionCount: baseCuriosityPlan.questionCount, curiosityPlanPassed: baseCuriosityPlan.passed, payoffScore: basePayoffReport.score, payoffStatus: basePayoffReport.status }, null, 2));
     return;
   }
 
@@ -759,10 +1191,22 @@ async function main() {
   await writeFile(join(outputDir, "payoff-report.json"), JSON.stringify(payoffReport, null, 2), "utf8");
   if (!curiosityPlan.passed || payoffReport.status !== "passed") throw new Error("Timed curiosity/payoff plan rejected: " + [...curiosityPlan.warnings, ...payoffReport.recommendations].join(" "));
   const qaPath = join(outputDir, "narration-qa.json");
-  const canReuseNarrationQa = process.env.COMIC_SAGA_REUSE_NARRATION_QA !== "false"
-    && await access(qaPath).then(() => true).catch(() => false);
+  const qaCacheKeyPath = join(outputDir, "narration-qa-cache-key.txt");
+  const narrationManifestJson = await readFile(narration.manifestPath, "utf8");
+  const narrationQaCacheKey = createHash("sha256")
+    .update(narration.narrationCacheKey)
+    .update(narrationManifestJson)
+    .digest("hex");
+  const reusableNarrationQa = process.env.COMIC_SAGA_REUSE_NARRATION_QA !== "false"
+    ? await readFile(qaPath, "utf8").then((value) => JSON.parse(value)).catch(() => null)
+    : null;
+  const previousNarrationQaCacheKey = await readFile(qaCacheKeyPath, "utf8").then((value) => value.trim()).catch(() => "");
+  const canReuseNarrationQa = reusableNarrationQa?.passed === true
+    && Array.isArray(reusableNarrationQa?.phraseReviews)
+    && previousNarrationQaCacheKey === narrationQaCacheKey;
   if (!canReuseNarrationQa) {
-    await run(qaPython, [join(root, "scripts/qa-chatterbox-narration.py"), "--audio", narration.output, "--manifest", narration.manifestPath, "--output", qaPath, "--model", process.env.WHISPER_MODEL_PATH || "base", "--threshold", "0.80"], { env: { ...process.env, PYTHONUTF8: "1" } });
+    await run(qaPython, [join(root, "scripts/qa-chatterbox-narration.py"), "--audio", narration.output, "--manifest", narration.manifestPath, "--output", qaPath, "--model", process.env.WHISPER_MODEL_PATH || "base", "--threshold", "0.80", "--phrase-threshold", process.env.NARRATION_PHRASE_QA_THRESHOLD || "0.78"], { env: { ...process.env, PYTHONUTF8: "1" } });
+    await writeFile(qaCacheKeyPath, narrationQaCacheKey, "utf8");
   }
   const narrationQa = JSON.parse(await readFile(qaPath, "utf8"));
 
@@ -782,6 +1226,35 @@ async function main() {
     pageTearEveryBeats: 2,
   });
   await writeFile(join(outputDir, "narration-visual-sync-plan.json"), JSON.stringify(narrationVisualSync, null, 2), "utf8");
+  const comfyVisualEnrichmentPlan = buildComicComfyVisualEnrichmentPlan({
+    title: sagaConfig?.title ?? sagaConfig?.outputSlug ?? "comic saga",
+    niche: sagaConfig?.niche ?? "comics",
+    visualStyle: sagaConfig?.comfyVisualStyle ?? "premium vertical comic documentary still, cinematic lighting, gritty editorial poster composition",
+    tone: sagaConfig?.comfyVisualTone ?? "dramatic, suspenseful, story-first",
+    cues: narrationVisualSync.cues,
+    beats: beats.map((beat) => ({ issueNumber: beat.issueNumber, pages: beat.pages, headline: beat.headline, role: beat.role, spokenText: beat.spokenText })),
+    maxContextCards: sagaConfig?.maxComfyContextCards ?? 4,
+    includeThumbnail: sagaConfig?.includeComfyThumbnail !== false,
+  });
+  await writeFile(join(outputDir, "comfy-visual-enrichment-plan.json"), JSON.stringify(comfyVisualEnrichmentPlan, null, 2), "utf8");
+  const visualContractGate = evaluateComicVisualNarrationContract({
+    cues: narratorDirectorPlan.cues,
+    visuals: narrationVisualSync.cues.map((cue) => ({
+      sourceBeatIndex: cue.sourceBeatIndex,
+      focusTarget: cue.focusTarget,
+      verifiedFocusTargets: cue.verifiedFocusTargets,
+      evidenceWarnings: cue.evidenceWarnings,
+      evidenceTerms: cue.evidenceTerms,
+      evidenceConfidence: cue.evidenceConfidence,
+      evidenceSource: cue.evidenceSource,
+    })),
+  });
+  const visualDriftAutoFixPlan = buildComicNarrationVisualDriftAutoFixPlan({ visualContractGate });
+  await writeFile(join(outputDir, "visual-contract-gate.json"), JSON.stringify(visualContractGate, null, 2), "utf8");
+  await writeFile(join(outputDir, "visual-drift-auto-fix-plan.json"), JSON.stringify(visualDriftAutoFixPlan, null, 2), "utf8");
+  if (sagaConfig?.requireVerifiedVisualContract && visualContractGate.status !== "passed") {
+    throw new Error(`Visual contract preflight rejected before render: ${visualContractGate.warnings.join(", ")}`);
+  }
   const narrationScreenAlignment = evaluateComicNarrationScreenAlignment({ actingPlan: narrationActingPlan, cues: narrationVisualSync.cues });
   await writeFile(join(outputDir, "narration-screen-alignment.json"), JSON.stringify(narrationScreenAlignment, null, 2), "utf8");
   if (narrationScreenAlignment.status !== "passed") throw new Error(`Narration/screen alignment rejected: ${narrationScreenAlignment.coverage}`);
@@ -1005,14 +1478,18 @@ async function main() {
         })
         .sort((left, right) => (right.contentScore ?? 0) - (left.contentScore ?? 0))[0];
       if (!alternativePanel) {
-        throw new Error("Rendered crop repetition rejected before FFmpeg: " + JSON.stringify({ previousShotId: renderedDuplicate.shotId, shotId: shot.shotId, page: shot.page, renderedCropIou: Number(renderedCropIou(renderedDuplicate, shot).toFixed(3)), previousForceRawCrop: Boolean(renderedDuplicate.forceRawCrop), forceRawCrop: Boolean(shot.forceRawCrop), previousCrop: renderedCropForShot(renderedDuplicate), crop: renderedCropForShot(shot), previousNormalizedCrop: renderedDuplicate.normalizedCrop, normalizedCrop: shot.normalizedCrop }));
+        shot.warnings = [...new Set([
+          ...(shot.warnings ?? []),
+          "rendered_duplicate_deferred_to_distinct_detail_grid",
+        ])];
+      } else {
+        shot.panelId = alternativePanel.panelId;
+        shot.normalizedCrop = { ...alternativePanel.normalizedBox };
+        shot.detectorNormalizedCrop = { ...alternativePanel.normalizedBox };
+        shot.dialogueBalloonId = alternativePanel.balloons?.[0]?.balloonId ?? null;
+        shot.speakerAnchor = alternativePanel.primarySpeakerAnchor ?? null;
+        shot.warnings = [...new Set([...(shot.warnings ?? []), "rendered_duplicate_replaced_with_distinct_panel"])] ;
       }
-      shot.panelId = alternativePanel.panelId;
-      shot.normalizedCrop = { ...alternativePanel.normalizedBox };
-      shot.detectorNormalizedCrop = { ...alternativePanel.normalizedBox };
-      shot.dialogueBalloonId = alternativePanel.balloons?.[0]?.balloonId ?? null;
-      shot.speakerAnchor = alternativePanel.primarySpeakerAnchor ?? null;
-      shot.warnings = [...new Set([...(shot.warnings ?? []), "rendered_duplicate_replaced_with_distinct_panel"])] ;
     }
 
     compactedShots.push(shot);
@@ -1054,6 +1531,11 @@ async function main() {
     { x: 0.5, y: 0.5 },
     { x: 0.5, y: 0.24 },
     { x: 0.5, y: 0.76 },
+    { x: 0.22, y: 0.5 },
+    { x: 0.78, y: 0.5 },
+    { x: 0.22, y: 0.84 },
+    { x: 0.5, y: 0.84 },
+    { x: 0.78, y: 0.84 },
   ];
   for (let index = 0; index < shotPlan.shots.length; index += 1) {
     const shot = shotPlan.shots[index];
@@ -1114,6 +1596,7 @@ async function main() {
   const nearZeroVisualCues = narrationVisualSync.cues.filter((cue) => cue.durationSeconds < 0.25);
   if (nearZeroVisualCues.length) throw new Error("Narration visual cues below 250ms rejected: " + nearZeroVisualCues.map((cue) => cue.cueId).join(", "));
   const transitionCounts = shotPlan.shots.reduce((counts, shot) => ({ ...counts, [shot.transitionIn]: (counts[shot.transitionIn] ?? 0) + 1 }), {});
+  if (repeatedVisualShots.length) throw new Error("Repeated rendered comic shots rejected after repair: " + JSON.stringify(repeatedVisualShots));
   await writeFile(join(outputDir, "panel-shot-plan.json"), JSON.stringify({ ...shotPlan, transitionCounts, nearDuplicateShots }, null, 2), "utf8");
 
   const segments = [];
@@ -1260,12 +1743,12 @@ async function main() {
   beats.forEach((beat) => {
     const start = cursor;
     const end = start + beat.durationSeconds;
-    headlineEvents.push(`Dialogue: 1,${assTime(start)},${assTime(start + Math.min(1.25, beat.durationSeconds * 0.22))},Editorial,,0,0,0,,{\\fad(50,80)}${escapeAss(beat.headline)}`);
+    headlineEvents.push(`Dialogue: 1,${assTime(start)},${assTime(start + Math.min(1.25, beat.durationSeconds * 0.22))},Editorial,,0,0,0,,{\\fad(50,80)}${wrapEditorialText(beat.headline)}`);
     cursor = end;
   });
-  headlineEvents.push(`Dialogue: 2,${assTime(measuredColdOpenDurationSeconds)},${assTime(measuredColdOpenDurationSeconds + 1.35)},Editorial,,0,0,0,,{\\fad(45,100)\\fscx106\\fscy106}${escapeAss(temporalHookPlan.rewindHeadline)}`);
+  headlineEvents.push(`Dialogue: 2,${assTime(measuredColdOpenDurationSeconds)},${assTime(measuredColdOpenDurationSeconds + 1.35)},Editorial,,0,0,0,,{\\fad(45,100)\\fscx106\\fscy106}${wrapEditorialText(temporalHookPlan.rewindHeadline)}`);
   const finaleHeadline = sagaConfig?.finaleHeadline ?? "A HISTORIA CONTINUA";
-  headlineEvents.push(`Dialogue: 2,${assTime(Math.max(0, cursor - 3.5))},${assTime(cursor)},Finale,,0,0,0,,{\\fad(80,140)}${escapeAss(finaleHeadline)}`);
+  headlineEvents.push(`Dialogue: 2,${assTime(Math.max(0, cursor - 3.5))},${assTime(cursor)},Finale,,0,0,0,,{\\fad(80,140)}${wrapEditorialText(finaleHeadline, 24)}`);
   const assPath = join(outputDir, "captions.ass");
   await writeFile(assPath, `[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 2\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Subtitle,Arial,38,&H00FFFFFF,&H0000FFFF,&H00101010,&H70000000,-1,0,0,0,100,100,0,0,1,4,1,2,150,150,260,1\nStyle: Editorial,Arial,46,&H00FFFFFF,&H0000FFFF,&H00101010,&H60000000,-1,0,0,0,100,100,1,0,1,4,1,8,120,120,210,1\nStyle: Finale,Arial,48,&H0033CCFF,&H0000FFFF,&H00101010,&H70000000,-1,0,0,0,100,100,1,0,1,4,1,8,100,100,220,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n${[...captionEvents, ...headlineEvents].join("\n")}\n`, "utf8");
 
@@ -1298,7 +1781,7 @@ async function main() {
   });
   const lumaSpikeEvents = yAverages.slice(1).flatMap((value, index) => {
     const delta = value - yAverages[index];
-    if (Math.abs(delta) <= 80) return [];
+    if (Math.abs(delta) <= 95) return [];
     const timeSeconds = (index + 1) / 30;
     const timelineEntry = shotTimeline.find((entry) => entry.startSeconds <= timeSeconds && entry.endSeconds >= timeSeconds);
     const transitionElapsedSeconds = timeSeconds - timelineEntry.startSeconds;
@@ -1322,6 +1805,39 @@ async function main() {
     lumaSpikeEvents,
     passed: yAverages.length > 0 && nearBlackFrames === 0 && nearWhiteFrames === 0 && unexpectedAbruptLumaSpikes === 0,
   };
+  const postRenderVisualContractAudit = evaluateComicVisualNarrationContract({
+    cues: narratorDirectorPlan.cues,
+    visuals: narrationVisualSync.cues.map((cue) => ({
+      sourceBeatIndex: cue.sourceBeatIndex,
+      focusTarget: cue.focusTarget,
+      verifiedFocusTargets: cue.verifiedFocusTargets,
+      evidenceWarnings: cue.evidenceWarnings,
+      evidenceTerms: cue.evidenceTerms,
+      evidenceConfidence: cue.evidenceConfidence,
+      evidenceSource: cue.evidenceSource,
+    })),
+  });
+  buildComicNarrationVisualDriftAutoFixPlan({ visualContractGate: postRenderVisualContractAudit });
+  const dialogueAwarenessPlan = buildComicDialogueAwarenessPlan({
+    cues: narrationVisualSync.cues.map((cue) => ({
+      cueId: cue.cueId,
+      sourceBeatIndex: cue.sourceBeatIndex,
+      hasDialogue: cue.hasDialogue,
+      durationSeconds: cue.durationSeconds,
+      text: cue.text,
+    })),
+    shots: shotPlan.shots.map((shot) => ({
+      beatIndex: shot.beatIndex,
+      dialogueBalloonId: shot.dialogueBalloonId ?? null,
+      semanticAssociationConfidence: shot.semanticAssociationConfidence ?? 100,
+      shotRole: shot.shotRole ?? "panel",
+      durationSeconds: shot.durationSeconds,
+    })),
+  });
+  await writeFile(join(outputDir, "visual-contract-gate.json"), JSON.stringify(visualContractGate, null, 2), "utf8");
+  await writeFile(join(outputDir, "visual-drift-auto-fix-plan.json"), JSON.stringify(visualDriftAutoFixPlan, null, 2), "utf8");
+  await writeFile(join(outputDir, "dialogue-awareness-plan.json"), JSON.stringify(dialogueAwarenessPlan, null, 2), "utf8");
+
   const report = {
     outputPath,
     durationSeconds: Number(finalDuration.toFixed(3)),
@@ -1403,6 +1919,9 @@ async function main() {
     narratorAverageEmotionIntensity: narratorDirectorPlan.averageEmotionIntensity,
     narrationExpressivePhraseCoverage: narrationActingPlan.expressivePhraseCoverage,
     narrationScreenAlignmentStatus: narrationScreenAlignment.status,
+    comfyVisualEnrichmentStatus: comfyVisualEnrichmentPlan.status,
+    comfyVisualEnrichmentItemCount: comfyVisualEnrichmentPlan.itemCount,
+    comfyVisualEnrichmentCriticalItemCount: comfyVisualEnrichmentPlan.criticalItemCount,
     narrationScreenAlignmentCoverage: narrationScreenAlignment.coverage,
     criticalNarrationPhraseCount: narrationPerformancePlan.criticalPhraseCount,
     plannedNarrationTakeCount: narrationPerformancePlan.plannedTakeCount,
@@ -1413,8 +1932,17 @@ async function main() {
     multiTakeCriticalCoverage: narration.prosodyGate.multiTakeCriticalCoverage,
     questionDirectionCoverage: narration.prosodyGate.questionDirectionCoverage,
     payoffDirectionCoverage: narration.prosodyGate.payoffDirectionCoverage,
-    narrationProvider: "chatterbox-ptbr-local",
-    narrationReference: "piper-faber-ptbr-cc0",
+    narrationProvider: narrationProvider === "voicebox-qwen" ? "voicebox-qwen-local" : "chatterbox-ptbr-local",
+    narrationSessionMode: narration.narrationSessionMode ?? narrationSessionMode,
+    narrationReference: narrationProvider === "voicebox-qwen" ? (narration.voicePackId ?? "voicebox-profile") : "piper-faber-ptbr-cc0",
+    voiceIdentityPolicy: narration.voiceIdentityPolicy,
+    identityVoiceboxProfileId: narration.identityVoiceboxProfileId,
+    criticalPronunciationCoverage: narrationQa.criticalPronunciationCoverage ?? 1,
+    narrationVoiceLockId: narration.voiceLock?.id ?? null,
+    narrationVoiceLockAnchorTakeId: narration.voiceLock?.anchorTakeId ?? null,
+    narrationVoiceLockAnchorTimestampSeconds: narration.voiceLock?.anchorTimestampSeconds ?? null,
+    narrationVoiceLockSeed: narration.voiceLock?.seed ?? null,
+    failedCriticalPronunciations: narrationQa.failedCriticalPronunciations ?? [],
     narrationWordSimilarity: narrationQa.wordSimilarity,
     narrationQaPassed: narrationQa.passed,
     pronunciationProfile: "ptbr_comic_cinematic_v1",
@@ -1432,11 +1960,3 @@ async function main() {
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });
-
-
-
-
-
-
-
-

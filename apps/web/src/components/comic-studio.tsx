@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
@@ -6,12 +6,19 @@ import {
   runComicStudioCreateProjectsRequest,
   runComicStudioCreateArcProjectsRequest,
   runComicStudioPlanRequest,
+  runComicOneClickAssistedPlanRequest,
+  runComicAutoBibleFromIssuesRequest,
+  runComicAutoBibleCreateProjectsRequest,
   getComicPanelPreviewUrl
 } from "../lib/studio-api";
 import type {
   ComicStudioCreateProjectsResponse,
   ComicStudioCreateArcProjectsResponse,
   ComicStudioFactoryPlanResponse,
+  ComicOneClickAssistedPlanResponse,
+  ComicAutoBibleFromIssuesResponse,
+  ComicAutoBibleCreateProjectsResponse,
+  ComicAutoBibleIssueInput,
   ComicStudioShortPlan,
   StudioChannel
 } from "../lib/studio-types";
@@ -523,6 +530,479 @@ function CreatedArcProjects({ result }: { result: ComicStudioCreateArcProjectsRe
     </section>
   );
 }
+const defaultAutoBibleIssues = [
+  "1|Issue 1|storage/assets/comics/batman-white-knight/issue-01",
+  "2|Issue 2|storage/assets/comics/batman-white-knight/issue-02"
+].join("\n");
+
+function parseAutoBibleIssueLines(value: string): ComicAutoBibleIssueInput[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const parts = line.split("|").map((part) => part.trim());
+      if (parts.length >= 3) {
+        const issueNumber = Number(parts[0]);
+        if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+          throw new Error(`Linha ${index + 1}: numero da edicao invalido.`);
+        }
+        return {
+          issueNumber,
+          title: parts[1] || `Issue ${issueNumber}`,
+          assetDirectory: parts[2] ?? "",
+          ...(parts[3] ? { sourcePath: parts[3] } : {})
+        };
+      }
+      if (parts.length === 2) {
+        const issueNumber = Number(parts[0]);
+        if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+          throw new Error(`Linha ${index + 1}: numero da edicao invalido.`);
+        }
+        return {
+          issueNumber,
+          title: `Issue ${issueNumber}`,
+          assetDirectory: parts[1] ?? ""
+        };
+      }
+      return {
+        issueNumber: index + 1,
+        title: `Issue ${index + 1}`,
+        assetDirectory: parts[0] ?? ""
+      };
+    })
+    .map((issue, index) => {
+      if (!issue.assetDirectory.trim()) {
+        throw new Error(`Linha ${index + 1}: assetDirectory e obrigatorio.`);
+      }
+      return issue;
+    });
+}
+
+function AutoBibleBuilderPanel({ channels }: { channels: StudioChannel[] }) {
+  const [title, setTitle] = useState("HQ Story Series - biblia automatica");
+  const [issuesText, setIssuesText] = useState(defaultAutoBibleIssues);
+  const [mode, setMode] = useState<"full_story_series" | "best_story_short" | "curiosity_batch">("full_story_series");
+  const [targetEventCount, setTargetEventCount] = useState(32);
+  const [maximumEpisodeDurationSeconds, setMaximumEpisodeDurationSeconds] = useState(180);
+  const [targetWordsPerMinute, setTargetWordsPerMinute] = useState(160);
+  const [forceRebuildIndex, setForceRebuildIndex] = useState(false);
+  const [ocrEnabled, setOcrEnabled] = useState(false);
+  const [plan, setPlan] = useState<ComicAutoBibleFromIssuesResponse | null>(null);
+  const [created, setCreated] = useState<ComicAutoBibleCreateProjectsResponse | null>(null);
+  const [channelId, setChannelId] = useState(channels[0]?.id ?? "");
+  const [titlePrefix, setTitlePrefix] = useState("HQ Story");
+  const [selectedEpisodeIds, setSelectedEpisodeIds] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function generateAutoBible() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const issues = parseAutoBibleIssueLines(issuesText);
+        const response = await runComicAutoBibleFromIssuesRequest({
+          title,
+          issues,
+          mode,
+          targetEventCount,
+          maximumEpisodeDurationSeconds,
+          targetWordsPerMinute,
+          forceRebuildIndex,
+          ocrEnabled
+        });
+        setPlan(response);
+        setCreated(null);
+        setSelectedEpisodeIds(response.productionGates.filter((gate) => gate.renderAllowed).map((gate) => gate.episodeId));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  function toggleEpisode(episodeId: string) {
+    setSelectedEpisodeIds((current) =>
+      current.includes(episodeId)
+        ? current.filter((id) => id !== episodeId)
+        : [...current, episodeId]
+    );
+  }
+
+  function createSeriesProjects() {
+    if (!plan) return;
+    if (!channelId) {
+      setError("Selecione um canal antes de criar projetos da serie.");
+      return;
+    }
+    if (selectedEpisodeIds.length === 0) {
+      setError("Selecione pelo menos um episodio aprovado.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const issues = parseAutoBibleIssueLines(issuesText);
+        const response = await runComicAutoBibleCreateProjectsRequest({
+          channelId,
+          titlePrefix,
+          issues,
+          narrativeBibleInput: plan.narrativeBibleInput,
+          episodeDefinitions: plan.episodeDefinitions,
+          approvedEpisodeIds: selectedEpisodeIds,
+          maxProjects: selectedEpisodeIds.length,
+          maximumEpisodeDurationSeconds,
+          targetWordsPerMinute
+        });
+        setCreated(response);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+  return (
+    <section className="rounded-[2rem] border border-cyan-300/20 bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.14),transparent_30%),rgba(255,255,255,0.035)] p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-cyan-100/55">Auto Bible Builder</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">HQ inteira entra, biblia narrativa e episodios saem</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-mist/68">
+            Use este fluxo para o sistema ler edicoes locais, entender a progressao da historia, separar eventos importantes e preparar episodios de ate 3 minutos. Ele continua candidate-first: nada e renderizado sem aprovacao humana.
+          </p>
+        </div>
+        <span className="rounded-full border border-cyan-200/25 bg-cyan-200/10 px-4 py-2 text-xs font-semibold text-cyan-100">
+          bible &gt; episodios &gt; gates
+        </span>
+      </div>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-[1fr_0.35fr_0.25fr_0.25fr_0.25fr]">
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Titulo da saga</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-cyan-200/70" />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Modo</span>
+          <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-cyan-200/70">
+            <option value="full_story_series">historia completa</option>
+            <option value="best_story_short">melhor short</option>
+            <option value="curiosity_batch">curiosidades</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Eventos</span>
+          <input type="number" min={4} max={80} value={targetEventCount} onChange={(event) => setTargetEventCount(Number(event.target.value))} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-cyan-200/70" />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Max s</span>
+          <input type="number" min={60} max={180} value={maximumEpisodeDurationSeconds} onChange={(event) => setMaximumEpisodeDurationSeconds(Number(event.target.value))} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-cyan-200/70" />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">WPM</span>
+          <input type="number" min={120} max={190} value={targetWordsPerMinute} onChange={(event) => setTargetWordsPerMinute(Number(event.target.value))} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-cyan-200/70" />
+        </label>
+      </div>
+
+      <label className="mt-5 block">
+        <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Edicoes locais</span>
+        <textarea value={issuesText} onChange={(event) => setIssuesText(event.target.value)} rows={5} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-mono text-xs leading-5 text-white outline-none focus:border-cyan-200/70" />
+        <span className="mt-2 block text-xs text-mist/50">Formato por linha: numero|titulo|assetDirectory|sourcePath opcional. Se sourcePath vier, o sistema ingere o CBR/CBZ local antes de minerar.</span>
+      </label>
+
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-sm text-mist/70">
+          <input type="checkbox" checked={forceRebuildIndex} onChange={(event) => setForceRebuildIndex(event.target.checked)} />
+          reconstruir indice
+        </label>
+        <label className="flex items-center gap-2 text-sm text-mist/70">
+          <input type="checkbox" checked={ocrEnabled} onChange={(event) => setOcrEnabled(event.target.checked)} />
+          OCR local se disponivel
+        </label>
+        <button type="button" onClick={generateAutoBible} disabled={isPending} className="rounded-full bg-cyan-200 px-6 py-3 text-sm font-semibold text-black disabled:opacity-50">
+          {isPending ? "Lendo HQ e montando biblia..." : "Gerar biblia automatica"}
+        </button>
+      </div>
+
+      {error ? <p className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">{error}</p> : null}
+
+      {plan ? (
+        <div className="mt-6 space-y-5">
+          <div className="grid gap-4 md:grid-cols-5">
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Status</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.status}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Eventos</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.whatItUnderstands.generatedEventCount}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Episodios</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.whatItUnderstands.generatedEpisodeCount}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Prontos</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.qualityGates.productionReadyEpisodes}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Paginas</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.sagaMapSummary.totalPages}</p>
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-white/10 bg-black/25 p-5">
+            <p className="text-xs uppercase tracking-[0.24em] text-mist/45">O que o sistema entendeu</p>
+            <h3 className="mt-3 text-xl font-semibold text-white">{plan.whatItUnderstands.centralQuestion}</h3>
+            <p className="mt-3 text-sm leading-6 text-mist/75">{plan.whatItUnderstands.premise}</p>
+            <div className="mt-4 grid gap-3 text-sm text-mist/68 md:grid-cols-3">
+              <span>Comeco: {plan.whatItUnderstands.beginning}</span>
+              <span>Meio: {plan.whatItUnderstands.middle}</span>
+              <span>Fim: {plan.whatItUnderstands.ending}</span>
+            </div>
+          </div>
+
+          {plan.qualityGates.blockers.length > 0 ? (
+            <div className="rounded-2xl border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+              Bloqueios: {plan.qualityGates.blockers.slice(0, 6).join("; ")}
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            {plan.productionGates.map((gate) => (
+              <article key={gate.episodeId} className="rounded-[1.5rem] border border-white/10 bg-black/30 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.26em] text-mist/45">Episodio {gate.episodeNumber}</p>
+                    <h3 className="mt-2 text-xl font-semibold text-white">{gate.title}</h3>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${gate.renderAllowed ? "bg-emerald-300 text-black" : "bg-amber-300/15 text-amber-100"}`}>
+                    {gate.renderAllowed ? "Render ready" : "Revisar"}
+                  </span>
+                </div>
+                <label className="mt-4 flex items-center gap-2 text-sm text-mist/75">
+                  <input type="checkbox" checked={selectedEpisodeIds.includes(gate.episodeId)} disabled={!gate.renderAllowed} onChange={() => toggleEpisode(gate.episodeId)} />
+                  Aprovar episodio para criar projeto
+                </label>
+                <p className="mt-3 text-sm text-mist/70">Score {gate.score}/100 - {gate.status}</p>
+                {gate.blockers.length > 0 || gate.warnings.length > 0 ? (
+                  <p className="mt-3 text-xs leading-5 text-amber-100/75">QA: {[...gate.blockers, ...gate.warnings].slice(0, 5).join("; ")}</p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+          <div className="rounded-[1.5rem] border border-cyan-200/15 bg-cyan-200/[0.04] p-5">
+            <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto]">
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Canal</span>
+                <select value={channelId} onChange={(event) => setChannelId(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-cyan-200/70">
+                  {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Prefixo dos projetos</span>
+                <input value={titlePrefix} onChange={(event) => setTitlePrefix(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-cyan-200/70" />
+              </label>
+              <button type="button" onClick={createSeriesProjects} disabled={isPending || selectedEpisodeIds.length === 0} className="mt-6 rounded-full bg-emerald-300 px-6 py-3 text-sm font-semibold text-black disabled:opacity-50">
+                {isPending ? "Criando projetos..." : `Criar ${selectedEpisodeIds.length} projeto(s)`}
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-mist/55">Cria VideoProjects editaveis com cenas por evento. Ainda nao importa paineis nem renderiza automaticamente.</p>
+          </div>
+
+          {created ? (
+            <div className="rounded-[1.5rem] border border-emerald-300/20 bg-emerald-300/[0.06] p-5">
+              <p className="text-xs uppercase tracking-[0.24em] text-emerald-100/70">Projetos criados</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {created.createdProjects.map((project) => (
+                  <Link key={project.projectId} href={`/projects/${project.projectId}`} className="rounded-2xl border border-white/10 bg-black/25 p-4 hover:border-emerald-200/50">
+                    <p className="text-sm font-semibold text-white">{project.title}</p>
+                    <p className="mt-2 text-xs text-mist/60">Episodio {project.episodeNumber} - {project.scenesCreated} cenas - score {project.productionGate.score}/100</p>
+                    {project.panelMatchSummary ? (
+                      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-mist/68">
+                        <p className="font-semibold text-cyan-100">Painel x narra??o: {project.panelMatchSummary.matchedCount}/{project.panelMatchSummary.beatCount} cenas - score m?dio {project.panelMatchSummary.averageScore}</p>
+                        <p className="mt-1">Alta confian?a: {project.panelMatchSummary.highConfidenceCount} - repetidos: {project.panelMatchSummary.repeatedPanelCount}</p>
+                        {project.panelMatchSummary.warnings.length > 0 ? (
+                          <p className="mt-1 text-amber-100/75">Avisos: {project.panelMatchSummary.warnings.slice(0, 2).join("; ")}</p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-amber-100/70">Sem ?ndice local de pain?is para autofill visual.</p>
+                    )}
+                    <p className="mt-2 text-xs text-emerald-100/75">Abrir projeto</p>
+                  </Link>
+                ))}
+              </div>
+              {created.panelIndexWarnings && created.panelIndexWarnings.length > 0 ? (
+                <p className="mt-4 text-xs text-amber-100/75">?ndice visual: {created.panelIndexWarnings.slice(0, 3).join("; ")}</p>
+              ) : null}
+              <p className="mt-4 text-xs text-mist/50">{created.riskPolicyGate.note}</p>
+            </div>
+          ) : null}
+          <p className="text-sm text-mist/65">{plan.outputContract.recommendedNextStep}</p>
+          <p className="text-xs text-mist/45">{plan.riskPolicyGate.note}</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+function OneClickAssistedPanel() {
+  const [episodes, setEpisodes] = useState("all");
+  const [title, setTitle] = useState("Batman White Knight - saga assistida");
+  const [maxDurationSeconds, setMaxDurationSeconds] = useState(180);
+  const [targetWordsPerMinute, setTargetWordsPerMinute] = useState(160);
+  const [narrationProvider, setNarrationProvider] = useState("voicebox-qwen");
+  const [narrationSessionMode, setNarrationSessionMode] = useState<"single" | "act" | "phrase">("single");
+  const [plan, setPlan] = useState<ComicOneClickAssistedPlanResponse | null>(null);
+  const [copiedEpisode, setCopiedEpisode] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function generatePlan() {
+    setError(null);
+    setCopiedEpisode(null);
+    startTransition(async () => {
+      try {
+        const response = await runComicOneClickAssistedPlanRequest({
+          title,
+          episodes,
+          maxDurationSeconds,
+          targetWordsPerMinute,
+          narrationProvider,
+          narrationSessionMode
+        });
+        setPlan(response);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  async function copyCommand(episodeNumber: number, command: string) {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopiedEpisode(episodeNumber);
+    } catch {
+      setError("Nao consegui copiar automaticamente. Selecione e copie o comando manualmente.");
+    }
+  }
+
+  return (
+    <section className="rounded-[2rem] border border-amber-300/20 bg-[radial-gradient(circle_at_top_left,rgba(255,207,112,0.16),transparent_30%),rgba(255,255,255,0.035)] p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-amber-100/55">One-Click Assistido</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Plano completo por episodio, com revisao humana antes do render</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-mist/68">
+            Este fluxo usa a biblia narrativa da HQ para preparar episodios de ate 3 minutos. Ele nao renderiza sozinho: mostra o que sera contado, valida os bloqueios e entrega o comando de render somente para episodio aprovado.
+          </p>
+        </div>
+        <span className="rounded-full border border-amber-200/25 bg-amber-200/10 px-4 py-2 text-xs font-semibold text-amber-100">
+          candidate-first / 0 auto-render
+        </span>
+      </div>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-[1fr_0.38fr_0.32fr_0.32fr_0.35fr]">
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Titulo do plano</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-amber-200/70" />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Episodios</span>
+          <input value={episodes} onChange={(event) => setEpisodes(event.target.value)} placeholder="all ou 1,2" className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-amber-200/70" />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Max s</span>
+          <input type="number" min={60} max={180} value={maxDurationSeconds} onChange={(event) => setMaxDurationSeconds(Number(event.target.value))} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-amber-200/70" />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">WPM</span>
+          <input type="number" min={120} max={190} value={targetWordsPerMinute} onChange={(event) => setTargetWordsPerMinute(Number(event.target.value))} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-amber-200/70" />
+        </label>
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Sessao voz</span>
+          <select value={narrationSessionMode} onChange={(event) => setNarrationSessionMode(event.target.value as "single" | "act" | "phrase")} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-amber-200/70">
+            <option value="single">single</option>
+            <option value="act">act</option>
+            <option value="phrase">phrase</option>
+          </select>
+        </label>
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto]">
+        <label className="block">
+          <span className="text-xs uppercase tracking-[0.24em] text-mist/45">Provider de narracao</span>
+          <input value={narrationProvider} onChange={(event) => setNarrationProvider(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none focus:border-amber-200/70" />
+        </label>
+        <button type="button" onClick={generatePlan} disabled={isPending} className="mt-6 rounded-full bg-amber-200 px-6 py-3 text-sm font-semibold text-black disabled:opacity-50">
+          {isPending ? "Montando plano..." : "Gerar plano assistido"}
+        </button>
+      </div>
+      {error ? <p className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">{error}</p> : null}
+
+      {plan ? (
+        <div className="mt-6 space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Status</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.status}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Episodios</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.selectedEpisodeCount}/{plan.episodeCount}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Biblia</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.bibleStatus}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-mist/45">Narracao</p>
+              <p className="mt-2 text-lg font-semibold text-white">{plan.narrationSessionMode}</p>
+            </div>
+          </div>
+
+          {plan.plannerBlockers.length > 0 ? (
+            <div className="rounded-2xl border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+              Bloqueios: {plan.plannerBlockers.slice(0, 5).join("; ")}
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            {plan.selectedEpisodes.map((episode) => (
+              <article key={episode.episodeId} className="rounded-[1.5rem] border border-white/10 bg-black/30 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.26em] text-mist/45">Episodio {episode.episodeNumber}</p>
+                    <h3 className="mt-2 text-xl font-semibold text-white">{episode.title}</h3>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${episode.gateStatus === "passed" ? "bg-emerald-300 text-black" : "bg-rose-300/15 text-rose-100"}`}>
+                    {episode.gateStatus === "passed" ? "Pronto" : "Revisar"}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3 text-sm text-mist/68 md:grid-cols-3">
+                  <span>{episode.estimatedDurationSeconds}s</span>
+                  <span>{episode.wordCount} palavras</span>
+                  <span>{episode.eventCount} eventos</span>
+                </div>
+                <p className="mt-3 text-xs text-mist/55">Edicoes: {episode.issueNumbers.join(", ")} | fatos criticos: {episode.criticalFactCount}</p>
+                <p className="mt-4 line-clamp-5 text-sm leading-6 text-mist/76">{episode.narrationPreview}</p>
+                {episode.warnings.length > 0 || episode.blockers.length > 0 ? (
+                  <p className="mt-4 text-xs leading-5 text-amber-100/75">
+                    QA: {[...episode.blockers, ...episode.warnings].slice(0, 4).join("; ")}
+                  </p>
+                ) : null}
+                <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                  <p className="text-xs uppercase tracking-[0.22em] text-mist/45">Comando aprovado</p>
+                  <code className="mt-2 block break-words text-xs leading-5 text-amber-100/80">{episode.renderCommand}</code>
+                </div>
+                <button type="button" onClick={() => copyCommand(episode.episodeNumber, episode.renderCommand)} className="mt-4 rounded-full border border-amber-200/40 px-4 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-200/10">
+                  {copiedEpisode === episode.episodeNumber ? "Comando copiado" : "Copiar comando de render"}
+                </button>
+              </article>
+            ))}
+          </div>
+          <p className="text-sm text-mist/65">{plan.riskPolicyGate.note}</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
   const [assetDirectory, setAssetDirectory] = useState("storage/assets/comics/justice-league-vs-godzilla-vs-kong/issue-01");
   const [channelId, setChannelId] = useState(channels[0]?.id ?? "");
@@ -675,6 +1155,10 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
         </div>
       </section>
 
+      <AutoBibleBuilderPanel channels={channels} />
+
+      <OneClickAssistedPanel />
+
       <section className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-6">
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_0.4fr_0.4fr_0.4fr]">
           <label className="block">
@@ -759,6 +1243,11 @@ export function ComicStudio({ channels }: { channels: StudioChannel[] }) {
     </div>
   );
 }
+
+
+
+
+
 
 
 

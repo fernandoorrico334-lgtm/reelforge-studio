@@ -4,6 +4,9 @@ export type ComicNarrationVisualCueInput = {
   focusTarget?: string;
   durationSeconds?: number;
   verifiedFocusTargets?: string[];
+  evidenceTerms?: string[];
+  evidenceConfidence?: number;
+  evidenceSource?: "detector" | "editorial_audit" | "ocr" | "metadata";
   evidenceWarnings?: string[];
 };
 
@@ -32,6 +35,9 @@ export type ComicNarrationVisualCue = {
   transitionHint: "page_tear" | "direct";
   focusTarget: string | null;
   verifiedFocusTargets: string[] | null;
+  evidenceTerms: string[];
+  evidenceConfidence: number;
+  evidenceSource: ComicNarrationVisualCueInput["evidenceSource"] | null;
   evidenceWarnings: string[];
 };
 
@@ -141,6 +147,9 @@ export function buildComicNarrationVisualSyncPlan(input: {
         focusTarget: cue.focusTarget ?? null,
         verifiedFocusTargets: cue.verifiedFocusTargets ?? null,
         evidenceWarnings: cue.evidenceWarnings ?? [],
+        evidenceTerms: cue.evidenceTerms ?? [],
+        evidenceConfidence: cue.evidenceConfidence ?? 0,
+        evidenceSource: cue.evidenceSource ?? null,
       });
       assignedDuration = round(assignedDuration + durationSeconds);
       cursor = endSeconds;

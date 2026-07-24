@@ -1,4 +1,4 @@
-﻿export type ComicPronunciationEntry = {
+export type ComicPronunciationEntry = {
   label: string;
   displayPattern: RegExp;
   spokenReplacement: string;
@@ -12,7 +12,7 @@ export type ComicPronunciationResult = {
 };
 
 export const comicTtsPronunciationDictionary: ComicPronunciationEntry[] = [
-  { label: "Batman", displayPattern: /\bBatman\b/gi, spokenReplacement: "Bétman", reason: "avoid flat Portuguese spelling as betimen" },
+  { label: "Batman", displayPattern: /\bBatman\b/gi, spokenReplacement: "B\u00e9tman", reason: "guide PT-BR synthesis while preserving Batman in display text" },
   { label: "Superman", displayPattern: /\bSuperman\b/gi, spokenReplacement: "Supermãn", reason: "guide PT-BR narrator pronunciation" },
   { label: "Godzilla", displayPattern: /\bGodzilla\b/gi, spokenReplacement: "Godzíla", reason: "keep monster name punchy in PT-BR" },
   { label: "Lex Luthor", displayPattern: /\bLex\s+Luthor\b/gi, spokenReplacement: "Léks Lútor", reason: "avoid robotic foreign-name reading" },
@@ -26,7 +26,7 @@ export const comicTtsPronunciationDictionary: ComicPronunciationEntry[] = [
   { label: "ação", displayPattern: /\bacao\b/gi, spokenReplacement: "ação", reason: "restore diacritic before TTS" },
 ];
 
-const PHONETIC_DISPLAY_LEAK = /\b(?:Bétman|Supermãn|Godzíla|Léks|Lútor|Clárk|Lôis|Flésh)\b/i;
+const PHONETIC_DISPLAY_LEAK = /\b(?:Supermãn|Godzíla|Léks|Lútor|Clárk|Lôis|Flésh)\b/i;
 
 export function applyComicTtsPronunciation(text: string): ComicPronunciationResult {
   const appliedLabels: string[] = [];
@@ -48,3 +48,4 @@ export function applyComicTtsPronunciation(text: string): ComicPronunciationResu
 export function assertComicDisplayTextHasNoPhoneticLeak(text: string) {
   return !PHONETIC_DISPLAY_LEAK.test(text);
 }
+

@@ -24,11 +24,12 @@ function round(value: number) {
 }
 
 function stageFor(cue: ComicNarratorDirectorCue, index: number, total: number): ComicNarrationEmotionArcStep["arcStage"] {
+  if (index >= total - 2) return "payoff";
   if (index === 0 || cue.deliveryMode === "cold_open_question") return "hook";
   if (cue.deliveryMode === "low_suspense") return "suspense";
   if (cue.deliveryMode === "urgent_escalation") return "escalation";
   if (cue.deliveryMode === "impact_hit") return "impact";
-  if (cue.deliveryMode === "weighted_reveal" || cue.deliveryMode === "emotional_release" || index >= total - 2) return "payoff";
+  if (cue.deliveryMode === "weighted_reveal" || cue.deliveryMode === "emotional_release") return "payoff";
   return "context";
 }
 

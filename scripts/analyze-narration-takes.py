@@ -20,11 +20,20 @@ def analyze(path: Path) -> dict[str, object]:
     active = rms[rms > 0.003]
     expressive_range_db = 0.0 if active.size < 3 else float(20 * np.log10((np.percentile(active, 90) + 1e-9) / (np.percentile(active, 20) + 1e-9)))
     energy_variation = 0.0 if active.size < 3 else float(np.std(active) / (np.mean(active) + 1e-9))
+    active_rms = float(np.sqrt(np.mean(np.square(values[np.abs(values) > 0.003]))) + 1e-12) if np.any(np.abs(values) > 0.003) else 0.0
+    active_rms_db = float(20 * np.log10(active_rms + 1e-12))
+    peak_db = float(20 * np.log10(np.max(np.abs(values)) + 1e-12))
+    active_floor_db = float(20 * np.log10(np.percentile(active, 20) + 1e-12)) if active.size else -120.0
+    presence_consistency = 0.0 if active.size < 3 else float(np.mean(active >= np.percentile(active, 35)))
     return {
         "path": str(path),
         "expressiveRangeDb": round(expressive_range_db, 3),
         "energyVariation": round(energy_variation, 3),
         "silenceRatio": round(float(np.mean(rms < 0.003)), 3),
+        "activeRmsDb": round(active_rms_db, 3),
+        "peakDb": round(peak_db, 3),
+        "activeFloorDb": round(active_floor_db, 3),
+        "presenceConsistency": round(presence_consistency, 3),
         "clippingDetected": bool(np.max(np.abs(values)) >= 0.998),
     }
 

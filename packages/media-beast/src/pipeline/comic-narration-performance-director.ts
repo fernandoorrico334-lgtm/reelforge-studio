@@ -69,11 +69,14 @@ export function buildComicNarrationPerformancePlan(input: {
     const pitchContour = isQuestion ? "rising_question" as const : isPayoff || phrase.emotion === "reveal" ? "falling_reveal" as const : phrase.emotion === "impact" ? "impact_peak" as const : phrase.emotion === "resolution" ? "warm_resolution" as const : "steady_forward" as const;
     const criticalPhrase = isQuestion || isPayoff || phrase.emotion === "impact" || phrase.emotion === "reveal" || phrase.emotion === "suspense";
     const base = phrase.chatterbox;
-    const takes: ComicNarrationTakeDirection[] = [{ takeId: `${phrase.phraseId}-take-1`, seedOffset: 0, exaggeration: base.exaggeration, cfgWeight: base.cfgWeight, temperature: base.temperature }];
+    const takes: ComicNarrationTakeDirection[] = [
+      { takeId: `${phrase.phraseId}-take-1`, seedOffset: 0, exaggeration: base.exaggeration, cfgWeight: base.cfgWeight, temperature: base.temperature },
+      { takeId: `${phrase.phraseId}-take-2`, seedOffset: 1009, exaggeration: round(clamp(base.exaggeration + 0.025, 0.45, 0.9)), cfgWeight: base.cfgWeight, temperature: round(clamp(base.temperature + 0.018, 0.55, 0.76)) },
+    ];
     if (criticalPhrase) {
       takes.push({
-        takeId: `${phrase.phraseId}-take-2`,
-        seedOffset: 1009,
+        takeId: `${phrase.phraseId}-take-3`,
+        seedOffset: 2018,
         exaggeration: round(clamp(base.exaggeration + (isQuestion ? 0.04 : 0.07), 0.45, 0.9)),
         cfgWeight: round(clamp(base.cfgWeight - 0.02, 0.25, 0.4)),
         temperature: round(clamp(base.temperature + 0.035, 0.55, 0.76)),
